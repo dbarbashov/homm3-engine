@@ -421,8 +421,10 @@ regression. World/route/pose checks remain independently inspectable.
 
 Protocol notes: the existing visible-cell word is 0 (hidden), 1 (visible), or
 257 (visible plus original MAP_EXTRA_MONSTER guard flag), or 2 (render-only
-fragments of already-known objects at a hidden shroud edge). Edge records have
-only refCount and object references; they carry no gameplay fields. No other player's
+fragments visible through the translucent shroud edge). Edge records have
+only refCount and object references; they carry no gameplay fields. An object
+visible only through this fringe has its extraInfo cleared; objects entirely
+outside the visible area and its fringe remain absent. No other player's
 visibility mask is sent. Optional `adventureSounds` is a bounded actor-private
 journal of serial IDs and original resource names; initial restore suppresses
 historical playback and later projections deduplicate it. Use paired current

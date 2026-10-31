@@ -11,6 +11,7 @@ from pathlib import Path
 from compare import compare, report
 from coverage import adventure, combat_regressions
 from seeded_faults import check
+from transition_checks import check_run
 
 ROOT=Path(__file__).resolve().parents[2]
 p=argparse.ArgumentParser(description=__doc__)
@@ -48,6 +49,11 @@ for suite in suites+['repeat-'+name for name in suites]:
     if scenario=='adventure' and complete:
         coverage={mode:adventure(t) for mode,t in traces.items()};(out/'coverage.json').write_text(json.dumps(coverage,indent=2))
         summary['harnessPassed'] &= coverage['legacy']['passed'];summary['parityPassed'] &= coverage.get('authority',{'passed':True})['passed']
+    if scenario=='turns' and complete:
+        transitions=check_run(out,'turns')
+        (out/'transition-checks.json').write_text(json.dumps(transitions,indent=2)+'\n')
+        summary['runs'][suite]['transitionsPassed']=transitions['passed']
+        summary['parityPassed'] &= transitions['passed']
 try:
     summary['repeatability']={}
     for suite in suites:

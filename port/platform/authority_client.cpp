@@ -47,7 +47,7 @@ struct AuthorityTurnViewAccess {
 namespace {
 bool active=false,applying=false,failed=false,choosing=false,viewInstalled=false;
 int actor=-1,turn=-1;
-int shownTurn=-1;bool pendingTurnPopup=false;
+int shownTurn=-1;bool pendingTurnPopup=false,pendingNewDay=false;
 int transferStage=0;
 int choiceMode=0,choiceValue=-1,choiceQuantity=0;
 bool movementStandEnd=true,movementRequestActive=false;
@@ -208,6 +208,8 @@ bool turnView(bool force,bool draw,bool update){
 #endif
     const int current=presentationActor();
     if(transfer){
+        TurnViewContext context(current>=0?current:actor);
+        AuthorityTurnViewAccess::enemy(true);
         // The original panel, without its save-file byte percentage: this
         // protocol sends commands/projections rather than a peer's save file.
         auto* panel=AuthorityTurnViewAccess::panel(win);
@@ -223,6 +225,9 @@ bool turnView(bool force,bool draw,bool update){
 #endif
         return true;
     }
+    // Original turn notifications and calendar events keep the transfer/wait
+    // panel behind their modals. The new-day card starts after those choices.
+    if(pendingTurnPopup||pendingNewDay)return true;
     if(current<0||current==actor)return false;
     TurnViewContext context(current);
     if(shownTurn!=current||force){g_advManager->clearBottomView();shownTurn=current;}
@@ -236,7 +241,7 @@ bool turnView(bool force,bool draw,bool update){
 bool animateTurnView(bool background){
     if(!active||actor<0||!viewInstalled)return false;
     const int current=presentationActor();
-    if(transferStage)return true;
+    if(transferStage||pendingTurnPopup||pendingNewDay)return true;
     if(current<0||current==actor)return false;
     auto* win=g_advManager->m_advWindow;
     if(shownTurn!=current){turnView(true,true,true);return true;}
@@ -322,10 +327,32 @@ void tick(){
     if(!active||applying||choosing||failed||BattleClient::active())return;
     playAdventureSounds();
     if(pendingTurnPopup&&!Fast::state().waiting&&HD::adventureVisible()){
-        pendingTurnPopup=false;choosing=true;
+        pendingTurnPopup=false;pendingNewDay=true;choosing=true;
         popupPlayerTurnInfo();
+        choosing=false;
+    }
+    if(pendingNewDay&&!Fast::state().waiting&&HD::adventureVisible()&&
+       EM_ASM_INT({return !window.homm3Authority.pendingChoice&&!window.homm3Authority.pendingLength()&&window.homm3AuthorityStatus?.phase==='adventure';})){
+        pendingNewDay=false;choosing=true;
+        // The notification stops the music. In the original startLocalPlayerTurn,
+        // doNewTurn then restores the terrain theme and ambient sounds. Rules run
+        // on the worker here, so their presentation continuation must run locally.
+        g_soundManager->m_playSounds=1;
+        const auto center=g_advManager->getMapCenter();
+        g_advManager->m_lastTerrain=g_advManager->getCell(center)->m_groundSet;
+        g_soundManager->switchAmbientMusic(g_terrainMusicIds[g_advManager->m_lastTerrain]);
+        g_advManager->setEnvironmentOrigin(center,1);
         g_advManager->overrideBottomView(advManager::BOTTOM_VIEW_1,-1);
-        g_advManager->updBottomView(1,1,1);choosing=false;
+        g_advManager->updBottomView(1,1,1);
+        // Original doNewTurn selects the next hero only after calendar dialogs.
+        // Selecting during projection receipt paints a live hero cursor behind
+        // the turn notification and can start ambient loops under the dialog.
+        g_advManager->deactivateCurrHero(false);
+        const int nextHero=g_currentPlayer->nextHero();
+        if(nextHero>=0)g_advManager->setHeroContext(nextHero,0,0,1);
+        else if(g_currentPlayer->m_numTowns>0)g_advManager->setTownContext(g_currentPlayer->m_townIds[0],0,1);
+        g_advManager->checkDimNextHeroBut();
+        choosing=false;
 #ifdef __EMSCRIPTEN__
         EM_ASM({window.homm3TurnPresentation=({mode:'new_turn',actor:$0});},actor);
 #endif
@@ -383,6 +410,13 @@ void tick(){
     if(length){
         pending.resize(length);
         EM_ASM({window.homm3Authority.copyPending(HEAP32,$0>>2);},pending.data());
+        if(viewInstalled&&HD::adventureVisible()&&length>=6&&previousTurn==actor&&pending[2]!=actor){
+            // Finish the old local presentation before installing canonical map
+            // cells. Demobilizing afterwards would write the old hero over them.
+            g_advManager->deactivateCurrTown(false);
+            g_advManager->deactivateCurrHero(false);
+            g_game->turnOnAIMusic();
+        }
         if(viewInstalled&&HD::adventureVisible()&&length>=6&&pending[2]==actor&&(previousTurn!=actor||previousDate!=pending[5]*28+pending[4]*7+pending[3])){
             transferStage=2;turnView(false,true,true);Port::Harness::wait(16);transferStage=0;
         }
@@ -394,7 +428,12 @@ void tick(){
     g_localGamePos=actor;g_netLocalGamePos=actor;g_playerTurn=turn;g_currentPlayer=&g_game->m_players[actor];g_curPlayerBit=1<<actor;g_curWatchPlayer=actor;g_mapVisibilityBit=1<<actor;
     g_currentPlayer->m_isLocal=turn==actor;g_thisNetGotAdventureControl=turn==actor;g_remoteOn=0;
     Fast::state().ready=turn!=actor;
+    const bool newTurn=turn==actor&&viewInstalled&&(previousTurn!=actor||previousDate!=g_game->m_month*28+g_game->m_week*7+g_game->m_day);
+    if(newTurn)pendingTurnPopup=true;
+    if(turn!=actor)pendingNewDay=false;
     auto& p=*g_currentPlayer;
+    const bool startingTurn=pendingTurnPopup||pendingNewDay;
+    if(newTurn){p.m_currHeroId=static_cast<HeroId>(-1);p.m_currTownId=-1;}
     if(!viewInstalled&&turn!=actor){
         // Adventure startup can have mobilized the local hero after the first
         // projection. With no fresh map packet, restore that cell before
@@ -411,10 +450,10 @@ void tick(){
     if(std::find(p.m_heroes,p.m_heroes+p.m_numHeroes,p.m_currHeroId)==p.m_heroes+p.m_numHeroes){
         // No hero selected is intentional when viewing a town or waiting.
         // Only start a fresh active turn with the first available hero.
-        p.m_currHeroId=turn==actor&&(!viewInstalled||previousTurn!=actor)&&p.m_numHeroes?p.m_heroes[0]:static_cast<HeroId>(-1);
+        p.m_currHeroId=!startingTurn&&turn==actor&&(!viewInstalled||previousTurn!=actor)&&p.m_numHeroes?p.m_heroes[0]:static_cast<HeroId>(-1);
     }
     if(p.m_currHeroId>=0)p.m_currTownId=-1;
-    else if(p.m_currTownId<0||p.m_currTownId>=int(g_game->m_towns.size())||g_game->m_towns[p.m_currTownId].m_owner!=actor)p.m_currTownId=turn==actor&&p.m_numTowns?p.m_townIds[0]:-1;
+    else if(p.m_currTownId<0||p.m_currTownId>=int(g_game->m_towns.size())||g_game->m_towns[p.m_currTownId].m_owner!=actor)p.m_currTownId=!startingTurn&&turn==actor&&p.m_numTowns?p.m_townIds[0]:-1;
     // The original misleadingly named all-cells flag is the AI blackout
     // screen: it paints opaque shroud and removes all locator portraits.
     g_completeDrawAllCells=0;g_completeDrawEnabled=1;g_blackoutPlayer=0;
@@ -435,7 +474,7 @@ void tick(){
             // acknowledgement must preserve that original selection state.
             if(turn==actor&&previousMobile){g_game->m_heroes[p.m_currHeroId].restoreCell();g_advManager->m_curHeroMobile=1;}
         }else if(p.m_currHeroId>=0)g_advManager->setHeroContext(p.m_currHeroId,0,turn!=actor,false);
-        if(turn!=actor)g_advManager->m_drawCursor=0;
+        if(turn!=actor||startingTurn)g_advManager->m_drawCursor=0;
         hero* selected=p.m_currHeroId>=0?&g_game->m_heroes[p.m_currHeroId]:nullptr;
         const int dx=selected?int(selected->m_x)-int(previousLocation.m_x):0;
         const int dy=selected?int(selected->m_y)-int(previousLocation.m_y):0;
@@ -467,11 +506,15 @@ void tick(){
         if(turn!=actor)g_game->showComputerScreen();
         auto* win=g_advManager->m_advWindow;
         win->getWidget(TAdventureMapWindow::END_TURN_ID)->enable(turn==actor&&!EM_ASM_INT({return window.homm3Authority.eliminated||window.homm3Authority.finished;}));
-        win->updateSpellButton(p.m_currHeroId>=0?&g_game->m_heroes[p.m_currHeroId]:nullptr);
-        win->updateSleepButton(p.m_currHeroId>=0?&g_game->m_heroes[p.m_currHeroId]:nullptr);
+        // showComputerScreen disables commands while retaining their existing
+        // artwork. A waiting seat must not recompute dimming from its cleared
+        // selection (read-only hero/town clicks update their own buttons).
+        if(turn==actor){
+            win->updateSpellButton(p.m_currHeroId>=0?&g_game->m_heroes[p.m_currHeroId]:nullptr);
+            win->updateSleepButton(p.m_currHeroId>=0?&g_game->m_heroes[p.m_currHeroId]:nullptr);
+            g_advManager->checkDimNextHeroBut();
+        }else if(!viewInstalled)g_advManager->checkDimNextHeroBut();
         win->updateHeroLocators(-1,1,1);win->updateTownLocators(-1,1,1);win->updateResourceDisplay(1,1);
-        const bool newTurn=turn==actor&&viewInstalled&&(previousTurn!=actor||previousDate!=g_game->m_month*28+g_game->m_week*7+g_game->m_day);
-        if(newTurn)pendingTurnPopup=true;
         if(viewInstalled&&turn!=previousTurn&&turn!=actor&&turn>=0&&g_game->m_players[turn].isHuman())
             g_chatMan.systemMsg((*g_generalText)[GENERAL_TEXT_PLAYER_TURN_ITS_FORMAT],g_game->m_players[turn].m_name);
         if(turn!=previousTurn)g_advManager->overrideBottomView(advManager::BOTTOM_VIEW_DEFAULT,0);

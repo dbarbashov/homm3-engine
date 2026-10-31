@@ -35,8 +35,9 @@
 // 1/257: revealed (257 also has adjacent monster), then type,extra,index,
 // typeIndex,flags,refCount,(objectIndex,offsets,layer)*refCount;
 // 2: hidden shroud edge, then refCount,(objectIndex,offsets,layer)*refCount.
-// Edge refs only reference objects already known from revealed cells; no
-// hidden cell gameplay state, new objects or visibility bits are disclosed.
+// Edge refs include sprite fragments visible through the shroud's transparent
+// border. Fringe-only objects have extra=0: their trigger cell, owner pools,
+// hero records, creature counts and other gameplay state remain undisclosed.
 // Private player header additionally carries fieldHeroCount + ordered fieldHeroIds,
 // townCount + ordered townIds. Owned garrison heroes are projected privately but
 // do not consume a field-hero roster slot.

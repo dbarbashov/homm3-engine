@@ -36,6 +36,17 @@ int main(int argc,char** argv){try{
     auto visible=[&](int x,int y,int z){return x>=0&&y>=0&&x<g_mapWidth&&y<g_mapHeight&&(*getMapExtraPtr(x,y,z)&bit);};
     std::vector<bool> known(map.m_objects.size(),false),knownHeroes(game::HERO_COUNT,false);
     for(int z=0;z<levels;++z)for(int y=0;y<g_mapHeight;++y)for(int x=0;x<g_mapWidth;++x)if(visible(x,y,z))for(const auto& r:map.cell(x,y,z)->m_objects)known[r.m_objectIndex]=true;
+    const auto disclosed=known;
+    int fringeOnly=0;
+    for(int z=0;z<levels;++z)for(int y=0;y<g_mapHeight;++y)for(int x=0;x<g_mapWidth;++x){
+        if(visible(x,y,z))continue;
+        bool fringe=false;for(int dy=-1;dy<=1;++dy)for(int dx=-1;dx<=1;++dx)fringe|=visible(x+dx,y+dy,z)!=0;
+        if(!fringe)continue;
+        for(const auto& r:map.cell(x,y,z)->m_objects){
+            if(!known[r.m_objectIndex]){known[r.m_objectIndex]=true;++fringeOnly;}
+        }
+    }
+    check(fringeOnly>0,"fixture must contain sprites seen only through shroud fringe");
     const auto& player=g_game->m_players[actor];
     for(const auto& h:g_game->m_heroes)knownHeroes[h.m_id]=h.m_owner==actor||h.m_id==player.m_recruits[0]||h.m_id==player.m_recruits[1]||(h.isOnMap()&&visible(h.m_x,h.m_y,h.m_z));
     struct Cell {int x,y,z;bool visible;std::vector<Ref> refs;};std::vector<Cell> expected;
@@ -62,6 +73,7 @@ int main(int argc,char** argv){try{
         if(!c.visible)check(actual.m_type==NOTHING&&actual.m_extraInfo==0&&actual.m_objectIndex==-1&&actual.m_objectTypeIndex==-1&&!actual.m_isTrigger,"hidden gameplay cell leaked");
     }
     for(size_t i=0;i<known.size();++i)if(!known[i])check(map.m_objects[i].m_typeIndex==65535&&map.m_objects[i].m_extraInfo==0,"unknown object leaked");
+    for(size_t i=0;i<known.size();++i)if(known[i]&&!disclosed[i])check(map.m_objects[i].m_extraInfo==0,"fringe-only sprite leaked rule metadata");
     for(const auto& h:g_game->m_heroes)if(!knownHeroes[h.m_id]){++hiddenHeroes;check(!h.isOnMap()&&h.m_owner==-1&&h.m_x==-1&&h.m_y==-1,"hidden hero leaked");}
     std::cout<<"{\"passed\":true,\"cells\":"<<expected.size()<<",\"hiddenCells\":"<<hidden<<",\"edgeCells\":"<<edgeCells<<",\"fragments\":"<<fragments<<",\"hiddenHeroes\":"<<hiddenHeroes<<"}\n";
     return 0;
