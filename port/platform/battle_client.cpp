@@ -131,6 +131,13 @@ struct AuthorityBattleAccess {
         button(TCombatWindow::COMBAT_RIGHT_COMMAND_0_ID,!c.m_creaturePlacement&&offered(101));
         button(TCombatWindow::COMBAT_RIGHT_COMMAND_1_ID,!c.m_creaturePlacement&&offered(8));
         button(TCombatWindow::COMBAT_RIGHT_COMMAND_2_ID,!c.m_creaturePlacement&&offered(3));
+        // getControl enables the combat log on a local turn. Its arrows keep
+        // that state during animations/opponent turns (disableAllButtons does
+        // not touch them), so history remains readable while commands wait.
+        if(canAct&&!c.m_creaturePlacement){
+            button(TCombatWindow::COMBAT_LOG_SCROLL_UP_ID,true);
+            button(TCombatWindow::COMBAT_LOG_SCROLL_DOWN_ID,true);
+        }
         if(c.m_creaturePlacement){button(TCombatWindow::COMBAT_PLACEMENT_COMMAND_0_ID,offered(8));button(TCombatWindow::COMBAT_PLACEMENT_COMMAND_1_ID,offered(100));}
         // NODRAW changes only the flags. drawFrame never repaints this bar.
         if(changed&&ready){c.m_combatWindow->drawWindow(0,WINDOW_ALL_WIDGETS_LOW,WINDOW_ALL_WIDGETS_HIGH);g_windowManager->updateScreen(0,556,800,44);}

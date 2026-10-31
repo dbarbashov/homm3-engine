@@ -11,6 +11,23 @@ def adventure(trace):
     return {'passed':all(c['passed'] for c in checks),'checks':checks}
 
 
+def adventure_regressions(reference, candidate):
+    """Town destinations and waiting-seat ambient policy, independent of pixels."""
+    checks=[]
+    for name in ['town-entry','garrison','visitor','town-exit']:
+        def targets(trace):
+            return {h['id']:h['target'] for h in trace['actions'][name+'/p0']['state']['adventure']['heroes']}
+        checks.append({'name':name+': original hero destinations',
+                       'passed':targets(reference)==targets(candidate)})
+    for name in ['waiting-town','waiting-hero']:
+        e=reference['actions'][name+'/p1'];a=candidate['actions'][name+'/p1']
+        def effects(action):return [v for v in action['audioEvents'] if v['kind'].startswith('homm3Sfx.')]
+        checks.append({'name':name+': no restarted ambient effects',
+                       'passed':effects(e)==effects(a)==[] and
+                       e['state']['adventure']['sound']['ambient']==a['state']['adventure']['sound']['ambient']==False})
+    return {'passed':all(c['passed'] for c in checks),'checks':checks}
+
+
 def combat_regressions(reference, candidate):
     """Focused behavioral gates; full frame/audio/timing comparison stays strict."""
     checks=[]
@@ -35,5 +52,17 @@ def combat_regressions(reference, candidate):
     for name in ['encounter-confirm','cast-haste']:
         e=action(reference,name)['state']['adventure'];a=action(candidate,name)['state']['adventure']
         record(name+': static map hero beneath battle',e==a and not a['mobile'] and not a['cursor'])
+    for name in ['encounter-confirm','battle-wait','battle-defend','cast-haste','log-up','log-up-again','log-down']:
+        def arrows(trace):return [w for w in action(trace,name)['state']['window']['widgets'] if w['id'] in [2006,2007]]
+        e=arrows(reference);a=arrows(candidate)
+        record(name+': combat history arrows enabled',len(e)==len(a)==2 and e==a and all(not w['status']&(8|32) for w in a))
+    def log(trace,name):
+        a=action(trace,name)['state']
+        return (a['combat']['log'],next(w['text'] for w in a['window']['widgets'] if w['id']==2005))
+    for name in ['log-up','log-up-again','log-down']:
+        record(name+': original history position and text',log(reference,name)==log(candidate,name))
+    for trace in [reference,candidate]:
+        up=log(trace,'log-up')[0]['start'];again=log(trace,'log-up-again')[0]['start'];down=log(trace,'log-down')[0]['start']
+        record(trace['mode']+': clicks scroll history in both directions',again==up-1 and down==again+1)
     return {'passed':all(c['passed'] for c in checks),'checks':checks,
             'scope':'Targeted regressions only. Does not waive remaining frame, audio onset, combat or timing differences.'}

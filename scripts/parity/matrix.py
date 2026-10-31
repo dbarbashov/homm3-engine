@@ -9,7 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 from compare import compare, report
-from coverage import adventure, combat_regressions
+from coverage import adventure, adventure_regressions, combat_regressions
 from seeded_faults import check
 from transition_checks import check_run
 
@@ -56,6 +56,10 @@ for suite in suites+['repeat-'+name for name in suites]:
         summary['parityPassed'] &= regressions['passed']
     if scenario=='adventure' and complete:
         coverage={mode:adventure(t) for mode,t in traces.items()};(out/'coverage.json').write_text(json.dumps(coverage,indent=2))
+        regressions=adventure_regressions(traces['legacy'],traces['authority'])
+        (out/'regressions.json').write_text(json.dumps(regressions,indent=2))
+        summary['runs'][suite]['regressionsPassed']=regressions['passed']
+        summary['parityPassed'] &= regressions['passed']
         summary['harnessPassed'] &= coverage['legacy']['passed'];summary['parityPassed'] &= coverage.get('authority',{'passed':True})['passed']
     if scenario=='turns' and complete:
         transitions=check_run(out,'turns')

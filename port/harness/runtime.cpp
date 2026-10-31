@@ -11,6 +11,7 @@
 #include "townmgr.h"
 #include "advmgr.h"
 #include "cmbtmgr.h"
+#include "combatwindow.h"
 #include "kb.h"
 #include "gzfile.h"
 #include "remote.h"
@@ -55,6 +56,8 @@ void interfaceSnapshot(){
         EM_ASM({window.homm3Harness.presentationClock=({adventureFrame:$0,adventureTimer:$1});},g_advManager->m_animCtr,g_timers[GLOBAL_ADVENTURE_ANIMATION_TIMER_SLOT]);
         auto* local=g_game->getLocalPlayer();
         EM_ASM({window.homm3AdventureState=({hero:$0,town:$1,mobile:!!$2,cursor:!!$3,heroes:[]});},int(local->m_currHeroId),local->m_currTownId,g_advManager->m_curHeroMobile,g_advManager->m_drawCursor);
+        const auto center=g_advManager->getMapCenter();
+        EM_ASM({window.homm3AdventureState.sound=({ambient:!!$0,terrain:$1,music:$2,center:[$3,$4,$5]});},g_soundManager->m_playSounds,g_advManager->m_lastTerrain,g_soundManager->m_currentTerrainMusic,center.m_x,center.m_y,center.m_z);
         EM_ASM({window.homm3AdventureState.bottom=({type:$0,resource:$1,quantity:$2,text:new TextDecoder('windows-1251').decode(HEAPU8.subarray($3,$3+$4))});},g_advManager->m_bottomViewType,g_advManager->m_bottomViewResourceType,g_advManager->m_bottomViewResourceQuantity,g_advManager->m_bottomViewMessage.data(),g_advManager->m_bottomViewMessage.size());
         EM_ASM({window.homm3AdventureState.obelisks=[];window.homm3AdventureState.motion=({moving:!!$0,sequence:$1,frame:$2,scroll:[$3,$4],speed:$5,local:!!$6,pointerVisible:!!$7,showRoute:!!$8});window.homm3AdventureState.route=[];},g_advManager->m_heroMoving,g_advManager->m_cursorSequence,g_advManager->m_cursorFrameCount,g_advManager->m_scrollX,g_advManager->m_scrollY,g_config.m_walkSpeed[1],g_currentPlayer->isLocalHuman(),g_mouseManager->isVis(),g_advManager->m_showRoute);
         if(g_advManager->m_routeArray)for(int z=0;z<g_game->getNumMapLevels();++z)for(int y=0;y<g_mapHeight;++y)for(int x=0;x<g_mapWidth;++x){const int value=*g_advManager->getRouteArrayPtr(x,y,z);if(value)EM_ASM({window.homm3AdventureState.route.push([$0,$1,$2,$3]);},x,y,z,value);}
@@ -73,6 +76,7 @@ void interfaceSnapshot(){
     if(g_combatActive&&g_combatManager){
       auto& c=*g_combatManager;
       EM_ASM({window.homm3Harness.exactCombat=({side:$0,slot:$1,round:$2,processing:!!$3,control:!!$4,mana:[$5,$6],stacks:[]});},c.m_actingSide,c.m_actingSlot,c.m_turnNumber,g_processingCombatAction,c.m_thisNetHasControl,c.m_heroes[0]?c.m_heroes[0]->m_mana:0,c.m_heroes[1]?c.m_heroes[1]->m_mana:0);
+      if(c.m_combatWindow)EM_ASM({window.homm3Harness.exactCombat.log=({start:$0,count:$1});},c.m_combatWindow->m_combatMessageStart,c.m_combatWindow->m_combatMessages.size());
       EM_ASM({window.homm3Harness.exactCombat.secondPhase=!!$0;},c.isInSecondPhase());
       EM_ASM({window.homm3Harness.exactCombat.grid=({shade:Array.from(HEAPU8.subarray($0,$0+187)),drawn:Array.from(HEAPU8.subarray($1,$1+187)),hover:[],showGrid:!!$2,shadeLevel:$3,showMouse:!!$4,selector:$5,highlight:$6});},c.m_curDrawGridShade,c.m_lastDrawGridShade,g_config.m_showCombatGrid,g_config.m_combatShadeLevel,g_config.m_showCombatMouseHex,c.m_lastMovedArmy?c.m_lastMovedArmy->m_gridIndex:-1,c.m_highlighterOn?c.m_highlighterIndex:-1);
       EM_ASM({window.homm3Harness.exactCombat.corpses=[];window.homm3Harness.exactCombat.pow=({frame:$0,active:[]});},c.m_powFrameIndex);

@@ -254,20 +254,22 @@ bool recruitChoiceActive(){return choiceMode==3;}
 void chooseRecruit(int creature,int count){if(choiceMode==3){choiceValue=creature;choiceQuantity=count;}}
 bool universityChoiceActive(){return choiceMode==4;}
 void chooseUniversity(int skill){if(choiceMode==4)choiceValue=skill;}
-void finishMovementPresentation(){
+void finishMovementPresentation(bool removeTarget){
     if(!active||!HD::adventureVisible())return;
     // Original MoveHero stops before dispatching an encounter. The route
     // continuation must not resume through a modal or keep a walking sample.
     g_advManager->stopCursor(true);
     if(movementRequestActive){movementStandEnd=true;g_heroMoveTriggeredEvent=1;}
-    g_advManager->hideRoute(1,1,1);
+    g_advManager->hideRoute(1,removeTarget,1);
 }
 void presentDeferred(){
 #ifdef __EMSCRIPTEN__
     if(Fast::state().waiting||choosing||BattleClient::active()||!HD::adventureVisible())return;
     int event[3]={};char text[65537]={};if(EM_ASM_INT({return window.homm3Authority.takeUIEvent(HEAP32,$0>>2,HEAPU8.subarray($1,$1+65537),65537);},event,text)){
         choosing=true;
-        finishMovementPresentation();
+        // Opening a town stops the walk and hides arrows, but the original
+        // retains the hero's destination while visiting the town window.
+        finishMovementPresentation(event[0]!=1);
         ScopedPresentationPointer pointer;
         if(event[0]==3)g_advManager->bvResMsg(text,event[1],event[2]);
         else AuthorityActionsClient::present(event[0]==1?"open_town":"hero_exchange",event[1],event[2]);
@@ -435,12 +437,17 @@ void tick(){
     const bool startingTurn=pendingTurnPopup||pendingNewDay;
     if(newTurn){p.m_currHeroId=static_cast<HeroId>(-1);p.m_currTownId=-1;}
     if(!viewInstalled&&turn!=actor){
+        // Adventure startup renders our local view before the first authority
+        // boundary. Restore the original waiting-seat sound policy too: no
+        // ambient loops, and selecting a different terrain can change music.
+        g_game->turnOnAIMusic();
         // Adventure startup can have mobilized the local hero after the first
         // projection. With no fresh map packet, restore that cell before
         // dropping selection; otherwise the waiting hero disappears until
         // the next server update.
         if(!length)g_advManager->demobilizeCurrHero(false,false);
         p.m_currHeroId=static_cast<HeroId>(-1);p.m_currTownId=-1;
+        g_advManager->setInitialMapOrigin();
     }
     if(viewInstalled&&previousTurn==actor&&turn!=actor){
         // Original turn handoff clears selection before entering wait mode.

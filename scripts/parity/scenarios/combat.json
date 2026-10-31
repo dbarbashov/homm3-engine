@@ -81,6 +81,21 @@
     }
   },
   {
+    "name": "log-up",
+    "widget": 2006,
+    "ms": 128
+  },
+  {
+    "name": "log-up-again",
+    "widget": 2006,
+    "ms": 128
+  },
+  {
+    "name": "log-down",
+    "widget": 2007,
+    "ms": 128
+  },
+  {
     "name": "battle-auto",
     "click": [
       178,
