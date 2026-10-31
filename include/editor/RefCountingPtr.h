@@ -1,0 +1,166 @@
+// RefCountingPtr.h - a copy-on-write handle (Loki h3maped).
+// The handle points at a wrapper that holds the reference count and the
+// owned object. Copies share the wrapper; the non-const accessors split a
+// shared wrapper first, the const ones never do.
+//
+// Windows keeps the object inside the wrapper, after the count: h3maped's
+// TGameMap::TLayer::getCell (0x41e82b) reads the layer's cell grid handle
+// at wrapper + 8 (the implementation's second field) and the grid itself
+// at that handle's wrapper + 4, and the cell lookup (0x42a4d0) reaches each
+// segment at its wrapper + 4. Loki's port holds a pointer there instead.
+// The release throws the bare TAllocationFailure.
+//
+// The copy constructor carries an empty exception specification on
+// Windows (Loki's has none): the vectors' fill inserts (h3maped 0x42ed20,
+// 0x43c702, 0x43c97f) expand std::_Construct in line without an EH frame
+// and call the shared out-of-line copy (0x438eff), and the vectors' copy
+// constructor (0x437abd) and _split expand it outright. Without throw() the
+// placement new keeps an EH state, the frameless insert may not take it
+// and every _Construct stays a call.
+#ifndef HOMM3_EDITOR_REFCOUNTINGPTR_H
+#define HOMM3_EDITOR_REFCOUNTINGPTR_H
+
+#include <stddef.h>
+
+#include <memory>
+
+#include "exceptions.h"
+
+// The count and the object. A namespace-scope template rather than Loki's
+// nested _TWrapper: VC6 completes a nested class with its enclosing
+// template, and the handle is a member of the classes whose implementation
+// it holds, before that implementation is complete. The name is not proven.
+template<class T>
+struct TRefCountingWrapper {
+    TRefCountingWrapper() : m_refCnt(1) {}
+    TRefCountingWrapper(const T& object) : m_refCnt(1), m_object(object) {}
+
+    unsigned int m_refCnt;
+    T m_object;
+};
+
+template<class T>
+class TRefCountingPtr {
+public:
+    TRefCountingPtr() : _m_pWrapper(new _TWrapper)
+    {
+        if (_m_pWrapper == NULL)
+            _fail();
+    }
+
+    TRefCountingPtr(const T& object) : _m_pWrapper(new _TWrapper(object))
+    {
+        if (_m_pWrapper == NULL)
+            _fail();
+    }
+
+    TRefCountingPtr(const TRefCountingPtr& other) throw() : _m_pWrapper(other._m_pWrapper)
+    {
+        ++_m_pWrapper->m_refCnt;
+    }
+
+    ~TRefCountingPtr()
+    {
+        if (--_m_pWrapper->m_refCnt == 0)
+            delete _m_pWrapper;
+    }
+
+    TRefCountingPtr& operator=(const TRefCountingPtr& other)
+    {
+        ++other._m_pWrapper->m_refCnt;
+        if (--_m_pWrapper->m_refCnt == 0)
+            delete _m_pWrapper;
+        _m_pWrapper = other._m_pWrapper;
+        return *this;
+    }
+
+    T* get()
+    {
+        if (_m_pWrapper->m_refCnt > 1)
+            _split();
+        return &_m_pWrapper->m_object;
+    }
+    const T* get() const { return &_m_pWrapper->m_object; }
+
+    T* operator->() { return get(); }
+    const T* operator->() const { return get(); }
+    T& operator*() { return *get(); }
+    const T& operator*() const { return *get(); }
+
+private:
+    typedef TRefCountingWrapper<T> _TWrapper;
+
+    void _fail()
+    {
+        throw TAllocationFailure();
+    }
+
+    void _split();
+
+    _TWrapper* _m_pWrapper;
+};
+
+template <class T>
+void TRefCountingPtr<T>::_split()
+{
+    _TWrapper* pNewWrapper = new _TWrapper(_m_pWrapper->m_object);
+    if (pNewWrapper == NULL)
+        _fail();
+    --_m_pWrapper->m_refCnt;
+    _m_pWrapper = pNewWrapper;
+}
+
+// A shared object owned through an auto_ptr: the count and the auto_ptr
+// (owner flag, then pointer) share one wrapper, built from an auto_ptr
+// passed by value (the map's condition holders, h3maped 0x432ffa and
+// 0x43308b; the wrapper constructor 0x4370f4 is the one the layer's object
+// links fold with). Copies share the wrapper and the object is never
+// split. The name is not proven.
+template<class T>
+class TRefCountingAutoPtr {
+public:
+    TRefCountingAutoPtr(std::auto_ptr<T> pObject) : _m_pWrapper(new _TWrapper(pObject))
+    {
+        if (_m_pWrapper == NULL)
+            _fail();
+    }
+
+    TRefCountingAutoPtr(const TRefCountingAutoPtr& other) : _m_pWrapper(other._m_pWrapper)
+    {
+        ++_m_pWrapper->m_refCnt;
+    }
+
+    ~TRefCountingAutoPtr()
+    {
+        if (--_m_pWrapper->m_refCnt == 0)
+            delete _m_pWrapper;
+    }
+
+    TRefCountingAutoPtr& operator=(const TRefCountingAutoPtr& other)
+    {
+        ++other._m_pWrapper->m_refCnt;
+        if (--_m_pWrapper->m_refCnt == 0)
+            delete _m_pWrapper;
+        _m_pWrapper = other._m_pWrapper;
+        return *this;
+    }
+
+    T* get() const { return _m_pWrapper->m_pObject.get(); }
+
+private:
+    struct _TWrapper {
+        _TWrapper(std::auto_ptr<T> pObject) : m_refCnt(1), m_pObject(pObject) {}
+
+        unsigned int m_refCnt;
+        std::auto_ptr<T> m_pObject;
+    };
+
+    void _fail()
+    {
+        throw TAllocationFailure();
+    }
+
+    _TWrapper* _m_pWrapper;
+};
+
+#endif  /* HOMM3_EDITOR_REFCOUNTINGPTR_H */

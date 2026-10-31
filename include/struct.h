@@ -1,0 +1,238 @@
+// struct.h - the engine's small shared value types (E:\gamedcs\struct.h)
+#ifndef HOMM3_STRUCT_H
+#define HOMM3_STRUCT_H
+
+#include "va.h"
+
+#include <string.h>
+
+#include "message_record.h"
+
+// A packed map coordinate. The DC layout (classes.csv: 4 B, three
+// members) puts x at offset 0 and BOTH y and z at offset 2 - the
+// signature of short-based bitfields, where x:10 fills the first
+// 16-bit unit's low bits and y:10 forces a new unit at +2 with z:4
+// tucked into that unit's remaining six.
+
+// Every retail reader agrees on the widths. searchArray::get_danger_value
+// (0x42ed30) and game::get_cell (0x42ed80) both read the field trio as
+//   x: dword @ +0, shl 6, movsx ax, sar 6      -> signed 10 bits @ 0..9
+//   y: dword @ +2, shl 6, movsx ax, sar 6      -> signed 10 bits @ 0..9
+//   z: dword @ +2, shl 2, movsx ax, sar 12     -> signed  4 bits @ 10..13
+// and can_take_town (0x428410) builds one the other way round, masking
+// the three source bytes with 0x3ff, 0x3ff and 0xf before packing.
+// Mac embeds this four-byte point at playerData+0x39. CodeWarrior
+// needs native type alignment because it ignores packing inside a class.
+#if defined(__MWERKS__)
+#pragma options align=packed
+#endif
+struct type_point {
+public:
+    short m_x : 10;
+    short m_y : 10;
+    short m_z : 4;
+
+    DC_ADDRESS(0x01eda8, 0x8)
+    type_point() {}
+
+    VA(0x004192b0, 0x44)  // anchor-callee
+    DC_ADDRESS(0x01edb0, 0x6e)
+    type_point(short newX, short newY, short newZ)
+    {
+        m_x = newX;
+        m_y = newY;
+        m_z = newZ;
+    }
+    // DC S_PUB32 ?is_valid@type_point@@QBA_NXZ proves a const bool member.
+    bool isValid() const;
+
+    // Dreamcast S_PUB32 is ??8type_point@@QBA_NABU0@@Z: bool return,
+    // const member, const-reference operand.
+    VA(0x0042ec20, 0x45)  // exact body + sole caller
+    DC_ADDRESS(0x01ee20, 0x7a)
+    bool operator==(const type_point& arg) const
+    {
+        return m_x == arg.m_x && m_y == arg.m_y && m_z == arg.m_z;
+    }
+
+    VA(0x00482340, 0x45)  // call edge + byte-identical point comparison
+    DC_ADDRESS(0x037d2c, 0x5a)
+    bool operator!=(const type_point& arg) const
+    {
+        return m_x != arg.m_x || m_y != arg.m_y || m_z != arg.m_z;
+    }
+
+    // E:\gamedcs\struct.h:120, and advspells.obj's own Dreamcast roster
+    // retains it out of line. Inlined twice in advManager::TownGate's
+    // statement pair (the `< best` test and the store). The z plane takes
+    // no part, which is what makes it a MAP distance. DC struct.h:120 proves
+    // const type_point& p2.
+    DC_ADDRESS(0x022fe4, 0x2e)
+    int distanceSquared(const type_point& p2) const
+    {
+        int dx = m_x - p2.m_x;
+        int dy = m_y - p2.m_y;
+        return dx * dx + dy * dy;
+    }
+};
+#if defined(__MWERKS__)
+#pragma options align=reset
+#endif
+
+// The shared inclusive rectangle used by the adventure and combat drawing
+// code. Dreamcast CodeView fixes the four names, offsets, and 16-byte extent;
+// retail's combat drawing wrappers read the same four dwords in this order.
+struct SLimitData {
+public:
+    int m_minX;
+    int m_minY;
+    int m_maxX;
+    int m_maxY;
+
+    DC_ADDRESS(0x0639e8, 0x4)
+    SLimitData() {}
+
+    DC_ADDRESS(0x01ee9c, 0x26)
+    SLimitData(int minx, int miny, int maxx, int maxy)
+        : m_minX(minx), m_minY(miny), m_maxX(maxx), m_maxY(maxy) {}
+
+    DC_ADDRESS(0x023014, 0xa)
+    int width() const { return m_maxX - m_minX + 1; }
+
+    DC_ADDRESS(0x023020, 0xa)
+    int height() const { return m_maxY - m_minY + 1; }
+
+    DC_ADDRESS(0x0872a8, 0x32)
+    bool intersects(const SLimitData& limits) const
+    {
+        return m_minX <= limits.m_maxX
+            && m_maxX >= limits.m_minX
+            && m_minY <= limits.m_maxY
+            && m_maxY >= limits.m_minY;
+    }
+
+    // Original: SLimitData::Contains; struct.h:293. Its native DC public
+    // ?Contains@SLimitData@@QBA_NHH@Z proves the bool result.
+    DC_ADDRESS(0x0639ec, 0x2a)
+    bool contains(int x, int y) const
+    {
+        return m_minX <= x && x <= m_maxX
+            && m_minY <= y && y <= m_maxY;
+    }
+
+    DC_ADDRESS(0x0872dc, 0x16)
+    bool isEmpty() const
+    {
+        return m_maxX < m_minX || m_maxY < m_minY;
+    }
+
+    DC_ADDRESS(0x02302c, 0x2c)
+    void clip(const SLimitData& limits)
+    {
+        if (m_minX < limits.m_minX)
+            m_minX = limits.m_minX;
+        if (m_minY < limits.m_minY)
+            m_minY = limits.m_minY;
+        if (m_maxX > limits.m_maxX)
+            m_maxX = limits.m_maxX;
+        if (m_maxY > limits.m_maxY)
+            m_maxY = limits.m_maxY;
+    }
+
+    DC_ADDRESS(0x04c968, 0x2c)
+    void include(const SLimitData& limits)
+    {
+        if (m_minX > limits.m_minX)
+            m_minX = limits.m_minX;
+        if (m_minY > limits.m_minY)
+            m_minY = limits.m_minY;
+        if (m_maxX < limits.m_maxX)
+            m_maxX = limits.m_maxX;
+        if (m_maxY < limits.m_maxY)
+            m_maxY = limits.m_maxY;
+    }
+};
+SIZE(SLimitData, 0x10);
+
+// CodeView struct.h:340/346 owns this network player record. Complete
+// extends DC's 28-byte dpid/name pair with the version dword at +0x1c;
+// retail's seat-record constructor proves the same base initialization.
+extern int& g_videoGameState;
+
+class CNetPlayerInfo {
+public:
+    unsigned long m_dpid;  // +0x00
+    char m_name[24];  // +0x04
+    int m_version;
+
+    VA(0x0057F720, 0x18)
+    DC_ADDRESS(0x11f5e4, 0xe)
+    CNetPlayerInfo()
+    {
+        m_dpid = 0;
+        m_name[0] = 0;
+        m_version = g_videoGameState;
+    }
+
+    // E:\gamedcs\struct.h:346
+    DC_ADDRESS(0x1473cc, 0x2c)
+    CNetPlayerInfo(char* name, unsigned long dpid)
+    {
+        m_dpid = dpid;
+        strcpy(m_name, name);
+        m_version = g_videoGameState;
+    }
+};
+SIZE(CNetPlayerInfo, 32);
+
+// GameTime has header-inline helpers in struct.h (DC lines 411-438);
+// Get, DelayTil and Delay remain ordinary definitions in kbwin.cpp.
+// The public names use @@YA (namespace functions), and their NB11 records
+// are LF_PROCEDURE; static class members in the same corpus use @@SA and
+// member-function records. GameTime has no object type or instance users.
+namespace GameTime {
+    unsigned long get();             // 0x4f82e0
+    void delayTil(unsigned long time);  // 0x4f82f0
+    void delay(int interval);        // 0x4f83c0
+
+    // DC struct.h:411 / :419 - the other two header inlines of the same
+    // family, inlined everywhere. The deadline is tested by the SIGN of the
+    // difference, not an unsigned `Get() >= deadline`.
+    DC_ADDRESS(0x01eec4, 0x10)
+    inline long elapsed(unsigned long stop, unsigned long start)
+    {
+        return static_cast<long>(stop - start);
+    }
+
+    // DC struct.h:412 explicitly calls Get then Elapsed(stop, start).
+    DC_ADDRESS(0x01eed4, 0x30)
+    inline long elapsedSince(unsigned long time)
+    {
+        return elapsed(get(), time);
+    }
+
+    // DC public ?IsPast@GameTime@@YA_NK@Z proves native bool although
+    // NB11 lowers its return record to T_UCHAR. DC struct.h:420 calls
+    // ElapsedSince then tests the sign.
+    DC_ADDRESS(0x01ef04, 0x24)
+    inline bool isPast(unsigned long time)
+    {
+        return elapsedSince(time) >= 0;
+    }
+
+    // DC struct.h:438 - the frame-pacing step, a header inline expanded at
+    // every site. `this_frame` is read once and the clamp compares
+    // `interval` on the left. DC struct.h:439 calls ElapsedSince before the
+    // clamp/add at line442.
+    DC_ADDRESS(0x04c994, 0x2c)
+    inline unsigned long nextFrameTime(unsigned long thisFrame,
+                                       long interval)
+    {
+        long lag = elapsedSince(thisFrame);
+        if (interval > lag)
+            lag = interval;
+        return thisFrame + lag;
+    }
+} // namespace GameTime
+
+#endif /* HOMM3_STRUCT_H */

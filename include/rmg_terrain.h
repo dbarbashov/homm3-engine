@@ -1,0 +1,344 @@
+// Complete-only random-map terrain transition support.
+#ifndef HOMM3_RMG_TERRAIN_H
+#define HOMM3_RMG_TERRAIN_H
+
+#include <memory>
+#include <set>
+#include <vector>
+
+#include "rmg.h"
+
+
+// Brush strength scales each terrain's special base-frame chance, which is
+// a percentage at full strength. The generator always paints at half.
+enum ERmgBrushStrength {
+    RMG_FULL_BRUSH_STRENGTH = 8,
+    RMG_BRUSH_STRENGTH = 4
+};
+
+// Cell transition shapes, unreflected (flipX/flipY give the rest). Names list
+// the other-terrain neighbours, each run followed by its edge kind: N_W = both
+// sides (outer corner), SE = that diagonal only, DIAG = corner on a 45-degree
+// edge. Id 1 is unused. Diagrams: docs/reference/rmg-terrain-shapes.md
+// The basic blend shapes as their main rules find them (hard = blend + 6).
+// North is up; C is the cell, e an edge of its kind, . none, ? not fixed.
+//   N_W    W      N      SE
+//   ? e ?  ? . .  ? e ?  . . ?
+//   e C ?  e C ?  . C .  . C .
+//   ? ? .  ? . .  . ? .  ? . e
+enum ERmgTerrainShape {
+    SHAPE_FILL = 0,
+    SHAPE_N_W_BLEND = 2,
+    SHAPE_W_BLEND = 3,
+    SHAPE_N_BLEND = 4,
+    SHAPE_SE_BLEND = 5,
+    SHAPE_N_W_DIAG_BLEND = 6,
+    SHAPE_SE_DIAG_BLEND = 7,
+    SHAPE_N_W_HARD = 8,
+    SHAPE_W_HARD = 9,
+    SHAPE_N_HARD = 10,
+    SHAPE_SE_HARD = 11,
+    SHAPE_N_W_DIAG_HARD = 12,
+    SHAPE_SE_DIAG_HARD = 13,
+    SHAPE_NW_SE_BLEND = 14,
+    SHAPE_NW_BLEND_SE_HARD = 15,
+    SHAPE_NW_SE_HARD = 16,
+    SHAPE_E_BLEND_SW_HARD = 17,
+    SHAPE_S_BLEND_NE_HARD = 18,
+    SHAPE_E_BLEND_SE_HARD = 19,
+    SHAPE_S_BLEND_SE_HARD = 20,
+    SHAPE_E_HARD_SW_BLEND = 21,
+    SHAPE_S_HARD_NE_BLEND = 22,
+    SHAPE_N_W_SE_BLEND = 23,
+    SHAPE_N_W_SE_HARD = 24,
+    SHAPE_N_W_BLEND_SE_HARD = 25,
+    SHAPE_N_W_HARD_SE_BLEND = 26,
+    SHAPE_E_S_BLEND_SE_HARD = 27,
+    SHAPE_E_S_BLEND_NE_SW_HARD = 28,
+    RMG_TERRAIN_SHAPE_COUNT = 29
+};
+
+// No edge for equal terrain, a sand centre, or a dirt centre that blends with
+// its neighbour; other blending pairs blend, remaining changes are hard edges.
+enum ERmgTerrainNeighbourKind {
+    RMG_NEIGHBOUR_NO_EDGE = 0,
+    RMG_NEIGHBOUR_BLEND_EDGE = 1,
+    RMG_NEIGHBOUR_HARD_EDGE = 2
+};
+
+// A gap cell C has other terrain x on both sides along one axis. North is up:
+//   horizontal  vertical
+//                   x
+//     x C x         C
+//                   x
+enum ERmgTerrainGapAxis {
+    RMG_HORIZONTAL_GAP,
+    RMG_VERTICAL_GAP
+};
+
+struct TRmgTerrainPatternEntry {
+    ERmgTerrainShape m_transition;
+    b8 m_special;
+};
+
+struct TRmgTerrainTransitionEntry {
+    ERmgTerrainShape m_transition;
+    b8 m_flipX;
+    b8 m_flipY;
+
+    bool matches(ERmgTerrainShape transition, b8 flipX, b8 flipY) const;
+};
+
+
+// The diagonal-neighbour probes clamp through a reference selector of their
+// own. Mac 0x258f18 keeps its operand order: value against minimum, then
+// value against maximum (cmpw value,maximum; ble), whereas the shared
+// includes.h tLimit (Mac 0x14cecc) tests maximum against value. Retail x86
+// shows the same split: cmp value,maximum; jg here, cmp maximum,value; jl
+// in tLimit's expansions.
+template <class T>
+inline const T& clampToRange(const T& minimum, const T& value,
+                             const T& maximum)
+{
+    if (value < minimum) {
+        return minimum;
+    } else if (value > maximum) {
+        return maximum;
+    } else {
+        return value;
+    }
+}
+
+#include "rmg_terrain_tile.h"
+
+struct TRmgTerrainFlip {
+    bool m_flipX;
+    bool m_flipY;
+
+    TRmgTerrainFlip() {}
+    TRmgTerrainFlip(bool x, bool y) : m_flipX(x), m_flipY(y) {}
+    // Loki's TFlippedState::operator!; Mac and Windows retain the indexed
+    // object's address across both inverted member reads in the selector.
+    TRmgTerrainFlip operator!() const { return TRmgTerrainFlip(!m_flipX, !m_flipY); }
+};
+
+// The cache word is decoded identically throughout the 0x5b3dd0..0x5b76f0
+// retail cluster. Its constructor clears only the validity bit; the upper
+// two bits survive every fill from the map adapter.
+struct TRmgPackedTerrainCell {
+    u16 m_initialized : 1;
+    u16 m_terrain : 4;
+    u16 m_frame : 7;
+    u16 m_flipX : 1;
+    u16 m_flipY : 1;
+    u16 m_unknown14 : 2;
+
+    TRmgPackedTerrainCell() : m_initialized(0) {}
+
+    inline void setInitialized() { m_initialized = 1; }
+    inline void setTerrain(s32 value) { m_terrain = value; }
+    inline void setFrame(s32 value) { m_frame = value; }
+    inline void setFlipX(b8 value) { m_flipX = value; }
+    inline void setFlipY(b8 value) { m_flipY = value; }
+};
+
+// The terrain-type traits of the map editor's TerrainPlacement.cpp. The map
+// editor's RTTI names the three classes TTerrainTypeTraits,
+// TNormalTerrainTypeTraits and TRockTraits (anonymous namespace there), and
+// Loki h3maped exports their constructors and the five virtuals below under
+// these spellings (isTileSpecial, getTileGroundShape, pickFullTile,
+// pickTransitionTile, hasSpecialTiles). Base vtable 0x642c80 fixes the six
+// slots.
+class TTerrainTypeTraits {
+public:
+    b8 m_blendsWithOtherTerrain; // +0x04
+    // isInvalid and repairTerrainPoint
+    // consult this byte before joining separated neighbour regions.
+    b8 m_allowsSeparatedNeighbours; // +0x05
+    char m_tailPadding[2];
+
+    TTerrainTypeTraits(b8 blendsWithOtherTerrain = 0,
+        b8 allowsSeparatedNeighbours = 0)
+        : m_blendsWithOtherTerrain(blendsWithOtherTerrain),
+          m_allowsSeparatedNeighbours(allowsSeparatedNeighbours) {}
+    // Retail's base vtable at 0x642c80 has six _purecall slots. The pure
+    // destructor still has its ordinary out-of-line body at 0x5b3850.
+    virtual ~TTerrainTypeTraits() = 0;
+    virtual b8 hasSpecialTiles() = 0;
+    virtual b8 isTileSpecial(s32 frame) = 0;
+    virtual s32 getTileGroundShape(s32 frame) = 0;
+    virtual s32 pickFullTile(s32 strength, s32 oldFrame) = 0;
+    virtual s32 pickTransitionTile(
+        s32 transition,
+        TRmgTerrainFlip requestedFlip,
+        TRmgTerrainFlip& selectedFlip,
+        s32 oldFrame) = 0;
+};
+
+struct TRmgTerrainPatternRange {
+    s32 m_firstFrame;
+    u32 m_frameCount;
+
+    // Both table owners initialize their range arrays before the body scan.
+    TRmgTerrainPatternRange() : m_firstFrame(0), m_frameCount(0) {}
+};
+
+
+
+// Fixed table at retail 0x6424a8; the Complete-only source name is unknown.
+// Unlike the pattern rule's special-frame flag, +4/+5 here are the two
+// transition flips (selector 0x5b3ae0 and range constructor 0x5b3940).
+
+DATA(0x006424a8)
+extern const TRmgTerrainTransitionEntry g_rmgTerrainPatterns[];
+
+// The table constructor at 0x5b3940 builds 116 first/count pairs from the
+// fixed pattern records. The stateless table rule consumes the first pair.
+// The static initializer at 0x5b3a10 passes this complete global as `this`.
+// Complete-only owner spelling is provisional.
+struct TRmgTerrainPatternTable {
+    TRmgTerrainPatternRange m_ranges[RMG_TERRAIN_SHAPE_COUNT * 2 * 2];
+    TRmgTerrainPatternTable();
+};
+DATA(0x006a4158)
+extern TRmgTerrainPatternTable g_rmgTerrainPatternRanges;
+
+// Constructor 0x5b3780 retains the entry-array pointer at +0x10 and builds
+// 58 first/count ranges at +0x14. This data-backed traits class supplies
+// vtable 0x642c98.
+class TNormalTerrainTypeTraits : public TTerrainTypeTraits {
+public:
+    s32 m_specialFrameChance;                  // +0x08: percentage at strength 8
+    u32 m_entryCount;                  // +0x0c
+    const TRmgTerrainPatternEntry* m_entries;   // +0x10
+    TRmgTerrainPatternRange m_ranges[RMG_TERRAIN_SHAPE_COUNT * 2];        // +0x14
+
+    TNormalTerrainTypeTraits(b8 blendsWithOtherTerrain,
+        b8 allowsSeparatedNeighbours, s32 specialFrameChance,
+        u32 entryCount, const TRmgTerrainPatternEntry* entries);
+
+    // Implicit destruction shares the base's retained cleanup at 0x5b3850;
+    // both concrete rule vtables use the deleting wrapper at 0x5b3a50.
+    virtual b8 hasSpecialTiles();
+    virtual b8 isTileSpecial(s32 frame);
+    virtual s32 getTileGroundShape(s32 frame);
+    virtual s32 pickFullTile(s32 strength, s32 oldFrame);
+    virtual s32 pickTransitionTile(
+        s32 transition,
+        TRmgTerrainFlip requestedFlip,
+        TRmgTerrainFlip& selectedFlip,
+        s32 oldFrame);
+};
+
+// Vtable 0x642cb0 is the stateless, table-backed rock traits, whose remaining
+// slots read the fixed transition table at 0x6424a8.
+class TRockTraits : public TTerrainTypeTraits {
+public:
+    TRockTraits();
+    virtual b8 hasSpecialTiles();
+    virtual b8 isTileSpecial(s32 frame);
+    virtual s32 getTileGroundShape(s32 frame);
+    virtual s32 pickFullTile(s32 strength, s32 oldFrame);
+    virtual s32 pickTransitionTile(
+        s32 transition,
+        TRmgTerrainFlip requestedFlip,
+        TRmgTerrainFlip& selectedFlip,
+        s32 oldFrame);
+};
+
+// Retail 0x642bd8 is a pointer table in the read-only .rdata section.
+extern TTerrainTypeTraits* const g_rmgTerrainRules[];
+
+// RepairTerrainPoint ranks up to four disjoint runs in an eight-cell ring.
+struct TRmgTerrainGap {
+    u32 m_weight;
+    u32 m_start;
+    u32 m_length;
+};
+
+// Provisional role name. Allocation at 0x5b7250 proves the 0x44-byte object;
+// the constructor at 0x5b45f0 proves the field order and the two Dinkumware
+// point sets followed by the packed-cell vector.
+// Prior provisional class role: TRmgTerrainPainter.
+class TRmgTerrainPainter {
+public:
+    TTerrainPlacementOp::TAbstractMap* m_adapter;                // +0x00
+    s32 m_paintTerrain;                               // +0x04
+    s32 m_transitionStrength;                         // +0x08
+    TTilePoint m_size;                             // +0x0c
+    // Cells of the painted terrain that may need gap repair.
+    std::set<TTilePoint> m_repairPoints;            // +0x14
+    // Adjacent cells of another terrain, checked after repair.
+    std::set<TTilePoint> m_otherTerrainPoints;          // +0x24
+    std::vector<TRmgPackedTerrainCell> m_packedCells;   // +0x34
+
+    TRmgTerrainPainter(
+        TTerrainPlacementOp::TAbstractMap* newAdapter,
+        s32 terrain,
+        s32 strength);
+    ~TRmgTerrainPainter();
+
+    void finish();
+    s32 changeTerrain(s32 terrain, s32 strength);
+    void paintRectangle(
+        u32 x, u32 y,
+        u32 rectangleWidth, u32 rectangleHeight);
+
+    void initializePackedCell(const TTilePoint& point, u32 index);
+    TRmgPackedTerrainCell* getPackedCell(const TTilePoint& point);
+    s32 getTerrain(const TTilePoint& point);
+    s32 getFrame(const TTilePoint& point);
+    // Provisional dimension accessors inferred from paintTransitions' scalar
+    // loads and inline boundaries. Unused declarations are byte-neutral;
+    // the source calls restore all but one of its retained cache reads.
+    u32 getWidth() const;
+    u32 getHeight() const;
+    void paintTransitions();
+    TRmgTerrainTile getTile(const TTilePoint& point);
+    s32 selectBaseFrame(const TTilePoint& point, s32 terrain);
+    s32 selectBaseFrame(const TTilePoint& point, s32 terrain, s32 oldFrame);
+    void setTile(const TTilePoint& point, const TRmgTerrainTile& tile);
+    const s32& getPaintTerrain() const;
+    b8 isPaintTerrain(const TTilePoint& point);
+
+    void paintPoint(const TTilePoint& point);
+    void queueOtherTerrainNeighbours(const TTilePoint& point);
+    void repairTerrainPoint(const TTilePoint& point);
+    // A gap cell C has other terrain x on both sides along one axis. North is up:
+    //   horizontal  vertical
+    //                   x
+    //     x C x         C
+    //                   x
+    // Spellings of Loki TerrainPlacement.cpp's layer predicates, which have
+    // the same bodies: wouldBeInvalidHoriz/Vert (given terrain), the
+    // inline isInvalidHoriz/Vert and isInvalid (own terrain),
+    // computeAdjacentSimilar and hasMultipleAdjSimilarSpans.
+    b8 wouldBeInvalidHoriz(const TTilePoint& point, s32 terrain);
+    b8 wouldBeInvalidVert(const TTilePoint& point, s32 terrain);
+    b8 isInvalidHoriz(const TTilePoint& point);
+    b8 isInvalidVert(const TTilePoint& point);
+    b8 isInvalid(const TTilePoint& point);
+    b8 hasMultipleAdjSimilarSpans(const TTilePoint& point);
+    void computeAdjacentSimilar(
+        const TTilePoint& point, b8* matches);
+
+    void buildNeighbourKinds(const TTilePoint& point, s32* neighbours);
+    b8 hasMatchingDiagonalNeighbour(
+        const TTilePoint& point, const TRmgTerrainFlip& flip);
+    b8 hasDifferentOuterAxisNeighbour(
+        const TTilePoint& point, const TRmgTerrainFlip& flip);
+    s32 getTransitionStrength(const TTilePoint& point, s32 terrain);
+
+    static void repaintMap(TTerrainPlacementOp::TAbstractMap* map, u32 specialTileFrequency);
+    static u32 computeEffectiveFrequency(u32 specialTileFrequency,
+        TTerrainPlacementOp::TAbstractMap* map, const TTilePoint& point, s32 terrain);
+};
+
+SIZE(TRmgTerrainTile, 0x0c);
+SIZE(TRmgTerrainFlip, 0x02);
+SIZE(TRmgPackedTerrainCell, 0x02);
+SIZE(TTerrainTypeTraits, 0x08);
+SIZE(TRmgTerrainPainter, 0x44);
+SIZE(TTerrainPlacementOp, 0x08);
+
+#endif  // HOMM3_RMG_TERRAIN_H

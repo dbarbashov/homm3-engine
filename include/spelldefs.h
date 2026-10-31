@@ -1,0 +1,51 @@
+#ifndef HOMM3_SPELLDEFS_H
+#define HOMM3_SPELLDEFS_H
+
+#include "va.h"
+
+#include <vector>
+
+#include "armygrp.h"
+
+// Dreamcast SpellDefs.h:345..346: original IsMindSpell.
+// Its header definition and get_spell_work_chance line 505 establish the
+// canonical accessor boundary; inlined in the caller.
+DC_ADDRESS(0x04fd34, 0x20)
+inline unsigned char isMindSpell(int spell)
+{
+    return (akSpellTraits[spell].m_flags & 0x400) != 0;
+}
+
+// Retail spell-class flag roles in TSpellTraits::field_c. Names are
+// behavior-derived; values and mastery thresholds are byte-proven by
+// SpellTargetsASingleArmy.
+enum ESpellTargetFlags {
+    SPELL_TARGET_ALWAYS_SINGLE = 0x10,
+    SPELL_TARGET_MASS_AT_ADVANCED = 0x20,
+    SPELL_TARGET_MASS_AT_EXPERT = 0x40,
+    // mark_area_highlights owns the rollover preview for the two area
+    // traits carried together by this mask. Retail tests the pair as one
+    // value before also admitting Berserk explicitly.
+    SPELL_TARGET_MARK_AREA = 0x280
+};
+
+unsigned char spellTargetsASingleArmy(int spell, int sslevel);
+unsigned char InitializeSpellTraitsTable();
+
+// Mutable implementation storage filled from sptraits.txt. The public
+// akSpellTraits pointer/reference cell is at 0x687f58; retail writes this
+// adjacent 81*136-byte backing array directly. Name is provisional because
+// only the public DC array name survives.
+extern TSpellTraits g_spellTraitsImp[kNumSpellsAndCreatureEffects];
+
+// The first sptraits.txt column of each group after the mana costs, as
+// InitializeSpellTraits's asserts check them.
+enum ESpellTraitsColumn {
+    SPELL_TRAITS_COLUMN_POWER_FACTOR = 11,
+    SPELL_TRAITS_COLUMN_MASTERY_BONUS = 12,
+    SPELL_TRAITS_COLUMN_TOWN_CHANCE = 16,
+    SPELL_TRAITS_COLUMN_AI_VALUE = 25,
+    SPELL_TRAITS_COLUMN_DESCRIPTION = 29
+};
+
+#endif  /* HOMM3_SPELLDEFS_H */

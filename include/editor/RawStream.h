@@ -1,0 +1,181 @@
+// RawStream.h - the editors' unformatted streams over a streambuf. Loki's
+// h3maped exports TRawIStream(streambuf*) and TRawOStream(streambuf*)
+// (19 bytes each, one member), the member templates operator>> <T> and
+// operator<< <T> for the scalars and char arrays of the map format, and the
+// nested failures TRawIStream::TReadFailure and TRawOStream::TWriteFailure
+// (RTTI .?AVTReadFailure@TRawIStream@@, .?AVTWriteFailure@TRawOStream@@ in
+// both Windows editors).
+#ifndef HOMM3_EDITOR_RAWSTREAM_H
+#define HOMM3_EDITOR_RAWSTREAM_H
+
+#include <algorithm>
+#include <bitset>
+#include <streambuf>
+#include <string>
+#include <vector>
+
+#include "exceptions.h"
+#include "va.h"
+
+class TRawIStream {
+public:
+    // h3ccmped 0x4011b0: the default runtime error, then the count read.
+    class TReadFailure : public TRuntimeError {
+    public:
+        explicit TReadFailure(int nRead) : m_nRead(nRead) {}
+        int m_nRead;
+    };
+
+    explicit TRawIStream(std::streambuf* pStreamBuf) : m_pStreamBuf(pStreamBuf) {}
+
+    template <class T>
+    TRawIStream& operator>>(T& value)
+    {
+        int nRead = m_pStreamBuf->sgetn(reinterpret_cast<char*>(&value), sizeof(T));
+        if (nRead < sizeof(T))
+            throw TReadFailure(nRead);
+        return *this;
+    }
+
+    TRawIStream& read(char* pData, unsigned int count)
+    {
+        int nRead = m_pStreamBuf->sgetn(pData, count);
+        if (nRead < count)
+            throw TReadFailure(nRead);
+        return *this;
+    }
+
+private:
+    std::streambuf* m_pStreamBuf;
+};
+
+#include "editor/RawStreamValue.h"
+
+// A string: its length, then its characters through a 512-byte buffer
+// (h3maped 0x4190cb, cdecl; h3ccmped expands it in the campaign readers).
+// As in the campaign reader, retain the scalar-return helper and save the
+// remaining count before resize. Its returned-value lifetime reproduces the
+// map editor's initial register-held count and all 183 retail bytes.
+inline TRawIStream& operator>>(TRawIStream& stream, std::string& value)
+{
+    value.erase(value.begin(), value.end());
+    long size = readValue<long>(stream);
+    std::string::size_type remaining = size;
+    value.resize(size);
+    for (std::string::iterator dest = value.begin(); remaining > 0;) {
+        char buffer[512];
+        std::string::size_type count = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
+        stream.read(buffer, count);
+        std::copy(buffer, buffer + count, dest);
+        dest += count;
+        remaining -= count;
+    }
+    return stream;
+}
+
+class TRawOStream {
+public:
+    // h3ccmped 0x401280: the default runtime error, then the count written.
+    class TWriteFailure : public TRuntimeError {
+    public:
+        explicit TWriteFailure(int nWritten) : m_nWritten(nWritten) {}
+        int m_nWritten;
+    };
+
+    explicit TRawOStream(std::streambuf* pStreamBuf) : m_pStreamBuf(pStreamBuf) {}
+
+    template <class T>
+    TRawOStream& operator<<(const T& value)
+    {
+        int nWritten = m_pStreamBuf->sputn(reinterpret_cast<const char*>(&value), sizeof(T));
+        if (nWritten < sizeof(T))
+            throw TWriteFailure(nWritten);
+        return *this;
+    }
+
+    TRawOStream& write(const char* pData, unsigned int count)
+    {
+        int nWritten = m_pStreamBuf->sputn(pData, count);
+        if (nWritten < count)
+            throw TWriteFailure(nWritten);
+        return *this;
+    }
+
+private:
+    std::streambuf* m_pStreamBuf;
+};
+
+// A string: its length, then its characters (h3maped 0x428afc, cdecl).
+// The length goes through a long local, as in the campaign editor's copy
+// of this header and Loki's writeContainer (a long count); retail's call
+// target is the int/long writer that ICF folds into one body.
+inline TRawOStream& operator<<(TRawOStream& stream, const std::string& value)
+{
+    long size = value.size();
+    stream << size;
+    stream.write(value.c_str(), value.length());
+    return stream;
+}
+
+// A bit set as the map format packs it: (N + 7) / 8 bytes, bit 0 of byte 0
+// first (the map's artifact and hero masks, a hero's spells: h3maped
+// 0x433db5, 0x434288).
+template <size_t N>
+void readBitset(TRawIStream& stream, std::bitset<N>& bits)
+{
+    unsigned char aByte[(N + 7) / 8];
+    stream >> aByte;
+    for (size_t i = 0; i < N; i++)
+        bits.set(i, (aByte[i / 8] & (1 << (i % 8))) != 0);
+}
+
+template <size_t N>
+void writeBitset(TRawOStream& stream, const std::bitset<N>& bits)
+{
+    unsigned char aByte[(N + 7) / 8];
+    std::fill_n(aByte, sizeof(aByte), 0);
+    for (size_t i = 0; i < N; i++)
+        if (bits.test(i))
+            aByte[i / 8] |= 1 << (i % 8);
+    stream << aByte;
+}
+
+// A counted sequence: the count, then each item (the map's rumors, 0x433f90).
+template <class T>
+void readContainer(TRawIStream& stream, std::vector<T>& aItem)
+{
+    aItem.erase(aItem.begin(), aItem.end());
+    long numItems;
+    stream >> numItems;
+    unsigned int count = numItems;
+    while (count-- > 0) {
+        T item;
+        stream >> item;
+        aItem.push_back(item);
+    }
+}
+
+// Each item of a range (Loki writeFromIter). The rumors' writer, h3maped
+// 0x434342, caches the range end and advances before each item's write.
+template <class InputIterator>
+inline TRawOStream& writeFromIter(TRawOStream& stream, InputIterator first, InputIterator last)
+{
+    while (first != last)
+        stream << *first++;
+    return stream;
+}
+
+// Loki writes the cast size() (Loki RawStream.h writeContainer). Residual:
+// retail computes the count into eax and stores it after loading the
+// stream, where VC6 stores it from each of size()'s branches; a named
+// size_type count reproduces retail's order.
+template <class T>
+// VA instance: writeContainer<TRumor>
+VA(0x00434342, 0x4a)
+void writeContainer(TRawOStream& stream, const std::vector<T>& aItem)
+{
+    stream << static_cast<long>(aItem.size());
+    writeFromIter(stream, aItem.begin(), aItem.end());
+}
+
+#endif  /* HOMM3_EDITOR_RAWSTREAM_H */

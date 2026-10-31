@@ -1,0 +1,842 @@
+#ifndef HOMM3_TOWN_H
+#define HOMM3_TOWN_H
+
+#include "va.h"
+#include "town_type.h"
+
+#include <bitset>
+#include <string>
+#include <vector>
+
+#include "armygrp.h"
+
+class TownExtra;  // canonical definition in Game.h
+
+// The retail town-event building tables contain 41 entries per faction.
+enum { TOWN_EVENT_BUILDING_SLOTS = 41 };
+
+// Building ids. DC LF_ENUM `type_building_id` (T_INT4, 245 enumerators:
+// these 45 canonical slots plus 200 per-town alias spellings such as
+// const_griffin_horde = 18). Transcribed from the Dreamcast CodeView
+// dump; four values are retail-proven on this image and the rest ride
+// on the DC roster (same ratification status as mapcell.h's
+// TAdventureObjectType):
+//   HORDE_ID / HORDE_UPG_ID / HORDE_2_ID / HORDE_2_UPG_ID - the
+//     .rdata quad {18,19,24,25} at 0x642e20 that get_horde_effect
+//     scans, and UpgradedDwellingID's two special cases;
+//   SPECIAL_BUILDING_ID / DWELLING_0_ID - get_build_cost_array's two
+//     band boundaries (cmp 0x11 / cmp 0x1e);
+//   MARKETPLACE_SILO_ID / HALL_TOWN_ID / HALL_CITY_ID /
+//     HALL_CAPITOL_ID / HOLY_GRAIL_ID - the bitNumber slots
+//     get_gold_income tests (0x66ce10 / cdf0 / cdf8 / ce00 / ce68);
+//   CASTLE_FORT_ID / CASTLE_CITADEL_ID / CASTLE_CASTLE_ID - the
+//     0x66cdd0/cdd8/cde0 bits check_wall_archery_penalty and
+//     get_castle_growth_bonus read;
+//   MAX_BUILDING_TYPE = 44 - the row width of every per-town building
+//     table (included_buildings, gHierarchyMask) and the bound of
+//     CalcNumLevelArchers' bitNumber walk (end symbol 0x66cef8 =
+//     bitNumber + 44).
+enum type_building_id {
+    MAGE_GUILD_ID = 0,
+    MAGE_GUILD2_ID = 1,
+    MAGE_GUILD3_ID = 2,
+    MAGE_GUILD4_ID = 3,
+    MAGE_GUILD5_ID = 4,
+    TAVERN_ID = 5,
+    DOCK_ID = 6,
+    CASTLE_FORT_ID = 7,
+    CASTLE_CITADEL_ID = 8,
+    CASTLE_CASTLE_ID = 9,
+    HALL_VILLAGE_ID = 10,
+    HALL_TOWN_ID = 11,
+    HALL_CITY_ID = 12,
+    HALL_CAPITOL_ID = 13,
+    MARKETPLACE_ID = 14,
+    MARKETPLACE_SILO_ID = 15,
+    BLACKSMITH_ID = 16,
+    SPECIAL_BUILDING_ID = 17,
+    HORDE_ID = 18,
+    HORDE_UPG_ID = 19,
+    DOCK_WITH_BOAT_ID = 20,
+    EXTRA_0_ID = 21,
+    EXTRA_1_ID = 22,
+    EXTRA_2_ID = 23,
+    HORDE_2_ID = 24,
+    HORDE_2_UPG_ID = 25,
+    HOLY_GRAIL_ID = 26,
+    EXTRA_3_ID = 27,
+    EXTRA_4_ID = 28,
+    EXTRA_5_ID = 29,
+    DWELLING_0_ID = 30,
+    DWELLING_1_ID = 31,
+    DWELLING_2_ID = 32,
+    DWELLING_3_ID = 33,
+    DWELLING_4_ID = 34,
+    DWELLING_5_ID = 35,
+    DWELLING_6_ID = 36,
+    DWELLING_0_UPG_ID = 37,
+    DWELLING_1_UPG_ID = 38,
+    DWELLING_2_UPG_ID = 39,
+    DWELLING_3_UPG_ID = 40,
+    DWELLING_4_UPG_ID = 41,
+    DWELLING_5_UPG_ID = 42,
+    DWELLING_6_UPG_ID = 43,
+    MAX_BUILDING_TYPE = 44,
+    // The rest of the Dreamcast LF_ENUM (245 enumerators): generic and
+    // per-town aliases of the slots above.
+    const_village_hall = 10,
+    const_town_hall = 11,
+    const_city_hall = 12,
+    const_capitol_hall = 13,
+    const_fort = 7,
+    const_citadel = 8,
+    const_castle = 9,
+    const_tavern = 5,
+    const_blacksmith = 16,
+    const_market = 14,
+    const_resource_silo = 15,
+    const_mage_guild_1 = 0,
+    const_mage_guild_2 = 1,
+    const_mage_guild_3 = 2,
+    const_mage_guild_4 = 3,
+    const_mage_guild_5 = 4,
+    const_shipyard = 6,
+    LIGHTHOUSE_ID = 17,
+    STABLES_ID = 21,
+    TAVERN_UPG_ID = 22,
+    const_colossus = 26,
+    const_lighthouse = 17,
+    const_brotherhood_of_the_sword = 22,
+    const_horse_stable = 21,
+    const_pikeman_generator = 30,
+    const_halberdier_generator = 37,
+    const_light_crossbowman_generator = 31,
+    const_heavy_crossbowman_generator = 38,
+    const_griffin_generator = 32,
+    const_royal_griffin_generator = 39,
+    const_griffin_horde = 18,
+    const_royal_griffin_horde = 19,
+    const_swordsman_generator = 33,
+    const_crusader_generator = 40,
+    const_monk_generator = 34,
+    const_zealot_generator = 41,
+    const_cavalier_generator = 35,
+    const_champion_generator = 42,
+    const_angel_generator = 36,
+    const_archangel_generator = 43,
+    const_storytelling_flora = 26,
+    const_mystic_garden = 17,
+    const_rainbow = 21,
+    const_treasury = 22,
+    const_house_1 = 23,
+    const_house_2 = 27,
+    const_house_3 = 28,
+    const_house_4 = 29,
+    const_centaur_generator = 30,
+    const_elite_centaur_generator = 37,
+    const_dwarf_generator = 31,
+    const_battle_dwarf_generator = 38,
+    const_dwarf_horde = 18,
+    const_battle_dwarf_horde = 19,
+    const_wood_elf_generator = 32,
+    const_grand_elf_generator = 39,
+    const_pegasus_generator = 33,
+    const_silver_pegasus_generator = 40,
+    const_treefolk_generator = 34,
+    const_briar_treefolk_generator = 41,
+    const_treefolk_horde = 24,
+    const_briar_treefolk_horde = 25,
+    const_unicorn_generator = 35,
+    const_war_unicorn_generator = 42,
+    const_green_dragon_generator = 36,
+    const_gold_dragon_generator = 43,
+    ARTIFACT_MERCHANTS_ID = 17,
+    WATCHTOWER_ID = 21,
+    LIBRARY_ID = 22,
+    WALL_OF_GLYPHIC_KNOWLEDGE_ID = 23,
+    const_skyship = 26,
+    const_artifact_merchants = 17,
+    const_library = 22,
+    const_watchtower = 21,
+    const_wall_of_glyphic_knowledge = 23,
+    const_apprentice_gremlin_generator = 30,
+    const_master_gremlin_generator = 37,
+    const_stone_gargoyle_generator = 31,
+    const_obsidian_gargoyle_generator = 38,
+    const_gargoyle_horde = 18,
+    const_obsidian_gargoyle_horde = 19,
+    const_stone_golem_generator = 32,
+    const_iron_golem_generator = 39,
+    const_mage_generator = 33,
+    const_archmage_generator = 40,
+    const_genie_generator = 34,
+    const_caliph_generator = 41,
+    const_naga_sentinel_generator = 35,
+    const_naga_guardian_generator = 42,
+    const_lesser_titan_generator = 36,
+    const_greater_titan_generator = 43,
+    BRIMSTONE_STORMCLOUDS_ID = 21,
+    CASTLE_GATE_ID = 22,
+    ORDER_OF_PAIN_ID = 23,
+    const_eternal_effigy = 26,
+    const_brimstone_stormclouds = 21,
+    const_castle_gate = 22,
+    const_order_of_pain = 23,
+    const_imp_generator = 30,
+    const_familiar_generator = 37,
+    const_imp_horde = 18,
+    const_familiar_horde = 19,
+    const_gog_generator = 31,
+    const_magog_generator = 38,
+    const_hellhound_generator = 32,
+    const_cerberus_generator = 39,
+    const_hellhound_horde = 24,
+    const_cerberus_horde = 25,
+    const_single_horned_demon_generator = 33,
+    const_dual_horned_demon_generator = 40,
+    const_pit_fiend_generator = 34,
+    const_pit_foe_generator = 41,
+    const_efreet_generator = 35,
+    const_efreet_sultan_generator = 42,
+    const_devil_generator = 36,
+    const_arch_devil_generator = 43,
+    const_king_of_terror = 26,
+    const_shroud_generator = 17,
+    const_necromancy_amplifier = 21,
+    const_skeleton_transformer = 22,
+    const_skeleton_generator = 30,
+    const_skeleton_warrior_generator = 37,
+    const_skeleton_horde = 18,
+    const_skeleton_warrior_horde = 19,
+    const_zombie_generator = 31,
+    const_zombie_lord_generator = 38,
+    const_wight_generator = 32,
+    const_wraith_generator = 39,
+    const_vampire_generator = 33,
+    const_nosferatu_generator = 40,
+    const_lich_generator = 34,
+    const_power_lich_generator = 41,
+    const_black_knight_generator = 35,
+    const_black_lord_generator = 42,
+    const_bone_dragon_generator = 36,
+    const_ghost_dragon_generator = 43,
+    const_river_of_blood = 26,
+    const_mana_vortex = 21,
+    const_portal_of_summoning = 22,
+    const_academy_of_battle_scholars = 23,
+    const_troglodyte_generator = 30,
+    const_infernal_troglodyte_generator = 37,
+    const_troglodyte_horde = 18,
+    const_infernal_troglodyte_horde = 19,
+    const_harpy_generator = 31,
+    const_harpy_hag_generator = 38,
+    const_beholder_generator = 32,
+    const_evil_eye_generator = 39,
+    const_medusa_generator = 33,
+    const_medusa_queen_generator = 40,
+    const_minotaur_generator = 34,
+    const_minotaur_king_generator = 41,
+    const_manticore_generator = 35,
+    const_scorpicore_generator = 42,
+    const_red_dragon_generator = 36,
+    const_black_dragon_generator = 43,
+    const_weapon_array = 26,
+    const_escape_tunnel = 17,
+    const_freelancers_guild = 21,
+    const_ballista_works = 22,
+    const_hall_of_valhalla = 23,
+    const_goblin_generator = 30,
+    const_hobgoblin_generator = 37,
+    const_goblin_horde = 18,
+    const_hobgoblin_horde = 19,
+    const_goblin_wolf_rider_generator = 31,
+    const_hobgoblin_wolf_rider_generator = 38,
+    const_orc_generator = 32,
+    const_orc_chieftan_generator = 39,
+    const_ogre_generator = 33,
+    const_ogre_mage_generator = 40,
+    const_roc_generator = 34,
+    const_thunderbird_generator = 41,
+    const_cyclops_generator = 35,
+    const_cyclops_lord_generator = 42,
+    const_young_behemoth_generator = 36,
+    const_ancient_behemoth_generator = 43,
+    DEFENSE_CAGE_ID = 17,
+    SIEGE_DEFENSE_ID = 21,
+    SIEGE_ATTACK_ID = 22,
+    const_carnivorous_plant = 26,
+    const_blood_obelisk = 21,
+    const_glyphs_of_fear = 22,
+    const_defense_cage = 17,
+    const_gnoll_generator = 30,
+    const_gnoll_marauder_generator = 37,
+    const_gnoll_horde = 18,
+    const_gnoll_marauder_horde = 19,
+    const_primitive_lizardman_generator = 31,
+    const_advanced_lizardman_generator = 38,
+    const_dragonfly_generator = 32,
+    const_fire_dragonfly_generator = 39,
+    const_basilisk_generator = 33,
+    const_greater_basilisk_generator = 40,
+    const_copper_gorgon_generator = 34,
+    const_bronze_gorgon_generator = 41,
+    const_wyvern_generator = 35,
+    const_wyvern_monarch_generator = 42,
+    const_hydra_generator = 36,
+    const_chaos_hydra_generator = 43
+};
+
+// DC LF_ENUM `EGameResource` (T_INT4, 37 enumerators; the tail past
+// GOLD is the reward/dialog domain, not a resource column). The seven
+// primary resources are the width of every cost row - GOLD = 6 is the
+// column get_gold_income reads out of the silo table (0x688ecc =
+// 0x688eb4 + 6*4).
+// NUM_RESOURCES is not an EGameResource member: the complete Dreamcast
+// CodeView enum does not contain it. armygrp.h's EGameResourceCount
+// defines it, since the creature cost row is the first table it sizes.
+enum EGameResource {
+    const_no_resource = -1,
+    WOOD = 0,
+    MERCURY = 1,
+    ORE = 2,
+    SULFUR = 3,
+    CRYSTAL = 4,
+    GEMS = 5,
+    GOLD = 6,
+    ABANDONED = 7,
+    RES_ARTIFACT = 8,
+    RES_SPELL = 9,
+    RES_COLOR = 10,
+    RES_GOOD_LUCK = 11,
+    RES_NEUTRAL_LUCK = 12,
+    RES_BAD_LUCK = 13,
+    RES_GOOD_MORALE = 14,
+    RES_NEUTRAL_MORALE = 15,
+    RES_BAD_MORALE = 16,
+    RES_EXPERIENCE = 17,
+    RES_HERO = 18,
+    RES_ARTIFACT_W_TEXT = 19,
+    RES_SECONDARY_SKILL = 20,
+    RES_MONSTER = 21,
+    RES_BUILDING_TT_0 = 22,
+    RES_BUILDING_TT_1 = 23,
+    RES_BUILDING_TT_2 = 24,
+    RES_BUILDING_TT_3 = 25,
+    RES_BUILDING_TT_4 = 26,
+    RES_BUILDING_TT_5 = 27,
+    RES_BUILDING_TT_6 = 28,
+    RES_BUILDING_TT_7 = 29,
+    // Complete inserts Conflux ahead of the four primary-skill icons.
+    // Retail type_dialog_icon::set proves this shifted tail through its
+    // nine-town jump-table arm and frame = resource - 31 lowering.
+    RES_BUILDING_TT_8 = 30,
+    RES_PRIMARY_SKILL_ATTACK = 31,
+    RES_PRIMARY_SKILL_DEFENSE = 32,
+    RES_PRIMARY_SKILL_POWER = 33,
+    RES_PRIMARY_SKILL_KNOWLEDGE = 34,
+    RES_MANA = 35,
+    RES_SMALL_GOLD = 36
+};
+
+// DC names this shared table townBuildingSpriteNames. Retail extends its
+// RoE eight-town run with Conflux and places the definition in townmgr.obj;
+// kb.obj's dialog-icon switch is the first proven cross-TU consumer.
+extern const char* g_townBuildingSpriteNames[9];
+
+// town.cpp owns the DATA claim; TResourceDisplay consumes the current
+// player-position selector directly, as its retail bodies do.
+extern int g_curWatchPlayer;
+
+// Retail .data 0x67814c; Dreamcast publishes the same global name. Both
+// hero::hire and town::hire subtract it from the player's gold resource.
+extern int g_heroGoldCost;
+
+// DC struct.h roster: exactly two dwords. make_gift's retail vector
+// advances by eight bytes and writes the resource id followed by the
+// displayed quantity before inserting an entry.
+struct type_dialog_resource {
+public:
+    // Retail only proves a four-byte resource index in the dialog vector;
+    // the DC enum name is semantic evidence, not an x86 layout requirement.
+    int m_resource;
+    // UNSIGNED, retyped in place 2026-08-20: show_creature_rewards
+    // splits the packed count|creature dword with `shr 16`, which a
+    // signed long cannot produce.
+    unsigned long m_qualifier;
+};
+SIZE(type_dialog_resource, 8);
+
+// DC LF_INTERFACE `type_horde_effect`, size 8, three members at the
+// offsets initialize_hordes writes: creature @0, bonus @4 (16-bit
+// store), dwelling @6 (16-bit store).
+struct type_horde_effect {
+public:
+    TCreatureType m_creature;
+    short m_bonus;
+    short m_dwelling;
+};
+SIZE(type_horde_effect, 8);
+
+// Head model. sizeof(town) == 360 from BOTH ends: the ai_player town-array
+// stride is 360, and `available` (the last member the TU touches) sits at
+// 0x160..0x167 - exactly 0x168. Field evidence:
+//   +0x00 id     - can_build and Deallocate sign-extend it and index
+//                  gpGame->towns with it (stride 360, i.e. the town
+//                  array's own element size);
+//   +0x01 owner  - sign-extended into the gpGame->players index
+//                  (stride 360) by can_build/can_ever_build/
+//                  get_buildable_mask/Deallocate; Deallocate stores -1;
+//   +0x02        - a byte can_build reads out of gpGame->towns[id] and
+//                  refuses to build when nonzero; role unattested;
+//   +0x04 type   - SIGNED char: every town-table index in this TU
+//                  (get_silo_income, get_horde_effect,
+//                  get_build_cost_array, get_gold_income,
+//                  get_buildable_mask) widens it with movsx;
+//   +0x08 boatX, +0x0c/+0x10 the two hero slots, +0xe0 garrison,
+//   +0x150/+0x158/+0x160 the three building masks.
+// For give_event_reward's parameter below; gated with it so no other
+// view of this header gains the type name (ungated here, this forward
+// declaration changes initialize_game_data, the include-set canary).
+class TTownEvent;
+
+DATA(0x0066cd98)
+extern __int64 g_bitNumber[];
+
+class town {
+public:
+    enum { TOWN_DOCK_SITE_NONE = 0xff };
+    // Index of this town in gpGame->towns (byte, sign-extended).
+    char m_id;
+    // Owning player, -1 when unowned (Deallocate stores -1 here).
+    char m_owner;
+    // can_build's first gate: nonzero in gpGame->towns[id] refuses
+    // every build. Name unattested - ordinal placeholder.
+    unsigned char m_builtThisTurn;
+    // DC names the next byte `threatening_heroes`; retail's
+    // type_town_threat_checker::mark_town increments exactly +3.
+    unsigned char m_threateningHeroes;
+    // Faction id (armyGroup::GetLuck gates the Fountain of Fortune on
+    // type == 1, Rampart).
+    // Before normalization (Dreamcast): townType.
+    char m_type;
+    // +5..+7, the town's map cell. can_take_town (0x428410) widens all
+    // three with movzx from these bytes and packs them into a
+    // type_point (x &0x3ff, y &0x3ff, z &0xf) before asking
+    // game::get_cell for the tile; the DC roster names them
+    // mapX/mapY/mapZ at the same offsets.
+    unsigned char m_mapX;
+    unsigned char m_mapY;
+    unsigned char m_mapZ;
+    // The shipyard's boat square, as a pair of map bytes, in the original
+    // Dreamcast spellings (ShipyardInfo names its pair the same way).
+    // check_shipyard_square (0x5c0c90) writes BOTH on success - `mov
+    // [ecx+8],dl` from the x parameter and `mov [ecx+9],dl` from y - which
+    // is what proves +9 is the partner of +8 and not padding.
+    // TOWN_DOCK_SITE_NONE (0xff) in boatX is the "no dock square" sentinel
+    // the CanBuildDock family tests.
+    unsigned char boatX;
+    unsigned char boatY;
+    // Before normalization (Dreamcast): garrisonHero.
+    int m_garrisonHeroId;
+    // The hero on the town's map tile, -1 for none. HasGarrison
+    // short-circuits to "defended" on this one alone.
+    // Before normalization (Dreamcast): occupyingHero.
+    int m_visitingHeroId;
+    // Mage guild level. SIGNED char, retyped in place 2026-08-20:
+    // BuildBuilding re-reads it with movsx at both spell-count loops
+    // and guards them with `cmp cl,1 / jl`.
+    signed char m_mageLevel;
+    short m_population[14];
+    char m_isGrouped;
+    unsigned char m_manaVortexFull;
+    // UNSIGNED, byte-proven by game::calculate_production's special-
+    // building arm: retail tests it `mov al,[esi+0x34] / test al,al /
+    // jbe` and widens it `and eax,0xff`. A signed `char` gives `jle` and
+    // `movsx`.
+    unsigned char m_pondAmount;
+    // +0x35..+0x37 alignment padding (retail's ??4town skips it).
+    int m_pondResource;
+    // +0x3c, NAMED AND TYPED 2026-08-14. DC `summoningType` at its own
+    // 52, the row straight ahead of summoningPopulation below; the type
+    // is what TCastleWindow::WindowHandler 0x5dcf80 proves, which hands
+    // this member to a `recruitUnit` whose parameter IS a TCreatureType
+    // (and the fort page's constructor already indexes
+    // akCreatureTypeTraits with it). Not gated: it is a rename plus an
+    // int-to-enum retype of an EXISTING member, so no view of this class
+    // gains or loses a declarator.
+    TCreatureType m_summoningType;
+    // +0x40. DC `summoningPopulation`, a T_SHORT at its own 56 - the row
+    // straight after `summoningType` at 52.
+    // Sliced 2026-08-14 for townManager::SetupWell (0x5dd5fa), which
+    // prints the summoning portal's stock with `movsx ecx, word ptr
+    // [town+0x40]`; town::SetSummoningGenerator writes it, as the note
+    // on that declarator already recorded.
+
+    // Behind the SUMMONING gate and nested so that every OTHER view of
+    // this class keeps the exact member COUNT it had: initialize.obj is
+    // the tree's documented include-set canary and one extra member
+    // anywhere in town changes initialize_game_data.
+    short m_summoningPopulation;
+    // +0x42..+0x43 alignment padding (retail's ??4town skips it).
+    // +0x44, five mage-guild rows of six spell ids. GiveSpells walks
+    // rows with a 0x18 stride and pairs them with the signed counts at
+    // +0xbc; five rows close exactly at that count band.
+    // DC town records 0x1aa3/0x61b5/0x631f: townSpells is SpellID[5][6]
+    // (arrays 0x3f11/0x1efc, canonical signed enum 0x1b61).
+    ESpellId m_mageGuildSpells[5][6];
+    signed char m_mageGuildSpellCounts[5];
+    // +0xc1..+0xc3 alignment padding (retail's ??4town copies the five
+    // count bytes and goes straight to the string assign).
+    // +0xc4..+0xd3 is a Dinkumware vector: the constructor copies an
+    // allocator byte into +0xc4 and clears its three pointer words.
+    // Its element semantics are not yet reached, so the name is ordinal.
+    // Retail's Dinkumware string: town::town initializes the allocator byte
+    // and three pointers at +0xc4..+0xd3; TQuickTownWindow's c_str() reader
+    // independently proves the text pointer at +0xc8. Dreamcast names the
+    // corresponding fixed-buffer field cName; Complete widened the storage.
+    std::string m_name;
+    // +0xd4..+0xdf. The spells this town's mage guild may never offer,
+    // copied from the map's TownExtra::SpellDisabledMask; the guild roll
+    // skips these and the game-wide disabled spells. The three-word
+    // default-constructor fill and the 70-position guards in the spell
+    // routines prove std::bitset<70>. Original Dreamcast SpellDisabledMask.
+    std::bitset<70> SpellDisabledMask;
+    // The town's own troops (ctor constructs an armyGroup at +0xe0 and
+    // then fills the seven type slots with -1).
+    armyGroup m_garrison;
+
+protected:
+    // DC town records generator_bonus as long[14] (at +0x10c there).
+    long m_generatorBonus[14];
+
+    // DC town records prove these protected __int64 fields, originally
+    // populationMask, full_building_mask and legal_buildings. Retail reads
+    // each as two dwords. They hold installed buildings, installed plus
+    // included buildings, and the town's legal buildings, respectively.
+    __int64 m_populationMask;
+    __int64 m_fullBuildingMask;
+    __int64 m_legalBuildings;
+
+public:
+    void applySpecialBuildingEffect(hero* townHero);
+    // Original ?CanBuildDock@town@@QBA_NXZ proves bool; the DC
+    // byte primitive is lowered, as for the other building predicates.
+    bool canBuildDock() const;
+
+    // DC Town.h:299 / :305 header inlines, declaration-only here
+    // (?get_building_mask@town@@QBA_JXZ kept out of line by the DC linker in
+    // ai_player.obj, ?get_generator_bonus@town@@QBAJJ@Z in townmgr.obj),
+    // declared with IsCastle/IsCapitol below: four DC-attested members.
+    // DC Town.h:299/300 returns full_building_mask (+0x150 in DC);
+    // Complete's is m_fullBuildingMask at +0x158. Inlined in getBuildableMask.
+    DC_ADDRESS(0x037f50, 0x12)
+    __int64 getBuildingMask() const { return m_fullBuildingMask; }
+    long getCastleGrowthBonus(TCreatureType creature) const;
+
+    // DC Town.h:305-306 returns generatorBonus[dwelling].
+    // set_bonus_display calls this header helper; inlined.
+    DC_ADDRESS(0x181404, 0x12)
+    long getGeneratorBonus(long dwelling) const { return m_generatorBonus[dwelling]; }
+    // Original ?get_gold_income@town@@QBAF_N@Z proves bool includeSilo.
+    short getGoldIncome(bool includeSilo) const;
+    // Original ?get_horde@town@@QBA?AW4type_building_id@@J@Z proves enum return.
+    type_building_id getHorde(long dwelling) const;
+    long getHordeBonus(long dwelling) const;
+    long getAssembledLegionBonus(long dwelling) const;
+    // 0x5bf900. Per-tier artifact growth contributed by the two heroes
+    // associated with this town.
+    long getLegionBonus(long dwelling) const;
+
+    // DC Town.h:311, selected in advmgr.obj. Line 312
+    // calls the canonical three-short type_point constructor with mapX/Y/Z
+    // and returns the value through the hidden UDT-result buffer.
+    // The CodeView constructor call stands; canTakeTown does not need a
+    // second helper definition.
+    DC_ADDRESS(0x01fdac, 0x68)
+    type_point getLocation() const
+    {
+        return type_point(m_mapX, m_mapY, m_mapZ);
+    }
+    void calcNumLevelArchers(int* numArchers, int* archerLevel);
+
+    // Town.h:325-327 records the active-mask guard then the built-mask
+    // return. DC HasBuilding (Town.h:324-328) reads the active mask itself,
+    // with no GetBuildingMask call, and opens a second lexical scope for
+    // line 326: the active arm is braced.
+    VA(0x004305a0, 0x66)  // hd-crossbuild + exact body/callers x18
+    DC_ADDRESS(0x01fe14, 0x98)
+    bool hasBuilding(int buildingId, bool checkIncluded) const
+    {
+        if (checkIncluded) {
+            return (m_fullBuildingMask & g_bitNumber[buildingId]) != 0;
+        }
+        return (m_populationMask & g_bitNumber[buildingId]) != 0;
+    }
+
+    // Original: town::set_mask; Town.h:331
+    DC_ADDRESS(0x168dfc, 0x28)
+    void setMask(__int64 newMask)
+    {
+        m_populationMask = newMask;
+        updateFullBuildingMask();
+    }
+
+    // E:\gamedcs\Town.h:337. Public ?IsCastle@town@@QBA_NXZ proves bool;
+    // the DC T_UCHAR return record is lowered, as for hasBuilding.
+    DC_ADDRESS(0x0bcc40, 0x74)
+    bool isCastle() const
+    {
+        return hasBuilding(CASTLE_FORT_ID, 0)
+            || hasBuilding(CASTLE_CITADEL_ID, 0)
+            || hasBuilding(CASTLE_CASTLE_ID, 0);
+    }
+
+    // E:\gamedcs\Town.h:342. Public ?IsCapitol@town@@QBA_NXZ likewise
+    // proves native bool.
+    DC_ADDRESS(0x0bccb4, 0x28)
+    bool isCapitol() const
+    {
+        return hasBuilding(HALL_CAPITOL_ID, 0);
+    }
+    void setSummoningGenerator();
+    int getPortraitFrame(bool isSmall) const;
+    town();
+    // Original town publics prove _N returns for can_build, can_ever_build,
+    // buy_building, is_legal_building, is_disabled and InitializeBuildingCostsTables.
+    // Preserve retail parameter ABI: native can_ever_build used an older short.
+    bool canBuild(short buildingId) const;
+    bool canEverBuild(int buildingId) const;
+    // 0x5bfe50.
+    void changeGeneratorBonus(TCreatureType creature, long change);
+    // 0x5be930. Installs the requested building and returns the resulting ID.
+    type_building_id createBuilding(type_building_id building);
+    bool buyBuilding(type_building_id building);
+    void destroyExtraCapitol();
+    void getBuildCost(type_building_id building, int* resources) const;
+    short getBuildCost(type_building_id building, EGameResource* types,
+                         int* amounts) const;
+    int* getBuildCostArray(type_building_id building) const;
+    __int64 getBuildableMask() const;
+    // 0x5bfb60. Weekly base, castle, artifact, horde, generator, and Grail
+    // growth for one dwelling slot.
+    short getGrowthRate(short dwelling) const;
+    type_horde_effect* getHordeEffect(type_building_id building) const;
+    int* getSiloIncome() const;
+    // 0x5bfeb0 (dc 0x167c3c) and 0x5c0670 (dc 0x16842c), reconstructed
+    // in the owning TU; gated so no other view of this class gains the
+    // declarators.
+    void giveEventReward(const TTownEvent& thisEvent);
+    // 0x5bfdd0.
+    void increasePopulation(TCreatureType bonusCreature,
+                             TCreatureType alternateBonus, long bonusAmount);
+    void initialize(const TownExtra* townSetup);
+    bool isLegalBuilding(type_building_id building) const;
+    void setLegalBuildings(__int64 disabledBuildings);
+    bool isDisabled(type_building_id building) const;
+    // Dreamcast's LF_FIELDLIST puts these immediately before update_shipyard,
+    // in this order. BuildBuilding calls both, and retail inlines both into
+    // that owner.
+    void setSpellsAvailable();
+    void updateFullBuildingMask();
+    // 0x5bf210. Keeps the dock-with-boat pseudo-building synchronized
+    // with the object occupying the town's dock square.
+    void updateShipyard();
+    int hasGarrison();
+    // 0x5bede0. DC signature; buy_building is the only claimed caller
+    // and it pushes exactly these three.
+    type_building_id buildBuilding(int buildingId, bool setBuiltFlag,
+                                   bool applySpecialEffect);
+    int load(TAbstractFile* infile, int saveVersion);
+    // 0x5bd2f0 (body in town.obj, not yet reconstructed). game::Save's
+    // town-pool loop is the only consumer here: it calls it on towns[i]
+    // with edi striding 0x168 == sizeof(town). Retail's body writes the
+    // class field for field and ends with the three __int64 masks at
+    // +0x150/+0x158/+0x160, i.e. exactly through sizeof(town), which is
+    // what identifies it. Gated rather than added outright - a bare
+    // member declarator on a class this widely included is the
+    // include-set wall's own trigger shape.
+    int save(TAbstractFile* outfile);
+    // 0x5c12e0. Charges and places one of the player's tavern offers.
+    void hire(hero* newHero, long playerId);
+    // game.obj joins the gate for GiveSpells alone: CreateTownHeroes
+// (0x4ca040) closes each starting town with `GiveSpells(NULL)` right
+// after PlaceInMap. Widening the existing guard rather than adding a
+// second declarator keeps every other includer's view of town unchanged.
+    // 0x5be030 remains outside the admitted surface; hire needs its
+    // direct town-spell handoff, and advManager::TownEvent closes every
+    // successful visit with it.
+    void giveSpells(hero* forceHero) const;
+    // advmgr.obj joins the gate for View alone: DoAdvCommand's two town arms
+// call it, one on gpGame->GetTown(currTownId) and one on the town the
+// current hero obscures. The guard is SPLIT around the single declarator
+// so no other includer's view of this class widens.
+    // 0x5be210. Enters the shared town manager and restores the visiting
+    // hero as the adventure-map context on return.
+    void view(int alreadyFaded);
+    // 0x5be450. Exchanges the garrison and visiting heroes.
+    void swapHeroes();
+    // 0x5be600. Rolls and publishes the five Mage Guild spell rows.
+    void initializeSpells(const TownExtra* townSetup);
+    // DC public ?included_buildings@town@@2PAY0CM@_JA (44-slot __int64
+    // rows). Retail .bss 0x6a8bb8, nine 0x160-stride rows to 0x6a9818
+    // (the DC build carries eight); filled by initialize.cpp's
+    // create_included_masks. Definition + DATA claim in src/town.cpp.
+    static __int64 s_includedBuildings[9][MAX_BUILDING_TYPE];
+    // ?get_army@town@@QAAAAVarmyGroup@@XZ / ...QBAABVarmyGroup@@XZ;
+    const class armyGroup& getArmy() const;
+    // DC town.cpp:2375 proves the ordinary non-const reference twin. Its
+    // Complete callers share the const twin's retained address 0x5c1460.
+    class armyGroup& getArmy();
+    // 0x5be2d0. Removes this town from its owner's roster and marks
+    // both this record and gpGame->towns[id] unowned.
+    void deallocate();
+    // Original ?PlaceInMap@town@@QAAXW4THeroID@@J_N@Z proves
+    // the bool flag; Complete retains its independently modeled int heroId.
+    void placeInMap(int heroId, long playerId, bool resetFlags);
+    static void initializeHordes();
+    static bool initializeBuildingCostsTables();
+    const char* getTypeName() const;
+    TTerrainType getNativeTerrain() const;
+    // The garrisoned hero steps out onto the town tile (0x5be390).
+    void removeGarrisonHero();
+    static int upgradedDwellingID(int id);
+
+protected:
+    // Retail .data
+    // 0x6887a0, nine 4-entry rows of 8 bytes (0x6887a0..0x6888c0);
+    // initialize_hordes walks it with a 0x10 (two-entry) inner step
+    // nine times, which is what pins the row count at 9.
+    static type_horde_effect s_constHordeEffects[9][4];
+    static int s_dwellingCosts[9][14][NUM_RESOURCES];
+    // The three build-cost tables get_build_cost_array switches
+    // between, all DC-attested town statics whose retail .bss extents
+    // CHAIN EXACTLY, which is what fixes both their bounds and their
+    // ownership:
+    //   NeutralBuildingCosts 0x6a80f8, int[?][7]   (building < 17)
+    //   SpecialBuildingCosts 0x6a82dc, int[9][9][7]  -> +0x8dc =
+    //   included_buildings   0x6a8bb8, __int64[9][44] -> +0xc60 =
+    //   DwellingCosts        0x6a9818, int[9][14][7]
+    // and the DC's own mangled types agree member for member
+    // (?SpecialBuildingCosts@town@@1PAY186HA = int(*)[9][7],
+    // ?DwellingCosts@town@@1PAY1O@6HA = int(*)[14][7]).
+    // The index arithmetic retail emits is the proof of the strides:
+    // 9*type + (building-17) for the special row, 14*type +
+    // (building-30) for the dwelling row. The three definitions sit in
+    // src/town.cpp beside InitializeBuildingCostsTables (0x5c14c0), whose
+    // three walks end exactly on the next table's address.
+    // NeutralBuildingCosts' leading bound is the only soft number: the
+    // 17 rows the band uses end 8 bytes short of SpecialBuildingCosts.
+    static int s_neutralBuildingCosts[SPECIAL_BUILDING_ID][NUM_RESOURCES];
+    static int s_specialBuildingCosts[9][9][NUM_RESOURCES];
+};
+SIZE(town, 360);
+
+// DC public gTownSizeNames; retail 0x6a6294 is indexed by the four hall
+// levels in TQuickTownWindow. Its owning data compiland is not yet located.
+extern const char* g_townSizeNames[4];
+
+// The three int[4] columns behind town::initialize's random starting
+// garrison (retail .data 0x688e84/0x688e94/0x688ea4): per dwelling
+// tier 0..3, a percent chance and the low/high Random bounds. Names
+// INVENTED (no DC symbols); owner TU unlocated - extern only, gated:
+// town.obj is the only consumer.
+extern int g_townInitArmyChance[4];
+extern int g_townInitArmyLow[4];
+extern int g_townInitArmyHigh[4];
+
+
+
+
+enum ETownConstants {
+    // The "no dock site" sentinel CanBuildDock tests for.
+    TOWN_DOCK_SITE_NONE = 0xff,
+    // Nine town types x 44 building-id slots, byte-derived from
+    // initialize_game_data's mask walks (0x160 row stride, rows 0..8,
+    // building ids to 43 in the requirement tables).
+    TOWN_TYPE_COUNT = TOWN_CONFLUX + 1,
+    // Restoration of Erathia has the first eight; Conflux came later.
+    TOWN_TYPE_ROE_COUNT = TOWN_CONFLUX,
+    TOWN_BUILDING_SLOTS = MAX_BUILDING_TYPE,
+    // The four horde columns of a const_horde_effects row - also the
+    // length of gHordeBuildings, which get_horde_effect scans.
+    TOWN_HORDE_SLOTS = 4,
+    // Base and upgraded dwelling slots per town - the width of a
+    // DwellingCosts row and of a gTownDwellingCreatures row, and the
+    // +7 UpgradedDwellingID adds.
+    TOWN_DWELLING_COUNT = 7,
+    // Both halves together - the row width of gTownDwellingCreatures
+    // (initialize_hordes steps its creature base by 14 per town) and
+    // the extent of town::generatorBonus (change_generator_bonus scans
+    // 0..13 and stops at 14).
+    TOWN_DWELLING_SLOTS = 2 * TOWN_DWELLING_COUNT
+};
+
+// The h3m editor's 41-slot building column order, one row per town
+// type (retail .data 0x6888c0, nine 41-int rows): row content maps the
+// map-format event building index to this faction's engine
+// type_building_id (row 0 opens 11,12,13,7,8,9,5,16,... - town hall,
+// city hall, capitol, fort, citadel, castle, tavern, blacksmith).
+// give_event_reward translates TTownEvent::BuildBuildings through it.
+// Name INVENTED (no DC symbol); owner TU unlocated - extern only.
+// Gated: town.obj is the only consumer.
+extern int g_eventBuildingIds[TOWN_TYPE_COUNT][TOWN_EVENT_BUILDING_SLOTS];
+
+// Per-town-type legal-building rollup create_requirement_masks
+// accumulates (DC public ?gTownEligibleBuildMask@@3PA_JA; retail .bss
+// 0x6976f0, nine qwords). Owner TU unlocated - extern only.
+extern __int64 g_townEligibleBuildMask[TOWN_TYPE_COUNT];
+
+// Transitive building-requirement masks, one 44-slot row per town type
+// (DC public ?gHierarchyMask@@3PAY0CM@_JA; retail .bss 0x697798,
+// 0x160-stride rows to 0x6983f8). Owner TU unlocated - extern only.
+DATA(0x00697798)
+extern __int64 g_hierarchyMask[TOWN_TYPE_COUNT][TOWN_BUILDING_SLOTS];
+
+// One-based dwelling tier used by the retail artifact-growth helper.
+// Tier one has no corresponding growth artifact, so only the switch's
+// populated domain is named here.
+enum ETownDwellingTier {
+    TOWN_DWELLING_TIER_2 = 2,
+    TOWN_DWELLING_TIER_3 = 3,
+    TOWN_DWELLING_TIER_4 = 4,
+    TOWN_DWELLING_TIER_5 = 5,
+    TOWN_DWELLING_TIER_6 = 6
+};
+
+// Original: gTownTypeNames. text.cpp owns the ten-entry table at 0x6a74f0;
+// entry zero is the neutral type -1. Retail's 0x6a74f4 operands are entry
+// one of that same allocation, not a separate nine-entry object.
+extern const char* g_townTypeNames[10];
+
+// Retail .data 0x688eb4: nine 7-int rows (one per town type) that
+// get_silo_income hands out whole and get_gold_income reads the GOLD
+// column of. The bytes are the Resource Silo's weekly yield -
+// wood+ore for Castle/Necropolis/Stronghold/Fortress, mercury for
+// Inferno/Conflux, crystal for Rampart, gems for Tower, sulfur for
+// Dungeon - and the gold column is zero in every row. Name INVENTED
+// (no DC symbol covers this table); owner TU unlocated.
+extern int g_siloIncome[TOWN_TYPE_COUNT][NUM_RESOURCES];
+
+// Original gDwellingType: DC public ?gDwellingType@@3PAY0O@W4TCreatureType@@A
+// proves fourteen-entry rows. Retail has nine towns, with seven base dwelling
+// creatures followed by their seven upgrades in each row.
+DATA(0x006747b4)
+extern TCreatureType g_dwellingType[TOWN_TYPE_COUNT][TOWN_DWELLING_SLOTS];
+
+// Retail .data 0x6782a4: ordinary spell counts for guild levels one
+// through five. initialize_spells generates one extra candidate per row so
+// Tower's Library can expose it.
+extern signed char g_mageGuildBaseSpellCounts[5];
+
+// Retail .rdata 0x642e20, the four horde building ids in slot order
+// {HORDE_ID, HORDE_UPG_ID, HORDE_2_ID, HORDE_2_UPG_ID} -
+// get_horde_effect's scan turns a building id into the
+// const_horde_effects column. Name INVENTED (no DC symbol); the four
+// values are read from the pinned image. Retyped in place 2026-08-20
+// (int -> type_building_id, an identical 4-byte load): create_building
+// assigns a row entry to its type_building_id result, which
+// the enum element type carries without a cast, while every int reader
+// (get_horde's return, the bitNumber indexes) narrows implicitly.
+extern const type_building_id g_hordeBuildings[4];
+
+#endif  /* HOMM3_TOWN_H */

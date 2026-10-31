@@ -1,0 +1,728 @@
+#include "text.h"
+#include "va.h"
+
+#include "combatcontrolsubwindow.h"
+
+#include "border.h"
+#include "button.h"
+#include "cmbtmgr.h"
+#include "combatwindow.h"
+#include "game.h"
+#include "iconwdgt.h"
+#include "inputmgr.h"
+#include "kb.h"
+#include "textresource.h"
+#include "textwdgt.h"
+#include "widget.h"
+#include "window.h"
+#include "winmgr.h"
+
+// The combat sub-window family's help-text table. Eleven rows, each
+// referenced from exactly one of this compiland's three constructors: the
+// base takes rows 0..3 and 6..8, TCombatControlSubWindow rows 4 and 5,
+// TCombatPlacementSubWindow rows 9 and 10. The eleven-row extent is a floor
+// rather than a measured end.
+
+// It is an 800x44 strip at (0, 556) with a ten-slot reserve, a
+// bitmapBorder over the caller's sprite and SEVEN buttons -
+// 'icm001.def'..'icm007.def', all 48x36 on row 5, ids 0x7d1..0x7d4 then
+// 0x7d8..0x7da. The four-id gap is real: 0x7d5/0x7d6/0x7d7 belong to
+// TCombatControlSubWindow's rollover strip and its two log arrows, which is
+// why these are seven literal ids and not one incrementing local.
+
+// rolloverWidget is nulled here, in the body (after the vptr store), which
+// makes the member the base's rather than TCombatControlSubWindow's.
+
+// The tail dims 0x7d4 through the PARENT window rather than through this
+// sub-window, and only when both sides are AI.
+VA(0x0046b610, 0x570)
+DC_ADDRESS(0x064a84, 0x468)
+MAC_ADDRESS(0x07765c, 0x894)
+type_combat_sub_window::type_combat_sub_window(
+    heroWindow* parent, const char* backgroundSpriteName)
+    : TSubWindow(0, 556, 800, 44, parent)
+{
+    m_rolloverWidget = 0;
+    m_widgets.reserve(10);
+
+    bitmapBorder* background = new bitmapBorder(0, 0, 800, 44, 0x7d0,
+        backgroundSpriteName, 0x800);
+    int gamePos = g_combatManager->m_playerIds[g_combatManager->m_currentSide];
+    if (gamePos >= 0)
+        background->setPlayerPaletteColors(gamePos);
+    else
+        background->setPlayerPaletteColors(g_game->getLocalPlayerGamePos());
+    m_widgets.push_back(background);
+
+    // The hotkeys are scancodes: S, R, O, A, C, W, then D and SPACE.
+    button* b = new button(54, 5, 48, 36, 0x7d1, "icm001.def",
+        0, 1, 0, 0, 2);
+    b->setHelpText(g_combatWindowHelp[0].m_text,
+        g_combatWindowHelp[0].m_rclick, 1);
+    b->setHotkey(0x1f);
+    m_widgets.push_back(b);
+
+    b = new button(105, 5, 48, 36, 0x7d2, "icm002.def", 0, 1, 0, 0, 2);
+    b->setHelpText(g_combatWindowHelp[1].m_text,
+        g_combatWindowHelp[1].m_rclick, 1);
+    b->setHotkey(0x13);
+    m_widgets.push_back(b);
+
+    b = new button(3, 5, 48, 36, 0x7d3, "icm003.def", 0, 1, 0, 0, 2);
+    b->setHelpText(g_combatWindowHelp[2].m_text,
+        g_combatWindowHelp[2].m_rclick, 1);
+    b->setHotkey(0x18);
+    m_widgets.push_back(b);
+
+    b = new button(156, 5, 48, 36, 0x7d4, "icm004.def", 0, 1, 0, 0, 2);
+    b->setHelpText(g_combatWindowHelp[3].m_text,
+        g_combatWindowHelp[3].m_rclick, 1);
+    b->setHotkey(0x1e);
+    m_widgets.push_back(b);
+
+    b = new button(645, 5, 48, 36, 0x7d8, "icm005.def", 0, 1, 0, 0, 2);
+    b->setHelpText(g_combatWindowHelp[6].m_text,
+        g_combatWindowHelp[6].m_rclick, 1);
+    b->setHotkey(0x2e);
+    m_widgets.push_back(b);
+
+    b = new button(696, 5, 48, 36, 0x7d9, "icm006.def", 0, 1, 0, 0, 2);
+    b->setHelpText(g_combatWindowHelp[7].m_text,
+        g_combatWindowHelp[7].m_rclick, 1);
+    b->setHotkey(0x11);
+    m_widgets.push_back(b);
+
+    b = new button(747, 5, 48, 36, 0x7da, "icm007.def", 0, 1, 0, 0, 2);
+    b->setHelpText(g_combatWindowHelp[8].m_text,
+        g_combatWindowHelp[8].m_rclick, 1);
+    b->setHotkey(0x20);
+    b->setHotkey(0x39);
+    m_widgets.push_back(b);
+
+    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+        if (*it)
+            addWidget(*it, -1);
+    }
+
+    if (g_combatManager->IsHuman[0] && g_combatManager->IsHuman[1])
+        parent->widgetSetStatus(0x7d4, widget::WIDGET_DIMMED_NODRAW);
+}
+
+VA_COMPGEN(0x0046bb80, 0x21, SCALAR_DELETING_DTOR, type_combat_sub_window)
+
+VA(0x0046bbb0, 0x78)
+DC_ADDRESS(0x064eec, 0x74)
+MAC_ADDRESS(0x077ef0, 0xcc)
+type_combat_sub_window::~type_combat_sub_window()
+{
+    for (std::vector<widget*>::iterator it = m_widgets.begin();
+         it != m_widgets.end(); ++it) {
+        widget* item = *it;
+        if (item) {
+            m_parentWindow->removeWidget(item);
+            delete item;
+        }
+    }
+}
+
+// The combat control bar: the rollover strip and the two message-log
+// arrows. Same family shape as the placement bar below - an out-of-line
+// base call, a LOCAL vector<widget*> that the tail loop drains into the
+// inherited Widgets, and a bare operator delete for the local's storage -
+// with three differences:
+//   * the tail loop pushes unconditionally and only guards AddWidget, where
+//     the placement bar's loop wraps both calls in one `if`;
+//   * rolloverWidget is the base's member at +0x34, a
+//     bitmapBackedTextWidget*, pushed through a widget* conversion;
+//   * the two arrows' handlers are address-taken only (combatwindow.obj,
+//     under their Dreamcast-attested static TCombatWindow names).
+// DC191 names setDisabledFrame and DC199 calls it again: both arrows use the
+// canonical setter. Original vector local new_widgets.
+
+// DC136/140 and their retained publics prove these empty virtual methods;
+// keep the bodies and original long arguments (JJ).
+DC_ADDRESS(0x064f60, 0x4)
+void type_combat_sub_window::setRollover(const char*)
+{
+}
+
+DC_ADDRESS(0x064f64, 0x4)
+void type_combat_sub_window::setRolloverButtons(long, long)
+{
+}
+
+VA(0x0046bc30, 0x26D)
+DC_ADDRESS(0x064fcc, 0x278)
+MAC_ADDRESS(0x0780a0, 0x3f8)
+TCombatControlSubWindow::TCombatControlSubWindow(heroWindow* parent)
+    : type_combat_sub_window(parent, "cbar.pcx")
+{
+    std::vector<widget*> newWidgets;
+
+    m_rolloverWidget = new bitmapBackedTextWidget(214, 7, 400, 32, "",
+        "smalfont.fnt", "cRollovr.pcx", font::PRIMARY, 0x7d5, 1, 8);
+    m_rolloverWidget->setHelpText(g_combatWindowHelp[4].m_text,
+        g_combatWindowHelp[4].m_rclick, 1);
+    newWidgets.push_back(m_rolloverWidget);
+
+    m_logScrollUpButton = new type_func_button(624, 5, 18, 17, 0x7d6,
+        "ComSlide.def", TCombatWindow::scrollUp, 0, 1);
+    m_logScrollUpButton->setHelpText(g_combatWindowHelp[5].m_text,
+        g_combatWindowHelp[5].m_rclick, 1);
+    m_logScrollUpButton->setDisabledFrame(1);
+    m_logScrollUpButton->setHotkey(KEYCODE_KP_8);
+    newWidgets.push_back(m_logScrollUpButton);
+
+    m_logScrollDownButton = new type_func_button(624, 24, 18, 17, 0x7d7,
+        "ComSlide.def", TCombatWindow::scrollDown, 2, 3);
+    m_logScrollDownButton->setHelpText(g_combatWindowHelp[5].m_text,
+        g_combatWindowHelp[5].m_rclick, 1);
+    m_logScrollDownButton->setHotkey(KEYCODE_KP_2);
+    m_logScrollDownButton->setDisabledFrame(3);
+    newWidgets.push_back(m_logScrollDownButton);
+
+    for (widget** it = newWidgets.begin(); it != newWidgets.end(); ++it) {
+        m_widgets.push_back(*it);
+        if (*it)
+            addWidget(*it, -1);
+    }
+
+    m_logScrollUpButton->sendMessage(widget::WIDGET_SET_STATUS,
+        widget::WIDGET_DIMMED);
+    m_logScrollDownButton->sendMessage(widget::WIDGET_SET_STATUS,
+        widget::WIDGET_DIMMED);
+}
+
+VA_COMPGEN(0x0046bea0, 0x21, SCALAR_DELETING_DTOR, TCombatControlSubWindow)
+
+VA(0x0046bed0, 0x78)
+DC_ADDRESS(0x065244, 0x2c)
+MAC_ADDRESS(0x07851c, 0x60)
+TCombatControlSubWindow::~TCombatControlSubWindow()
+{
+}
+
+// DC227..246 retains an empty derived override with the same JJ ABI.
+DC_ADDRESS(0x065270, 0x4)
+void TCombatControlSubWindow::setRolloverButtons(long, long)
+{
+}
+
+// E:\gamedcs\combatcontrolsubwindow.cpp:249
+VA(0x0046bf50, 0x32)
+DC_ADDRESS(0x065274, 0x24)
+MAC_ADDRESS(0x078580, 0x5c)  // vtable 0x63d420 slot 1 + rollover widget at +0x34
+void TCombatControlSubWindow::setRollover(const char* newText)
+{
+    m_rolloverWidget->setText(newText);
+    m_rolloverWidget->sendMessage(widget::WIDGET_DRAW, 0);
+    m_rolloverWidget->forceUpdate();
+}
+
+VA(0x0046bf90, 0xB2)
+DC_ADDRESS(0x064f68, 0x64)
+MAC_ADDRESS(0x077fc4, 0xdc)
+void type_combat_sub_window::disableAllButtons()
+{
+    m_parentWindow->widgetSetStatus(0x7d1, widget::WIDGET_DIMMED_NODRAW);
+    m_parentWindow->widgetSetStatus(0x7d2, widget::WIDGET_DIMMED_NODRAW);
+    m_parentWindow->widgetSetStatus(0x7d3, widget::WIDGET_DIMMED_NODRAW);
+    m_parentWindow->widgetSetStatus(0x7d4, widget::WIDGET_DIMMED_NODRAW);
+    m_parentWindow->widgetSetStatus(0x7d8, widget::WIDGET_DIMMED_NODRAW);
+    m_parentWindow->widgetSetStatus(0x7d9, widget::WIDGET_DIMMED_NODRAW);
+    m_parentWindow->widgetSetStatus(0x7da, widget::WIDGET_DIMMED_NODRAW);
+    m_parentWindow->drawWindow(0, WINDOW_ALL_WIDGETS_LOW,
+                             WINDOW_ALL_WIDGETS_HIGH);
+    g_windowManager->updateScreen(m_x, m_y, m_width, m_height);
+}
+
+// DC271 calls the ordinary base implementation; the override and its
+// canonical source call stay.
+DC_ADDRESS(0x065298, 0x10)
+void TCombatControlSubWindow::disableAllButtons()
+{
+    type_combat_sub_window::disableAllButtons();
+}
+
+// The battlefield-placement bar: two buttons over the family base, the
+// smallest of the family's constructors. The base is an out-of-line call
+// with (parent, "CoPlacbr.pcx").
+VA(0x0046c050, 0x18C)
+DC_ADDRESS(0x0652a8, 0x1a4)
+MAC_ADDRESS(0x0785fc, 0x2d8)
+TCombatPlacementSubWindow::TCombatPlacementSubWindow(heroWindow* parent)
+    : type_combat_sub_window(parent, "CoPlacbr.pcx")
+{
+    std::vector<widget*> buttons;
+
+    // 0x8fc has no attested name; 0x7802 is winmgr.h's DIALOG_RETURN_OK
+    // value, but nothing here proves this id is that domain, so both stay
+    // literal. The hotkeys are the SPACE and ENTER scancodes.
+    widget* b = new button(213, 4, 198, 36, 0x8fc, "ICM011.def",
+        0, 1, 0, 0x39, 2);
+    b->setHelpText(g_combatWindowHelp[9].m_text,
+        g_combatWindowHelp[9].m_rclick, 1);
+    buttons.push_back(b);
+
+    b = new button(419, 4, 198, 36, 0x7802, "ICM012.def",
+        0, 1, 0, 0x1c, 2);
+    b->setHelpText(g_combatWindowHelp[10].m_text,
+        g_combatWindowHelp[10].m_rclick, 1);
+    buttons.push_back(b);
+
+    for (widget** it = buttons.begin(); it != buttons.end(); ++it) {
+        widget* w = *it;
+        if (w) {
+            m_widgets.push_back(w);
+            addWidget(w, -1);
+        }
+    }
+}
+
+VA_COMPGEN(0x0046c1e0, 0x21, SCALAR_DELETING_DTOR, TCombatPlacementSubWindow)
+
+VA(0x0046c210, 0x78)
+DC_ADDRESS(0x06544c, 0x2c)
+MAC_ADDRESS(0x0788d4, 0x60)
+TCombatPlacementSubWindow::~TCombatPlacementSubWindow()
+{
+}
+
+VA(0x0046c290, 0xD6)
+DC_ADDRESS(0x065478, 0x28)
+MAC_ADDRESS(0x078934, 0x50)
+void TCombatPlacementSubWindow::disableAllButtons()
+{
+    m_parentWindow->widgetSetStatus(0x8fc, widget::WIDGET_DIMMED_NODRAW);
+    m_parentWindow->widgetSetStatus(0x7802, widget::WIDGET_DIMMED_NODRAW);
+    type_combat_sub_window::disableAllButtons();
+}
+
+VA(0x0046c370, 0x7FC)
+DC_ADDRESS(0x0654a0, 0x638)
+MAC_ADDRESS(0x078984, 0xd0c)
+TCombatHeroSubWindow::TCombatHeroSubWindow(
+    int x, int y, int w, int h, heroWindow* parent)
+    : TSubWindow(x, y, w, h, parent)
+{
+    m_widgets.reserve(12);
+
+    m_backgroundWidget = new bitmapBorder(
+        0, 0, 78, 202, 0x834, "CHrPop.pcx", 0x800);
+    m_widgets.push_back(m_backgroundWidget);
+    m_portrait = new bitmapBorder(10, 6, 58, 64, 0x835, 0, 0x800);
+    m_widgets.push_back(m_portrait);
+
+    sprintf(g_text, "%s:", (*g_generalText)[GENERAL_TEXT_ATTACK_ABBREVIATION]);
+    m_widgets.push_back(new textWidget(
+        9, 75, 60, 12, g_text, "tiny.fnt", font::WHITE,
+        0x836, 0, 0, 8));
+    m_attackText = new textWidget(
+        9, 75, 60, 12, 0, "tiny.fnt", font::WHITE,
+        0x837, 2, 0, 8);
+    m_widgets.push_back(m_attackText);
+
+    sprintf(g_text, "%s:", g_generalText->GetText(GENERAL_TEXT_DEFENSE_ABBREVIATION));
+    m_widgets.push_back(new textWidget(
+        9, 87, 60, 12, g_text, "tiny.fnt", font::WHITE,
+        0x838, 0, 0, 8));
+    m_defenseText = new textWidget(
+        9, 87, 60, 12, 0, "tiny.fnt", font::WHITE,
+        0x839, 2, 0, 8);
+    m_widgets.push_back(m_defenseText);
+
+    sprintf(g_text, "%s:", g_generalText->GetText(GENERAL_TEXT_POWER_ABBREVIATION));
+    m_widgets.push_back(new textWidget(
+        9, 99, 60, 12, g_text, "tiny.fnt", font::WHITE,
+        0x83a, 0, 0, 8));
+    m_powerText = new textWidget(
+        9, 99, 60, 12, 0, "tiny.fnt", font::WHITE,
+        0x83b, 2, 0, 8);
+    m_widgets.push_back(m_powerText);
+
+    sprintf(g_text, "%s:", g_generalText->GetText(GENERAL_TEXT_KNOWLEDGE_ABBREVIATION));
+    m_widgets.push_back(new textWidget(
+        9, 111, 60, 12, g_text, "tiny.fnt", font::WHITE,
+        0x83c, 0, 0, 8));
+    m_knowledgeText = new textWidget(
+        9, 111, 60, 12, 0, "tiny.fnt", font::WHITE,
+        0x83d, 2, 0, 8);
+    m_widgets.push_back(m_knowledgeText);
+
+    sprintf(g_text, "%s:", g_generalText->GetText(GENERAL_TEXT_MORALE));
+    m_widgets.push_back(new textWidget(
+        9, 131, 60, 12, g_text, "tiny.fnt", font::PRIMARY,
+        0x83e, 0, 0, 8));
+    m_moraleIcon = new iconWidget(
+        47, 131, 22, 12, 0x83f, "imrls.def", 0, 0, 0, 0,
+        iconWidget::ICON_STYLE_PLAIN);
+    m_widgets.push_back(m_moraleIcon);
+
+    sprintf(g_text, "%s:", g_generalText->GetText(GENERAL_TEXT_LUCK));
+    m_widgets.push_back(new textWidget(
+        9, 143, 60, 12, g_text, "tiny.fnt", font::PRIMARY,
+        0x840, 0, 0, 8));
+    m_luckIcon = new iconWidget(
+        47, 143, 22, 12, 0x841, "ilcks.def", 0, 0, 0, 0,
+        iconWidget::ICON_STYLE_PLAIN);
+    m_widgets.push_back(m_luckIcon);
+
+    m_manaText = new textWidget(
+        7, 165, 64, 30, 0, "tiny.fnt", font::WHITE,
+        0x842, 5, 0, 8);
+    m_widgets.push_back(m_manaText);
+
+    for (std::vector<widget*>::iterator current = m_widgets.begin();
+         current != m_widgets.end(); ++current) {
+        widget* w = *current;
+        if (w)
+            w->m_status &= ~(widget::WIDGET_ACTIVE | widget::WIDGET_DRAWN);
+        addWidget(w, -1);
+    }
+
+    m_shown = false;
+}
+
+// TCombatHeroSubWindow's own destructor deletes each widget but does NOT
+// hand it to parentWindow->RemoveWidget first; it derives straight from
+// TSubWindow.
+VA_COMPGEN(0x0046cb70, 0x21, SCALAR_DELETING_DTOR, TCombatHeroSubWindow)
+
+VA(0x0046cba0, 0x6B)
+DC_ADDRESS(0x065ad8, 0x68)
+MAC_ADDRESS(0x079690, 0xb0)
+TCombatHeroSubWindow::~TCombatHeroSubWindow()
+{
+    for (std::vector<widget*>::iterator it = m_widgets.begin();
+         it != m_widgets.end(); ++it) {
+        if (*it)
+            delete *it;
+    }
+}
+
+VA(0x0046cc10, 0x1D7)
+DC_ADDRESS(0x065b40, 0x144)
+MAC_ADDRESS(0x079740, 0x29c)
+void TCombatHeroSubWindow::update(const hero& info, const hero* otherHero,
+                                  bool onCursedGround)
+{
+    char buffer[64];
+    hero& mutableInfo = const_cast<hero&>(info);
+
+    m_backgroundWidget->setPlayerPaletteColors(info.m_owner);
+    m_portrait->setImage(akHeroTraits[info.m_portrait].m_large_portrait_name);
+
+    sprintf(buffer, "%d", info.getPrimarySkill(0));
+    m_attackText->setText(buffer);
+    sprintf(buffer, "%d", info.getPrimarySkill(1));
+    m_defenseText->setText(buffer);
+    sprintf(buffer, "%d", info.getPrimarySkill(2));
+    m_powerText->setText(buffer);
+    sprintf(buffer, "%d", info.getPrimarySkill(3));
+    m_knowledgeText->setText(buffer);
+
+    m_moraleIcon->setIconFrame(
+        mutableInfo.getMorale(otherHero, onCursedGround, 1) + 3);
+    m_luckIcon->setIconFrame(
+        mutableInfo.getLuck(otherHero, onCursedGround, 1) + 3);
+
+    sprintf(buffer, "%s\n%d/%d", (*g_generalText)[GENERAL_TEXT_SPELL_POINTS_LABEL], info.m_mana,
+            mutableInfo.getMaxMana());
+    m_manaText->setText(buffer);
+}
+
+VA(0x0046cdf0, 0x74)
+DC_ADDRESS(0x065c84, 0x74)
+MAC_ADDRESS(0x0799dc, 0xd0)
+void TCombatHeroSubWindow::show()
+{
+    if (!m_shown) {
+        saveBackground();
+        for (std::vector<widget*>::iterator current = m_widgets.begin();
+             current != m_widgets.end(); ++current) {
+            if (*current)
+                (*current)->m_status |= widget::WIDGET_ACTIVE |
+                                      widget::WIDGET_DRAWN;
+        }
+        draw(0, WINDOW_ALL_WIDGETS_LOW, WINDOW_ALL_WIDGETS_HIGH);
+        // DC refreshes the whole combat area; Complete posts this
+        // subwindow rectangle with width + 1.
+        g_windowManager->updateScreen(
+            m_x + m_parentWindow->m_x, m_y + m_parentWindow->m_y, m_width + 1, m_height);
+        m_shown = true;
+    }
+}
+
+VA(0x0046ce70, 0x3A)
+DC_ADDRESS(0x065cf8, 0xc4)
+MAC_ADDRESS(0x079aac, 0x80)
+void TCombatHeroSubWindow::unShow()
+{
+    if (m_shown) {
+        for (std::vector<widget*>::iterator current = m_widgets.begin();
+             current != m_widgets.end(); ++current) {
+            if (*current)
+                (*current)->m_status &= ~(widget::WIDGET_ACTIVE |
+                                        widget::WIDGET_DRAWN);
+        }
+        restoreBackground();
+        m_shown = false;
+    }
+}
+
+// The compiland's last class: constructor, scalar deleting destructor,
+// destructor, Update, Show and UnShow in DC roster order (562, 655, 666,
+// 688, 773, 820). Its destructor is TCombatHeroSubWindow's delete-only loop
+// over Widgets; both classes carry a one-slot table holding nothing but the
+// destructor.
+
+// E:\gamedcs\combatcontrolsubwindow.cpp:562
+// The DC lexical map proves the two view-level arms and their common
+// spellText append; Complete adds the compact-stat labels and the
+// three-iteration standing-spell loops. DC573/578/583/588/593/598 pass named
+// text-resource arguments, each caption captured before formatting (the
+// local names are inferred). DC-separated member assignments stay apart from
+// push_back.
+VA(0x0046ceb0, 0xCD1)
+DC_ADDRESS(0x065dbc, 0x824)
+MAC_ADDRESS(0x079b2c, 0x10ec)  // roster order + vtable 0x63d444 + CCrPop/SpellInf
+TCombatCreatureSubWindow::TCombatCreatureSubWindow(
+    int x, int y, int w, int h, heroWindow* parent, int viewLevel)
+    : TSubWindow(x, y, w, h, parent), m_viewLevel(viewLevel)
+{
+    m_widgets.reserve(11);
+
+    if (viewLevel == 1) {
+        m_backgroundWidget = new bitmapBorder(
+            0, 0, 78, 288, 0x898, "CCrPop.pcx", 0x800);
+        m_widgets.push_back(m_backgroundWidget);
+        m_creatureIcon = new iconWidget(
+            10, 6, 58, 64, 0x899, "TwCrPort.def", 0, 0, 0, 0,
+            iconWidget::ICON_STYLE_PLAIN);
+        m_widgets.push_back(m_creatureIcon);
+
+        const char* attackName = (*g_generalText)[GENERAL_TEXT_ATTACK_ABBREVIATION];
+        sprintf(g_text, "%s:", attackName);
+        m_widgets.push_back(new textWidget(
+            9, 75, 60, 12, g_text, "tiny.fnt", font::WHITE,
+            0x89a, 0, 0, 8));
+        m_attackText = new textWidget(
+            9, 75, 60, 12, 0, "tiny.fnt", font::WHITE,
+            0x89b, 2, 0, 8);
+        m_widgets.push_back(m_attackText);
+
+        const char* defenseName = g_generalText->GetText(GENERAL_TEXT_DEFENSE_ABBREVIATION);
+        sprintf(g_text, "%s:", defenseName);
+        m_widgets.push_back(new textWidget(
+            9, 87, 60, 12, g_text, "tiny.fnt", font::WHITE,
+            0x89c, 0, 0, 8));
+        m_defenseText = new textWidget(
+            9, 87, 60, 12, 0, "tiny.fnt", font::WHITE,
+            0x89d, 2, 0, 8);
+        m_widgets.push_back(m_defenseText);
+
+        const char* damageName = g_generalText->GetText(GENERAL_TEXT_DAMAGE_ABBREVIATION);
+        sprintf(g_text, "%s:", damageName);
+        m_widgets.push_back(new textWidget(
+            9, 99, 60, 12, g_text, "tiny.fnt", font::WHITE,
+            0x89e, 0, 0, 8));
+        m_damageText = new textWidget(
+            9, 99, 60, 12, 0, "tiny.fnt", font::WHITE,
+            0x89f, 2, 0, 8);
+        m_widgets.push_back(m_damageText);
+
+        const char* speedName = g_generalText->GetText(GENERAL_TEXT_HEALTH_LABEL);
+        sprintf(g_text, "%s:", speedName);
+        m_widgets.push_back(new textWidget(
+            9, 111, 60, 12, g_text, "tiny.fnt", font::WHITE,
+            0x8a0, 0, 0, 8));
+        m_speedText = new textWidget(
+            9, 111, 60, 12, 0, "tiny.fnt", font::WHITE,
+            0x8a1, 2, 0, 8);
+        m_widgets.push_back(m_speedText);
+
+        const char* moraleName = g_generalText->GetText(GENERAL_TEXT_MORALE);
+        sprintf(g_text, "%s:", moraleName);
+        m_widgets.push_back(new textWidget(
+            9, 131, 60, 12, g_text, "tiny.fnt", font::WHITE,
+            0x8a2, 0, 0, 8));
+        m_moraleIcon = new iconWidget(
+            47, 131, 22, 12, 0x8a3, "imrls.def", 0, 0, 0, 0,
+            iconWidget::ICON_STYLE_PLAIN);
+        m_widgets.push_back(m_moraleIcon);
+
+        const char* luckName = g_generalText->GetText(GENERAL_TEXT_LUCK);
+        sprintf(g_text, "%s:", luckName);
+        m_widgets.push_back(new textWidget(
+            9, 143, 60, 12, g_text, "tiny.fnt", font::WHITE,
+            0x8a4, 0, 0, 8));
+        m_luckIcon = new iconWidget(
+            47, 143, 22, 12, 0x8a5, "ilcks.def", 0, 0, 0, 0,
+            iconWidget::ICON_STYLE_PLAIN);
+        m_widgets.push_back(m_luckIcon);
+
+        m_countText = new textWidget(
+            10, 8, 58, 64, 0, "Verd10B.fnt", font::WHITE,
+            0x8a6, 10, 0, 8);
+        m_widgets.push_back(m_countText);
+
+        int spellY = 169;
+        for (int i = 0; i < 3; ++i) {
+            m_spellIcons[i] = new iconWidget(
+                15, spellY, 48, 36, 0x8a7 + i, "spellint.def",
+                0, 0, 0, 0, iconWidget::ICON_STYLE_PLAIN);
+            m_widgets.push_back(m_spellIcons[i]);
+            spellY += 38;
+        }
+        m_spellText = new textWidget(
+            15, 169, 48, 36, "", "tiny.fnt", font::PRIMARY,
+            0x8aa, 1, 0, 8);
+    } else {
+        m_backgroundWidget = new bitmapBorder(
+            0, 0, 78, 126, 0x898, "SpellInf.pcx", 0x800);
+        m_widgets.push_back(m_backgroundWidget);
+
+        int spellY = 7;
+        for (int i = 0; i < 3; ++i) {
+            m_spellIcons[i] = new iconWidget(
+                15, spellY, 48, 36, 0x8a7 + i, "spellint.def",
+                0, 0, 0, 0, iconWidget::ICON_STYLE_PLAIN);
+            m_widgets.push_back(m_spellIcons[i]);
+            spellY += 38;
+        }
+        m_spellText = new textWidget(
+            15, 7, 48, 36, "", "tiny.fnt", font::PRIMARY,
+            0x8aa, 1, 0, 8);
+    }
+
+    m_widgets.push_back(m_spellText);
+    for (std::vector<widget*>::iterator current = m_widgets.begin();
+         current != m_widgets.end(); ++current) {
+        widget* w = *current;
+        if (w)
+            w->m_status &= ~(widget::WIDGET_ACTIVE | widget::WIDGET_DRAWN);
+        addWidget(w, -1);
+    }
+    m_shown = false;
+}
+
+VA_COMPGEN(0x0046db90, 0x21, SCALAR_DELETING_DTOR, TCombatCreatureSubWindow)
+
+VA(0x0046dbc0, 0x6B)
+DC_ADDRESS(0x0665e0, 0x68)
+MAC_ADDRESS(0x07ac18, 0xb0)
+TCombatCreatureSubWindow::~TCombatCreatureSubWindow()
+{
+    for (std::vector<widget*>::iterator it = m_widgets.begin();
+         it != m_widgets.end(); ++it) {
+        if (*it)
+            delete *it;
+    }
+}
+
+// E:\gamedcs\combatcontrolsubwindow.cpp:688
+VA(0x0046dc30, 0x2C2)
+DC_ADDRESS(0x066648, 0x2a0)
+MAC_ADDRESS(0x07acc8, 0x3b4)  // roster order + "%d(%d)" pair + the three spell icons
+void TCombatCreatureSubWindow::update(const army& info, const hero* owner)
+{
+    char buffer[64];
+
+    m_backgroundWidget->setPlayerPaletteColors(
+        owner != 0 ? owner->m_owner : g_game->getLocalPlayerGamePos());
+
+    if (m_viewLevel == 1) {
+        m_creatureIcon->setIconFrame(info.m_creatureType + 2);
+        const TCreatureTypeTraits& normalTraits =
+            akCreatureTypeTraits[info.m_creatureType];
+
+        bool canShoot = info.canShoot(0);
+        long attack = info.getAdjustedAttack(0, canShoot);
+        int defense = info.getAdjustedDefense(0, 1);
+        if (canShoot)
+            attack = max(attack, info.getAdjustedAttack(0, 0));
+
+        sprintf(buffer, "%d(%d)", normalTraits.attackSkill, attack);
+        m_attackText->setText(buffer);
+        sprintf(buffer, "%d(%d)", normalTraits.defenseSkill, defense);
+        m_defenseText->setText(buffer);
+
+        if (info.m_monInfo.damageLowBound != info.m_monInfo.damageHighBound) {
+            sprintf(buffer, "%d-%d", info.m_monInfo.damageLowBound,
+                    info.m_monInfo.damageHighBound);
+        } else {
+            sprintf(buffer, "%d", info.m_monInfo.damageLowBound);
+        }
+        m_damageText->setText(buffer);
+
+        sprintf(buffer, "%d", info.m_monInfo.hitPoints);
+        m_speedText->setText(buffer);
+
+        m_moraleIcon->setIconFrame(info.getMorale(1) + 3);
+        m_luckIcon->setIconFrame(info.getLuck(1) + 3);
+
+        int count = info.m_numTroopsToShowOverride;
+        if (count == -1)
+            count = info.m_numTroops;
+        sprintf(buffer, "%d", count);
+        m_countText->setText(buffer);
+    }
+
+    unsigned int spell = max(
+        0, static_cast<int>(info.m_spellInfluenceQueue.size()) - 3);
+    for (int icon = 0; icon < 3; ++icon) {
+        if (spell < info.m_spellInfluenceQueue.size()) {
+            m_spellIcons[icon]->setIconFrame(info.m_spellInfluenceQueue[spell] + 1);
+        } else {
+            m_spellIcons[icon]->setIconFrame(0);
+        }
+        ++spell;
+    }
+
+    if (info.m_spellInfluenceQueue.size() == 0)
+        m_spellText->setText((*g_generalText)[GENERAL_TEXT_NO_ACTIVE_SPELLS]);
+    else
+        m_spellText->setText("");
+}
+
+VA(0x0046df00, 0x73)
+DC_ADDRESS(0x0668e8, 0x88)
+MAC_ADDRESS(0x07b07c, 0xcc)  // MAC_ABSTRACTION_FROM(tokens1:c25970ff8440,100.0000): restore DC 0x6695c's combat update facade; Mac expands the same rectangle, but the extra source boundary grows the candidate frame by 16 bytes.
+void TCombatCreatureSubWindow::show()
+{
+    if (!m_shown) {
+        saveBackground();
+        for (std::vector<widget*>::iterator current = m_widgets.begin();
+             current != m_widgets.end(); ++current) {
+            if (*current)
+                (*current)->m_status |= widget::WIDGET_ACTIVE |
+                                      widget::WIDGET_DRAWN;
+        }
+        draw(0, WINDOW_ALL_WIDGETS_LOW, WINDOW_ALL_WIDGETS_HIGH);
+        // DC 0x6695c retains the four-coordinate combat facade.
+        g_combatManager->updateCombatArea(
+            m_x + m_parentWindow->m_x, m_y + m_parentWindow->m_y, m_width, m_height);
+        m_shown = true;
+    }
+}
+
+VA(0x0046df80, 0x3A)
+DC_ADDRESS(0x066970, 0x84)
+MAC_ADDRESS(0x07b148, 0x80)
+void TCombatCreatureSubWindow::unShow()
+{
+    if (m_shown) {
+        for (std::vector<widget*>::iterator current = m_widgets.begin();
+             current != m_widgets.end(); ++current) {
+            if (*current)
+                (*current)->m_status &= ~(widget::WIDGET_ACTIVE |
+                                        widget::WIDGET_DRAWN);
+        }
+        restoreBackground();
+        m_shown = false;
+    }
+}
+
+VA_COMPGEN(0x0046a650, 0x26, VECTOR_DTOR, widget)
+
+VA_COMPGEN(0x004491c0, 0x69, DEQUE_CONST_ITERATOR_ADD, int)

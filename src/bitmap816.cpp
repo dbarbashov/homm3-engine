@@ -1,0 +1,328 @@
+// 17 functions in link order.
+// The game's ~Bitmap816 unwind map proves its compile saw <new>'s
+// `operator delete(void*) _THROW0()` (see the destructor's note below);
+// the editors' copy did not. The game profile force-includes <new>
+// (config/units.toml), so this file includes no <new> itself.
+#include "va.h"
+
+#include <string.h>
+
+#include "bitmap816.h"
+
+#include "bitmap16.h"
+#include "pcx.h"
+
+VA_COMPGEN(0x0044f7d0, 0x21, SCALAR_DELETING_DTOR, Bitmap816)
+
+// Original: Bitmap816::Bitmap816; bitmap816.cpp:36
+// DC allocates a padded, locked DirectDraw surface when available. Complete
+// removes that per-bitmap surface tail: the constructor owns the byte
+// buffer directly, and the destructor releases it with delete[].
+DC_ADDRESS(0x053854, 0x10c)
+Bitmap816::Bitmap816(int w, int h)
+    : resource(0, RESOURCE_TYPE_NONE),
+      ImageSize(w * h), Width(w), Height(h), Pitch(w)
+{
+    DataSize = ImageSize;
+    if (w && h)
+        map = new unsigned char[DataSize];
+    else
+        map = 0;
+}
+
+VA(0x0044f800, 0xCA)
+DC_ADDRESS(0x053960, 0x106)
+MAC_ADDRESS(0x05daf0, 0xc4)
+Bitmap816::Bitmap816(const char* name, int w, int h, unsigned char* data,
+                     TPalette16* palette16, int dataSize)
+    : resource(name, RESOURCE_TYPE_BITMAP),
+      ImageSize(w * h), Width(w), Height(h), Pitch(w), m_p16(palette16)
+{
+    DataSize = dataSize ? dataSize : ImageSize;
+    map = new unsigned char[DataSize];
+    if (map)
+        memcpy(map, data, DataSize);
+}
+
+// Original: Bitmap816::Bitmap816; bitmap816.cpp:125
+DC_ADDRESS(0x053a68, 0xa4)
+Bitmap816::Bitmap816(const char* name, int rbits, int rshift,
+                     int gbits, int gshift, int bbits, int bshift)
+    : resource(name, RESOURCE_TYPE_BITMAP),
+      DataSize(0), ImageSize(0), Width(0), Height(0), Pitch(0), map(0)
+{
+    importPCXFile(name, rbits, rshift, gbits, gshift, bbits, bshift);
+}
+
+VA(0x0044f8d0, 0xF8)
+DC_ADDRESS(0x053b0c, 0x96)
+Bitmap816::Bitmap816(const char* name, const char* path,
+                     int rbits, int rshift, int gbits, int gshift,
+                     int bbits, int bshift)
+    : resource(name, RESOURCE_TYPE_BITMAP),
+      DataSize(0), ImageSize(0), Width(0), Height(0), Pitch(0), map(0)
+{
+    char filename[264];
+
+    strcpy(filename, path);
+    strcat(filename, name);
+    importPCXFile(filename, rbits, rshift, gbits, gshift, bbits, bshift);
+}
+
+// DC unlocks/releases the optional surface; Complete's heap buffer needs
+// only delete[]. DC deletes palette pointers, whereas Complete destroys the
+// embedded m_p24/m_p16 automatically after this body.
+VA(0x0044f9d0, 0x70)
+DC_ADDRESS(0x053ba4, 0xb8)
+MAC_ADDRESS(0x05dbb4, 0x88)
+Bitmap816::~Bitmap816()
+{
+    if (map)
+        delete[] map;
+}
+
+// The destructor's unwind map has two cleanup states, not three: this TU
+// sees <new>'s non-throwing `operator delete(void*) _THROW0()`, and
+// ~TPalette24 carries no exception specification. The editors' Libraries
+// compile had no <new>, so their copies keep a third state around the
+// delete.
+
+// Original: Bitmap816::import; bitmap816.cpp:163
+DC_ADDRESS(0x053c5c, 0x104)
+void Bitmap816::import(int w, int h, unsigned char* data,
+                       TPalette16& p16, int size)
+{
+    clear();
+    Width = w;
+    Height = h;
+    Pitch = w;
+    ImageSize = w * h;
+    DataSize = size ? size : ImageSize;
+    if (w && h)
+        map = new unsigned char[DataSize];
+    if (map)
+        memcpy(map, data, DataSize);
+    // DC 0x53d34..0x53d48 copies through a separate palette temporary and
+    // destroys it after assignment. Preserve that lifetime using Complete's
+    // pointer-taking payload-copy interfaces (0x5228e0 / 0x522910); assigning
+    // directly from p16 had lost the evidenced constructor/destructor pair.
+    // This import overload has no proven retained Complete counterpart.
+    TPalette16 palette(&p16);
+    m_p16 = &palette;
+}
+
+// Original: Bitmap816::clear; bitmap816.cpp:221
+DC_ADDRESS(0x053d60, 0x90)
+void Bitmap816::clear()
+{
+    Width = 0;
+    Height = 0;
+    Pitch = 0;
+    DataSize = 0;
+    ImageSize = 0;
+    if (map) {
+        delete[] map;
+        map = 0;
+    }
+}
+
+VA(0x0044fa40, 0x155)
+DC_ADDRESS(0x053df0, 0x1f2)
+int Bitmap816::importPCXFile(const char* filename, int rbits, int rshift,
+                             int gbits, int gshift, int bbits, int bshift)
+{
+    PcxData pdat;
+    imgdes pcxfile;
+    int error = pcxinfo(filename, &pdat);
+    if (error)
+        return 1;
+
+    Width = pdat.m_width;
+    Height = pdat.m_length;
+    Pitch = Width;
+    ImageSize = Width * Height;
+    DataSize = ImageSize;
+    map = new unsigned char[ImageSize];
+    if (!map)
+        return 2;
+
+    allocimage(&pcxfile, pdat.m_width, pdat.m_length,
+               pdat.m_bpPixel * pdat.m_nplanes);
+    loadpcx(filename, &pcxfile);
+    flipimage(&pcxfile, &pcxfile);
+
+    for (int y = 0; y < Height; ++y) {
+        memcpy(map + y * Pitch,
+               pcxfile.m_ibuff + y * pcxfile.m_buffwidth,
+               Width);
+    }
+
+    for (int i = 0; i < 256; ++i) {
+        m_p16.Palette[i] =
+            static_cast<unsigned short>(
+                ((pcxfile.m_palette[i].rgbRed >> (8 - rbits)) << rshift) |
+                ((pcxfile.m_palette[i].rgbGreen >> (8 - gbits)) << gshift) |
+                ((pcxfile.m_palette[i].rgbBlue >> (8 - bbits)) << bshift));
+    }
+
+    freeimage(&pcxfile);
+    return 0;
+}
+
+// Bitmap816.h's const getMap helper (DC 0x19c5f0) owns the source-pixel
+// address calculation in both draw loops.
+VA(0x0044fba0, 0xCB)
+DC_ADDRESS(0x053fe4, 0xc4)
+MAC_ADDRESS(0x05dc3c, 0xf8)
+void Bitmap816::zBufferDraw(int sx, int sy, int sw, int sh,
+                            unsigned short* dst, int dx, int dy,
+                            int dw, int dh, int dpitch, int id) const
+{
+    if (dx < 0) {
+        sx -= dx;
+        sw += dx;
+        dx = 0;
+    }
+    if (dy < 0) {
+        sy -= dy;
+        sh += dy;
+        dy = 0;
+    }
+    if (dx + sw > dw)
+        sw = dw - dx;
+    if (dy + sh > dh)
+        sh = dh - dy;
+
+    if (sw > 0 && sh > 0) {
+        const unsigned char* src = GetMap(sx, sy);
+        dst = static_cast<unsigned short*>(static_cast<void*>(
+            static_cast<unsigned char*>(static_cast<void*>(dst))
+            + dy * dpitch + dx * 2));
+        for (int y = 0; y < sh; ++y) {
+            unsigned short* out = dst;
+            const unsigned char* in = src;
+            for (int x = 0; x < sw; ++x) {
+                unsigned char pixel = *in++;
+                if (pixel)
+                    *out = static_cast<unsigned short>(id);
+                ++out;
+            }
+            dst = static_cast<unsigned short*>(static_cast<void*>(
+                static_cast<unsigned char*>(static_cast<void*>(dst))
+                + dpitch));
+            src += Pitch;
+        }
+    }
+}
+
+VA(0x0044fc70, 0x136)
+DC_ADDRESS(0x0540a8, 0x108)
+MAC_ADDRESS(0x05dd34, 0x21c)
+void Bitmap816::Draw(int sx, int sy, int sw, int sh, unsigned short* dst,
+                     int dx, int dy, int dw, int dh, int dpitch,
+                     bool tblit) const
+{
+    if (dx < 0) {
+        sx -= dx;
+        sw += dx;
+        dx = 0;
+    }
+    if (dy < 0) {
+        sy -= dy;
+        sh += dy;
+        dy = 0;
+    }
+    if (dx + sw > dw)
+        sw = dw - dx;
+    if (dy + sh > dh)
+        sh = dh - dy;
+
+    if (sw > 0 && sh > 0) {
+        const unsigned char* src = GetMap(sx, sy);
+        dst = static_cast<unsigned short*>(static_cast<void*>(
+            static_cast<unsigned char*>(static_cast<void*>(dst))
+            + dy * dpitch + dx * 2));
+        if (tblit) {
+            for (int y = 0; y < sh; ++y) {
+                unsigned short* out = dst;
+                const unsigned char* in = src;
+                for (int x = 0; x < sw; ++x) {
+                    unsigned char pixel = *in++;
+                    if (pixel)
+                        *out = m_p16.Palette[pixel];
+                    ++out;
+                }
+                dst = static_cast<unsigned short*>(static_cast<void*>(
+                    static_cast<unsigned char*>(static_cast<void*>(dst))
+                    + dpitch));
+                src += Pitch;
+            }
+        } else {
+            for (int y = 0; y < sh; ++y) {
+                unsigned short* out = dst;
+                const unsigned char* in = src;
+                for (int x = 0; x < sw; ++x) {
+                    *out++ = m_p16.Palette[*in++];
+                }
+                dst = static_cast<unsigned short*>(static_cast<void*>(
+                    static_cast<unsigned char*>(static_cast<void*>(dst))
+                    + dpitch));
+                src += Pitch;
+            }
+        }
+    }
+}
+
+VA(0x0044fdb0, 0x3B)
+DC_ADDRESS(0x0541b0, 0x7a)
+MAC_ADDRESS(0x05df50, 0x44)
+void Bitmap816::Draw(int sx, int sy, int sw, int sh, Bitmap16Bit* dst,
+                     int dx, int dy, bool tblit) const
+{
+    Draw(sx, sy, sw, sh, dst->GetMap(0, 0), dx, dy,
+         dst->GetWidth(), dst->GetHeight(), dst->GetPitch(), tblit);
+}
+
+VA(0x0044fdf0, 0x3B)
+DC_ADDRESS(0x05422c, 0x4e)
+MAC_ADDRESS(0x05df94, 0x40)
+void Bitmap816::zBufferDraw(int sx, int sy, int sw, int sh,
+                            unsigned short* zBuffer, int dx, int dy,
+                            int id) const
+{
+    zBufferDraw(sx, sy, sw, sh, zBuffer, dx, dy, 800, 600, 1600, id);
+}
+
+// Vtable slot 2. Complete adds this resource virtual; DC Bitmap816 type
+// 0x105e / fields 0x244e has no GetSize member.
+VA(0x0044fe30, 0x09)
+MAC_ADDRESS(0x05dfd4, 0xc)
+unsigned int Bitmap816::getSize() const
+{
+    return DataSize + sizeof(*this);
+}
+
+VA(0x0044fe40, 0x18)
+DC_ADDRESS(0x05427c, 0x18)
+MAC_ADDRESS(0x05dfe0, 0x34)
+void Bitmap816::SetPalette(const unsigned short* pal)
+{
+    memcpy(m_p16.Palette, pal, sizeof(m_p16.Palette));
+}
+
+VA(0x0044fe60, 0x16)
+DC_ADDRESS(0x054294, 0x6)
+MAC_ADDRESS(0x05e014, 0x24)
+void Bitmap816::SetPalette(TPalette24* pal24)
+{
+    m_p24 = *pal24;
+}
+
+VA(0x0044fe80, 0x40)
+DC_ADDRESS(0x05429c, 0x64)
+MAC_ADDRESS(0x05e038, 0x4c)
+void Bitmap816::ResetPalette()
+{
+    TPalette16 converted(GetPalette24());
+    SetPalette(converted.Palette);
+}

@@ -1,0 +1,937 @@
+#ifndef HOMM3_ARMYGRP_H
+#define HOMM3_ARMYGRP_H
+
+#include "va.h"
+
+#include "abstractfile.h"
+#include "artifact_type.h"
+#include "creature_flags.h"
+#include "spellschool.h"
+#include "spelleffect_type.h"
+#include "struct.h"
+#include "terrain_type.h"
+
+// The seven primary resources (wood .. gold), the width of every cost
+// row; town.h's EGameResource names the columns. Dreamcast's complete
+// EGameResource carries no count, so this enum stands beside it.
+enum EGameResourceCount {
+    NUM_RESOURCES = 7
+};
+
+namespace std {
+template<class T> class allocator;
+template<class E> struct char_traits;
+template<class E, class Tr, class A> class basic_string;
+}
+
+// Creature IDs shared by the game and the editor's serialized stacks.
+// Dreamcast CodeView types armies[] and IsMember's parameter as
+// TCreatureType; retail compares empty slots against -1.
+enum TCreatureType {
+    CREATURE_NONE = -1,  // DC spelling: eCreatureNone.
+    // Complete's editor table at 0x58b100 stores these fourteen choices
+    // as -2..-15. Its crgenerc.txt rows are base/upgraded pairs for levels
+    // 1..7, also consumed by TIndeterminateGeneratorTraits. These names
+    // are inferred; the older DC enum 0x1bac has only -1 below zero.
+    randomBaseCreatureLevel1 = -2,
+    randomUpgradedCreatureLevel1 = -3,
+    randomBaseCreatureLevel2 = -4,
+    randomUpgradedCreatureLevel2 = -5,
+    randomBaseCreatureLevel3 = -6,
+    randomUpgradedCreatureLevel3 = -7,
+    randomBaseCreatureLevel4 = -8,
+    randomUpgradedCreatureLevel4 = -9,
+    randomBaseCreatureLevel5 = -10,
+    randomUpgradedCreatureLevel5 = -11,
+    randomBaseCreatureLevel6 = -12,
+    randomUpgradedCreatureLevel6 = -13,
+    randomBaseCreatureLevel7 = -14,
+    randomUpgradedCreatureLevel7 = -15,
+    // Original TCreatureType::Pikeman, ordinal zero; Dreamcast GetBaseCreature
+    // returns this value on its out-of-range dwelling arm.
+    CREATURE_PIKEMAN = 0,
+    // The two griffins, byte-proven by ai_tactical's
+    // get_counterstroke_value (0x439e80): it doubles the counterstrike
+    // multiplier for 4 and refuses the spell outright for 5, which is
+    // exactly the retaliation ladder (the Griffin retaliates twice, the
+    // Royal Griffin already retaliates without limit, so buying it more
+    // retaliations is worth nothing).
+    CREATURE_GRIFFIN = 0x4,
+    CREATURE_ROYAL_GRIFFIN = 0x5,
+    // The four base elementals (NH3API enum spellings; IDs proven by
+    // GetAlignments' compare chain at 0x44ac08).
+    CREATURE_AIR_ELEMENTAL = 0x70,
+    CREATURE_EARTH_ELEMENTAL = 0x71,
+    CREATURE_FIRE_ELEMENTAL = 0x72,
+    CREATURE_WATER_ELEMENTAL = 0x73,
+    // Proven by GetArmyLuck's min-luck clamp at 0x44b415 (NH3API
+    // spelling; the +1-luck special).
+    CREATURE_HALFLING = 0x8a,
+    // Proven by GetArmyMorale's min-morale clamp at 0x44b221 (the
+    // always-positive-morale pair).
+    CREATURE_MINOTAUR = 0x4e,
+    CREATURE_MINOTAUR_KING = 0x4f,
+    // Proven by GetLuck's enemy-group scans at 0x44b32b (the -1
+    // enemy-luck special).
+    CREATURE_DEVIL = 0x36,
+    CREATURE_ARCH_DEVIL = 0x37,
+    // Complete CastSpell's post-cast mana-channel walk compares every
+    // opposing stack against 0x2b before returning one fifth of the mana
+    // cost to the opposing hero. Dreamcast spells.cpp:1764 independently
+    // names the same source comparison as Familiar.
+    CREATURE_FAMILIAR = 0x2b,
+    // Proven by GetMorale's two inlined IsMember scans: 0xc/0xd in the
+    // OWN group add +1 morale (0x44af9c) and 0x44/0x45 in the ENEMY
+    // group subtract 1 (0x44afd1) - exactly the Angel/Archangel and
+    // Bone/Ghost Dragon morale rules, at the Complete ids those rules
+    // belong to (NH3API spellings).
+    // The two JOUSTERS, byte-proven by ai_tactical's
+    // check_adjacent_hexes (0x436300): when the attacker's creatureType
+    // is 10 or 11 AND the side is being played by the AI, a tie between
+    // two candidate hexes is broken toward the one that costs MORE to
+    // reach, and toward the cheaper one for every other creature. That
+    // is the Champion's per-hex charge bonus and nothing else's - the
+    // same joustBonus army.h already carries at +0x490 - and 10/11 is
+    // where the Castle dwelling order puts the pair, immediately below
+    // the Angel/Archangel 0xc/0xd this enum already proves.
+    CREATURE_CAVALIER = 0xa,
+    CREATURE_CHAMPION = 0xb,
+    CREATURE_ANGEL = 0xc,
+    CREATURE_ARCHANGEL = 0xd,
+    CREATURE_BONE_DRAGON = 0x44,
+    CREATURE_GHOST_DRAGON = 0x45,
+    // Proven by modify_spell_damage's dispatch table at 0x44b58c:
+    // the golem spell-damage ladder (1/2, 1/4, 15/100, 1/20) and the
+    // upgraded elementals pairing with their base forms' counter-
+    // spell lists.
+    CREATURE_STONE_GOLEM = 0x20,
+    CREATURE_IRON_GOLEM = 0x21,
+    CREATURE_GOLD_GOLEM = 0x74,
+    CREATURE_DIAMOND_GOLEM = 0x75,
+    CREATURE_ICE_ELEMENTAL = 0x7b,
+    CREATURE_MAGMA_ELEMENTAL = 0x7d,
+    CREATURE_STORM_ELEMENTAL = 0x7f,
+    CREATURE_ENERGY_ELEMENTAL = 0x81,
+    // NH3API-lineage names for the Complete-numbering ids the AI and
+    // spell-work code compare (the DC enum carries the older AB
+    // numbering - Catapult=118 there vs 145 here).
+    CREATURE_STONE_GARGOYLE = 0x1e,
+    CREATURE_OBSIDIAN_GARGOYLE = 0x1f,
+    CREATURE_TROGLODYTE = 0x46,
+    CREATURE_INFERNAL_TROGLODYTE = 0x47,
+    // The one creature with an innate Fire Shield: army::
+    // get_fire_shield_strength (0x443130) and combatManager::
+    // compute_fire_shield_damage (0x422440) both accept it in place of
+    // a live fireShieldRounds counter. NH3API spelling, Complete
+    // numbering (0x34 is the plain Efreeti).
+    CREATURE_EFREET_SULTAN = 0x35,
+    // The two remaining creature CASTERS, byte-proven by
+    // army::cast_spell (0x448260): its creature switch routes 0x25 to
+    // cast_caliph_spell - the Master Genie's random-beneficial roll -
+    // and 0x5b to CastSpell(SPELL_BLOODLUST, ...), the Ogre Mage's one
+    // spell. NH3API spellings, Complete numbering (0x24 the plain
+    // Genie, 0x5a the plain Ogre).
+    CREATURE_MASTER_GENIE = 0x25,
+    CREATURE_OGRE_MAGE = 0x5b,
+    // The on-attack debuff roster, byte-proven in one function:
+    // army::check_special_attack (0x440500) switches over the
+    // ATTACKER's creatureType and applies BIND for the dendroids,
+    // BLIND for the unicorns, DISEASE for the zombie, CURSE for the
+    // two knights and the mummy, AGE for the ghost dragon, STONE for
+    // the medusas and basilisks, PARALYZE for the scorpicore, POISON
+    // for the wyvern monarch and the SoD acid effect (spell id 80) for
+    // the rust dragon. Every id lands where the Complete dwelling runs
+    // this enum already anchors put it (POWER_LICH 65 and
+    // BONE/GHOST_DRAGON 0x44/0x45 pin the Necropolis run, the
+    // TROGLODYTE/MINOTAUR pairs pin Dungeon, HALFLING/ROGUE pin the
+    // neutrals). NH3API spellings.
+    // Three more of do_attack's own witnesses (0x441610): 0x2f takes
+    // the Cerberus arm - the three-headed cleave that widens the
+    // attack mask by the two ring neighbours - and 0x6e/0x6f are the
+    // two ids its attack-frame chooser pins to cs_attack_r, the
+    // hydras, at the Fortress top exactly where the Complete run ends.
+    // NH3API spellings.
+    CREATURE_CERBERUS = 0x2f,
+    CREATURE_HYDRA = 0x6e,
+    CREATURE_CHAOS_HYDRA = 0x6f,
+    CREATURE_DENDROID_GUARD = 0x16,
+    CREATURE_DENDROID_SOLDIER = 0x17,
+    CREATURE_ZOMBIE = 0x3b,
+    CREATURE_BLACK_KNIGHT = 0x42,
+    CREATURE_DREAD_KNIGHT = 0x43,
+    CREATURE_MEDUSA = 0x4c,
+    CREATURE_MEDUSA_QUEEN = 0x4d,
+    CREATURE_SCORPICORE = 0x51,
+    CREATURE_BASILISK = 0x6a,
+    CREATURE_GREATER_BASILISK = 0x6b,
+    CREATURE_WYVERN_MONARCH = 0x6d,
+    // Creature-bank table owners (DC guard_types/reward_types, 0x5601/0x5602).
+    // Complete's 0x6702a0/0x67037c tables corroborate these stored values.
+    // Original DC names: eCreatureCyclops, eCreatureImp, eCreatureNagaSentinel,
+    // eCreatureDragonFly, eCreatureVampire, eCreatureWyvern.
+    CREATURE_CYCLOPS = 94,
+    CREATURE_IMP = 42,
+    CREATURE_NAGA_SENTINEL = 38,
+    CREATURE_DRAGON_FLY = 105,
+    CREATURE_VAMPIRE = 62,
+    CREATURE_WYVERN = 108,
+    CREATURE_MUMMY = 0x8d,
+    // Retail army::get_mirror_effect floors this creature's backlash chance
+    // at Magic Mirror's base value. NH3API supplies the Complete-era spelling.
+    CREATURE_FAERIE_DRAGON = 0x86,
+    // The other two war machines, used by recruit.obj's
+    // siege_artifact_to_creature (0x550360), whose jump table returns
+    // 0x91..0x94 for the four siege artifacts in order. The numbering
+    // is corroborated by its own neighbours - 0x93/0x94 below were
+    // already byte-proven - and by the creature->artifact switch
+    // inlined into recruitUnit::Update, which maps 0x91->3 and
+    // 0x92->4. NH3API spellings, Complete numbering.
+    // 0x8f, used by hero.obj's hero::getIdentifyLevel (0x4e5de0) and the same
+    // block inlined into hero::IsInIdentifyRange
+    // (0x4e5e10): both `push 0x8f` into armyGroup::get_creature_total
+    // and, when the count is nonzero, force a mastery field that is
+    // otherwise below 3 up to 3. The id is INTERPOLATED between two ids
+    // this enum already byte-proves, and the gap admits exactly one
+    // ordering: Halfling 0x8a and Catapult 0x91 bracket six slots
+    // (0x8b..0x90), which is exactly the six neutrals HoMM3 places
+    // between them - Peasant, Boar, Mummy, Nomad, Rogue, Troll - so
+    // Rogue lands on 0x8f. The role corroborates it from the other
+    // side: Rogues are the army that reveals enemy hero detail, and the
+    // only consumer of this compare is the identify-range gate. NH3API
+    // spelling.
+    CREATURE_ROGUE = 0x8f,
+    CREATURE_CATAPULT = 0x91,
+    // Dreamcast TCreatureType::kNumCreatureTypes (= eCreatureCatapult): the
+    // creature types before the war machines, 145 in Complete. It sizes the
+    // AI's creature value tables and the campaign crossover creature mask
+    // (NH3API MAX_CREATURES).
+    kNumCreatureTypes = CREATURE_CATAPULT,
+    CREATURE_BALLISTA = 0x92,
+    CREATURE_FIRST_AID_TENT = 0x93,
+    CREATURE_AMMO_CART = 0x94,
+    CREATURE_ARROW_TOWER = 0x95,
+    // The four shooters combatManager::ShotIsThroughWall lets past its
+    // wall gate alongside the Arrow Tower: the compare chain at
+    // 0x46753d tests 0x22, 0x23, 0x88, 0x89, 0x95 in that order and
+    // answers "no wall between us" for each. That set is exactly
+    // HoMM3's no-obstacle-penalty shooters - Mage/Arch Mage and
+    // Enchanter/Sharpshooter - at Complete numbering, and the ids the
+    // enum already byte-proves on both sides bracket them: the Tower
+    // dwelling order puts the Mage pair straight after Stone/Iron
+    // Golem (0x20/0x21 above), and the neutral block runs Azure
+    // Dragon 0x84 / Crystal Dragon 0x85 ... Halfling 0x8a, leaving
+    // 0x88/0x89 exactly where Enchanter/Sharpshooter sit in it.
+    // NH3API spellings; values retail-proven.
+    // Gelu's retail specialty upgrades Wood Elves (0x12) to Sharpshooters.
+    CREATURE_WOOD_ELF = 0x12,
+    CREATURE_MAGE = 0x22,
+    CREATURE_ARCH_MAGE = 0x23,
+    CREATURE_ENCHANTER = 0x88,
+    CREATURE_SHARPSHOOTER = 0x89,
+    // The rest of the two blocks the note above already brackets, added
+    // 2026-08-20 for game::GetRandomMonster (0x4c92c0). That body strikes
+    // ids out of its roll domain with PUSHED IMMEDIATES, so every value
+    // here is retail-proven at the byte, and the two sets it forms are
+    // each semantically closed. 0x84..0x89 is the six Armageddon's Blade
+    // neutral specials - the same block this header already runs "Azure
+    // Dragon 0x84 / Crystal Dragon 0x85 ... Halfling 0x8a" through, with
+    // Enchanter/Sharpshooter already pinned inside it. 0x76..0x83, with
+    // 0x7a/0x7c/0x7e/0x80 skipped, is every Conflux-exclusive creature:
+    // the upgrade half of each elemental pair plus the two Phoenix rungs.
+    // The four BASE elementals are deliberately absent from that set -
+    // they are generic neutrals and GetRandomMonster leaves them in the
+    // domain, which is what makes the skipped ids evidence rather than a
+    // gap. Existing neighbours 0x7b/0x7d/0x7f/0x81/0x86/0x88/0x89/0x8a
+    // bracket the new values with no slack. NH3API Complete spellings.
+    // MAGIC_ELEMENTAL 0x79, AZURE_DRAGON 0x84 and CRYSTAL_DRAGON 0x85 are
+    // NOT repeated here - get_spell_work_chance's immunity switch already
+    // carries all three below, at the same values this body proves.
+
+    // GATED, like netmsg.h's RS_ERASE_OBJECT: ungated, these six enumerators
+    // change initialize_game_data and advManager::monsters_sell_out, neither
+    // of which mentions a creature id (the type/symbol-table population
+    // class). game.obj opens them for itself.
+    CREATURE_PIXIE = 0x76,
+    CREATURE_SPRITE = 0x77,
+    CREATURE_PSYCHIC_ELEMENTAL = 0x78,
+    CREATURE_FIREBIRD = 0x82,
+    CREATURE_PHOENIX = 0x83,
+    CREATURE_RUST_DRAGON = 0x87,
+    // hero::GetManaCost (0x4e5240) crosses two pairs: 0x14/0x15 in the
+    // ENEMY group add 2 to the cost, 0x22/0x23 in the caster's own
+    // group take 2 off. The second pair is the Mage/Arch Mage above -
+    // HoMM3's spell-cost reducers - so the first is the pair that
+    // RAISES enemy spell cost, Pegasus/Silver Pegasus, and 0x14/0x15
+    // is exactly where the Rampart dwelling order puts them (after
+    // Wood Elf/Grand Elf 0x12/0x13, before Dendroid Guard 0x16).
+    CREATURE_PEGASUS = 0x14,
+    CREATURE_SILVER_PEGASUS = 0x15,
+    // hero::GetNecromancyCreature (0x4e3c60) returns exactly these four
+    // off the Necromancy mastery byte, in this order - HoMM3's
+    // Necropolis undead ladder, and the Cloak of the Undead King's own
+    // basic/advanced/expert upgrades. DC spellings for 58 and 59 are
+    // eCreatureZombie / eCreatureZombieLord; the NH3API pair used here
+    // (Walking Dead / Zombie) is the same two ids, kept because the
+    // rest of this enum is NH3API-spelled.
+    CREATURE_SKELETON = 0x38,
+    CREATURE_WALKING_DEAD = 0x3a,
+    CREATURE_WIGHT = 0x3c,
+    CREATURE_LICH = 0x40,
+    // get_spell_work_chance's per-creature immunity switch (0x44a9xx):
+    // the magic-resistant dwarves/Crystal Dragon, the level-gated
+    // dragons, and the spell-immune Magic Elemental (NH3API spellings;
+    // Complete numbering).
+    CREATURE_DWARF = 0x10,
+    CREATURE_BATTLE_DWARF = 0x11,
+    CREATURE_GREEN_DRAGON = 0x1a,
+    CREATURE_GOLD_DRAGON = 0x1b,
+    CREATURE_RED_DRAGON = 0x52,
+    CREATURE_BLACK_DRAGON = 0x53,
+    CREATURE_MAGIC_ELEMENTAL = 0x79,
+    CREATURE_AZURE_DRAGON = 0x84,
+    CREATURE_CRYSTAL_DRAGON = 0x85,
+    // 0x8e, one slot below Rogue in the six-slot run the CREATURE_ROGUE
+    // note above reconstructs (Peasant, Boar, Mummy, NOMAD, Rogue,
+    // Troll). Retail pins the ROLE independently: findpath's
+    // GetTerrainCost (0x4b18c0) asks get_creature_total(0x8e) > 0 and
+    // hands the answer to CalcTerrainCost as the flag whose only effect
+    // is `terrain == 1 -> terrain = 0` - it erases terrain 1's movement
+    // penalty, terrain 1 is Sand (terrain.h's ten-mask permutation),
+    // and Nomads are the creature that cancels the sand penalty.
+    CREATURE_NOMAD = 0x8e,
+    // The rest of the roster, which the editors' town generator tables and
+    // the game's per-creature switches name. Dreamcast TCreatureType gives
+    // every town creature 0..117 at these ids (eCreatureHalberdier ..
+    // eCreatureBronzeGorgon); NH3API spellings like the rest of this enum,
+    // NH3API's Complete numbering for the neutrals.
+    CREATURE_HALBERDIER = 1,
+    CREATURE_ARCHER = 2,
+    CREATURE_MARKSMAN = 3,
+    CREATURE_SWORDSMAN = 6,
+    CREATURE_CRUSADER = 7,
+    CREATURE_MONK = 8,
+    CREATURE_ZEALOT = 9,
+    CREATURE_CENTAUR = 14,
+    CREATURE_CENTAUR_CAPTAIN = 15,
+    CREATURE_GRAND_ELF = 19,
+    CREATURE_UNICORN = 24,
+    CREATURE_WAR_UNICORN = 25,
+    CREATURE_GREMLIN = 28,
+    CREATURE_MASTER_GREMLIN = 29,
+    CREATURE_GENIE = 36,
+    CREATURE_NAGA_QUEEN = 39,
+    CREATURE_GIANT = 40,
+    CREATURE_TITAN = 41,
+    CREATURE_GOG = 44,
+    CREATURE_MAGOG = 45,
+    CREATURE_HELL_HOUND = 46,
+    CREATURE_DEMON = 48,
+    CREATURE_HORNED_DEMON = 49,
+    CREATURE_PIT_FIEND = 50,
+    CREATURE_PIT_LORD = 51,
+    CREATURE_EFREETI = 52,
+    CREATURE_SKELETON_WARRIOR = 57,
+    CREATURE_WRAITH = 61,
+    CREATURE_VAMPIRE_LORD = 63,
+    CREATURE_POWER_LICH = 65,
+    CREATURE_HARPY = 72,
+    CREATURE_HARPY_HAG = 73,
+    CREATURE_BEHOLDER = 74,
+    CREATURE_EVIL_EYE = 75,
+    CREATURE_MANTICORE = 80,
+    CREATURE_GOBLIN = 84,
+    CREATURE_HOBGOBLIN = 85,
+    CREATURE_WOLF_RIDER = 86,
+    CREATURE_WOLF_RAIDER = 87,
+    CREATURE_ORC = 88,
+    CREATURE_ORC_CHIEFTAIN = 89,
+    CREATURE_OGRE = 90,
+    CREATURE_ROC = 92,
+    CREATURE_THUNDERBIRD = 93,
+    CREATURE_CYCLOPS_KING = 95,
+    CREATURE_BEHEMOTH = 96,
+    CREATURE_ANCIENT_BEHEMOTH = 97,
+    CREATURE_GNOLL = 98,
+    CREATURE_GNOLL_MARAUDER = 99,
+    CREATURE_LIZARDMAN = 100,
+    CREATURE_LIZARD_WARRIOR = 101,
+    CREATURE_GORGON = 102,
+    CREATURE_MIGHTY_GORGON = 103,
+    CREATURE_SERPENT_FLY = 104,
+    CREATURE_PEASANT = 139,
+    CREATURE_BOAR = 140,
+    CREATURE_TROLL = 144,
+    // Dreamcast TCreatureType::kNumSiegeWeaponTypes and
+    // kNumCreatureAndSiegeWeaponTypes: the war machines that follow
+    // kNumCreatureTypes, and the creature ids through the Ammo Cart.
+    kNumSiegeWeaponTypes = 4,
+    kNumCreatureAndSiegeWeaponTypes = kNumCreatureTypes + kNumSiegeWeaponTypes
+};
+
+// The spell-id domain (the full roster gets its own header when spell
+// work begins in earnest); DC CodeView types the parameters SpellID.
+typedef int SpellID;
+
+// Named spell ids as retail compares and case labels surface them,
+// grown per consumer (armygrp's work-chance/damage switches,
+// ai_combat's damage-spell dispatch). NH3API spells.hpp spellings;
+// the DC SpellID enum corroborates every value (eSpellStoneGaze for
+// SPELL_STONE).
+enum ESpellId {
+    // Original DC LF_ENUM SpellID 0x1b61 uses signed int (0x74) and
+    // eSpellNone = -1. The default type_spell_choice constructor passes
+    // this sentinel to type_enchant_data; retain the signed domain through
+    // canonical enum spell interfaces as well as the Complete positive IDs.
+    SPELL_NONE = -1,
+    SPELL_SUMMON_BOAT = 0x0,
+    // advManager::SkuttleBoat (0x41cdf0) is the witness and it proves the
+    // id twice in one body: it takes its traits row at `akSpellTraits +
+    // 0x88` (one 136-byte record past SUMMON_BOAT's) for the per-mastery
+    // success chance, and charges the cast with
+    // `hero::GetManaCost(1, 0, get_special_terrain())`.
+    SPELL_SCUTTLE_BOAT = 0x1,
+    // IsInIdentifyRange indexes this row's mastery bonus and multiplies it by
+    // spell power to derive the scouting radius; retail displacement 0x144
+    // proves spell id 2 independently of the Dreamcast spelling.
+    SPELL_VISIONS = 0x2,
+    // advManager::CastSpell (0x41c490) dispatches the ten adventure spells
+    // through one ascending jump table, which fixes every id in the run: its
+    // arms 3 and 5 both play "view.wav" and hand their OWN case value to
+    // advManager::ViewWorld, and arm 4 writes hero::disguiseLevel. Each arm
+    // then charges `GetManaCost(<that id>, ...)`, so the traits row and the
+    // id agree twice over.
+    SPELL_VIEW_EARTH = 0x3,
+    SPELL_DISGUISE = 0x4,
+    SPELL_VIEW_AIR = 0x5,
+    // Dreamcast's first combat spell and CastSpell's first jump-table arm;
+    // retail indexes the mastery row at 0x642214 and places QuicksandInfo.
+    SPELL_QUICKSAND = 0xa,
+    // 11. combatManager::SetupAndLoadObstacles (0x466290) prices the
+    // Tower's moat with ComputeSpellDamage(11, ...) and builds each
+    // moat hex out of the obstacle shape whose sprite is C09spF1.def -
+    // i.e. the Tower's moat IS a minefield, which is what identifies
+    // the spell. The id also sits one below SPELL_EARTHQUAKE 0xe in the
+    // battlefield-obstacle run this enum already anchors at that end.
+    SPELL_LAND_MINE = 0xb,
+    // The two WALL spells, byte-proven by combatManager::ValidSpellTarget
+    // (0x5a39c0): its tail tests the spell against 0xc and then 0xd and
+    // gives each one its own placement rule - 0xc walks the two spell
+    // obstacle-shape rows cmbtmgr.h declares (whose sprites are the
+    // C15spE pair) and 0xd walks a hard-coded two-or-three cell column
+    // at -17 / -34 with a row-parity nudge. Both sit inside the
+    // battlefield-obstacle run this enum already anchors at both ends
+    // (LAND_MINE 0xb above, EARTHQUAKE 0xe below), which is what fixes
+    // WHICH is which: 0xc is one below Fire Wall, i.e. Force Field.
+    SPELL_FORCE_FIELD = 0xc,
+    SPELL_FIRE_WALL = 0xd,
+    // hero::Fly at 0x4e59a0 passes 6 to get_spell_level and indexes the
+    // corresponding 0x88-byte traits row's per-mastery mana-cost band.
+    SPELL_FLY = 0x6,
+    // AI_AttemptMove's two path-mode helpers pass these ids, and its
+    // town-portal arm independently charges spell 9's mana cost.
+    SPELL_WATER_WALK = 0x7,
+    // attempt_teleport passes 8 to all three spell helpers and indexes row
+    // 8's per-mastery cast-count limit before the retained TeleportTo call.
+    // Dreamcast independently names the same SpellID rung.
+    SPELL_DIMENSION_DOOR = 0x8,
+    SPELL_TOWN_PORTAL = 0x9,
+    // DC eSpellEarthquake = 14. Read by check_wall_archery_penalty
+    // (0x42482b) out of hero::available_spells - a hero who can bring
+    // the town wall down is modeled as taking no wall archery penalty.
+    SPELL_EARTHQUAKE = 0xe,
+    SPELL_ICE_BOLT = 0x10,
+    SPELL_LIGHTNING_BOLT = 0x11,
+    SPELL_CHAIN_LIGHTNING = 0x13,
+    SPELL_FROST_RING = 0x14,
+    SPELL_FIREBALL = 0x15,
+    SPELL_INFERNO = 0x16,
+    SPELL_METEOR_SHOWER = 0x17,
+    SPELL_DEATH_RIPPLE = 0x18,
+    SPELL_DESTROY_UNDEAD = 0x19,
+    SPELL_ARMAGEDDON = 0x1a,
+    // The two damage-reduction shields, byte-proven 2026-08-08 by the
+    // pricers' traits displacement `K*136 + 0x34` (the mastery_bonus
+    // row): get_shield_value (0x438c60) indexes +0xe8c = 27*136 + 0x34
+    // and get_air_shield_value (0x438bc0) indexes +0xf14 = 28*136 +
+    // 0x34. The pair sits immediately below FIRE_SHIELD, which the
+    // surrounding roster already pins.
+    SPELL_SHIELD = 0x1b,
+    SPELL_AIR_SHIELD = 0x1c,
+    // compute_fire_shield_damage (0x422440) prices the shield's
+    // retaliation through ModifySpellDamage under THIS id, which fixes
+    // it against the surrounding roster (0x1e is the first protection).
+    SPELL_FIRE_SHIELD = 0x1d,
+    // The anti-magic family ai_combat's get_enchantment_value
+    // (0x425510) writes off against a side that cannot cast. Their
+    // values are fixed by the surrounding roster, which is already
+    // byte-proven at both ends (DISPEL 0x23, RESURRECTION 0x26).
+    SPELL_PROTECTION_FROM_AIR = 0x1e,
+    SPELL_PROTECTION_FROM_FIRE = 0x1f,
+    SPELL_PROTECTION_FROM_WATER = 0x20,
+    SPELL_PROTECTION_FROM_EARTH = 0x21,
+    SPELL_ANTI_MAGIC = 0x22,
+    SPELL_DISPEL = 0x23,
+    SPELL_MAGIC_MIRROR = 0x24,
+    SPELL_CURE = 0x25,
+    SPELL_RESURRECTION = 0x26,
+    SPELL_ANIMATE_DEAD = 0x27,
+    // The gap between ANIMATE_DEAD and BLESS, byte-proven by
+    // combatManager::find_spell_target (0x5a3950): its three-way jump
+    // chain is `sub edx, 0x26 / dec / dec`, so the third arm is 0x28, and
+    // that arm is the one gated on `first_target` before it reaches
+    // find_resurrection_target - the sacrifice beneficiary lookup.
+
+    // Corroborated independently by ai_tactical's consider_spell, whose
+    // 56-entry byte table sends `spell - 14 == 26` to the arm that calls
+    // type_AI_spellcaster::consider_sacrifice and nothing else, and a
+    // third time by combatManager::SpellTargetMessage (0x5a8690), whose
+    // 0x28 arm is the one gated on `first_target`.
+    SPELL_SACRIFICE = 0x28,
+    SPELL_BLESS = 0x29,
+    SPELL_CURSE = 0x2a,
+    // The 41..52 enchantment ladder, byte-proven end to end by the
+    // ai_tactical pricers' `K*136 + 0x34` mastery_bonus displacement;
+    // PRECISION 44, MIRTH 49, SORROW 50 and MISFORTUNE 52 anchor both ends:
+    //   get_blood_lust_value    0x438100  +0x170c = 43*136 + 0x34
+    //   get_weakness_value      0x438ed0  +0x181c = 45*136 + 0x34
+    //   get_tough_skin_value    0x438d90  +0x18a4 = 46*136 + 0x34
+    //   get_disruptive_ray_value 0x438dc0 +0x192c = 47*136 + 0x34
+    //   get_prayer_value        0x438ac0  +0x19b4 = 48*136 + 0x34
+    // DISRUPTING_RAY corroborates independently: 0x438dc0 also PUSHES
+    // the literal 0x2f into the work-chance leaf at 0x5a8090.
+    // STONE_SKIN is the DC roster's get_tough_skin_value; the spell it
+    // prices is Stone Skin (the HD crossbuild names that same body
+    // get_stone_skin_value), so the enumerator takes the spell's name.
+    SPELL_BLOODLUST = 0x2b,
+    SPELL_PRECISION = 0x2c,
+    SPELL_WEAKNESS = 0x2d,
+    SPELL_STONE_SKIN = 0x2e,
+    SPELL_DISRUPTING_RAY = 0x2f,
+    SPELL_PRAYER = 0x30,
+    SPELL_MIRTH = 0x31,
+    SPELL_SORROW = 0x32,
+    SPELL_FORTUNE = 0x33,
+    SPELL_MISFORTUNE = 0x34,
+    // 54, and army.h's spell-influence block already fixes the value
+    // from the other side: "+0x198 + 54*4 == +0x270" is the word that
+    // header reads for Slow. The one consumer in this tree is
+    // combatManager::SetNextArmy (0x465330), where 0x36 is the FIRST of
+    // the four spells the Armor of the Damned auto-casts - Slow, Curse,
+    // Weakness, Misfortune - which is also what corroborates it, since
+    // the other three are already byte-proven enumerators above.
+    // Corroborated a third time by combatManager::ShowSpellMessage
+    // (0x5a8950): its artifact arm groups exactly 0x36 with CURSE 0x2a,
+    // WEAKNESS 0x2d and MISFORTUNE 0x34 onto one Armor-of-the-Damned
+    // line, which is the same four-spell set from the other side.
+    SPELL_SLOW = 0x36,
+    SPELL_SLAYER = 0x37,
+    SPELL_TITANS_LIGHTNING_BOLT = 0x39,
+    // 58, byte-proven by ai_tactical's get_counterstroke_value
+    // (0x439e80), which folds the row into the displacement as
+    // `[akSpellTraits + 4*mastery + 0x1f04]` = 58*136 + 0x34 - the
+    // constant form, so the enumerator is what the source names.
+    SPELL_COUNTERSTRIKE = 0x3a,
+    SPELL_BERSERK = 0x3b,
+    SPELL_HYPNOTIZE = 0x3c,
+    SPELL_FORGETFULNESS = 0x3d,
+    SPELL_BLIND = 0x3e,
+    SPELL_TELEPORT = 0x3f,
+    // 64, byte-proven by combatManager::SpellTargetMessage (0x5a8690).
+    // Its jump table covers exactly 0xc..0x40 and the TOP entry, 0x40,
+    // gets an arm of its own: `strcpy(gText, <the row two above the two
+    // target-naming rows the sacrifice arms use>)` and nothing else -
+    // a fixed line with no target to name, which is what a spell that
+    // removes a battlefield obstacle prints. It sits one above
+    // SPELL_TELEPORT 0x3f and one below SPELL_CLONE 0x41, both already
+    // proven, so no other value fits.
+
+    // UNGATED DELIBERATELY, although armygrp.h reaches initialize.cpp's
+    // include closure and a new enumerator is an input to the include-set
+    // class recorded on TSpellTraits below.
+    SPELL_REMOVE_OBSTACLE = 0x40,
+    // get_elemental_type's 0x5a9360 jump table independently proves this
+    // contiguous summon family and its mapping to the four base elementals.
+    // Dreamcast CodeView supplies the enumerator spellings.
+    SPELL_SUMMON_FIRE_ELEMENTAL = 0x42,
+    SPELL_SUMMON_EARTH_ELEMENTAL = 0x43,
+    SPELL_SUMMON_WATER_ELEMENTAL = 0x44,
+    SPELL_SUMMON_AIR_ELEMENTAL = 0x45,
+    SPELL_STONE = 0x46,
+    SPELL_POISON = 0x47,
+    // The nine rows ai_tactical's enchantment dispatch
+    // get_enchantment_function (0x43b690) needs and this roster did
+    // not carry. Each is byte-proven by that function's own two
+    // tables: the 61-entry BYTE index table at +0x214 maps
+    // `spell - 15` onto a slot of the 39-entry dword table at +0x178,
+    // and every slot's target is a `mov eax, offset get_<x>_value`
+    // whose relocation names the handler outright. So the value ->
+    // handler pairing is READ, not inferred, and the enumerator takes
+    // the handler's spell:
+    //   15, 18 -> get_damage_spell_value, the two flanks of the
+    //             already-proven ICE_BOLT 16 / LIGHTNING_BOLT 17
+    //   53 -> get_haste_value      56 -> get_frenzy_value
+    //   65 -> get_clone_value      73 -> get_disease_value
+    //   74 -> get_blind_value      75 -> get_age_value
+    //   72 -> the table's second default slot (no pricer of its own)
+    // Four of the nine are independently corroborated by army.h's
+    // +0x198 spell-influence row, which already fixes FRENZY 0x38,
+    // BIND 0x48 and AGE 0x4b from the round-counter side and puts
+    // PARALYZE on 74. (SPELL_SACRIFICE 0x28 belongs to this set too and
+    // is declared once, in value order, above.)
+    SPELL_MAGIC_ARROW = 0xf,
+    SPELL_IMPLOSION = 0x12,
+    SPELL_HASTE = 0x35,
+    // Round-side corroboration: the one influence row ResetRound
+    // (0x447120) refuses to decrement, paired with army.h's frenzyRounds
+    // (+0x278 == +0x198 + 56*4) by ComputeAttackerDamageReduction.
+    SPELL_FRENZY = 0x38,
+    SPELL_CLONE = 0x41,
+    // Round-side corroboration: remove_binding (0x43ee10) cancels this
+    // row the moment a bound stack's `binders` list empties - `push 0x48
+    // / call CancelIndividualSpell` - the same index 72 army.h's +0x2b8
+    // bindRounds field pairs. Also the folded `akSpellTraits + 0x2650`
+    // row address in viewarmywindow.cpp's Dendroid-hold arm.
+    SPELL_BIND = 0x48,
+    SPELL_DISEASE = 0x49,
+    SPELL_PARALYZE = 0x4a,
+    SPELL_AGE = 0x4b,
+    // The Lich shot's pseudo-spell row: army::range_attack (0x43f900)
+    // reads akSpellTraits[0x4c].m_sample/m_effect for the death-cloud
+    // animation over the target hex. NH3API's SPELL_DEATH_CLOUD at the
+    // same value; the neighbours 0x4a/0x4b above and 0x4e below bracket
+    // it.
+    SPELL_DEATH_CLOUD = 0x4c,
+    // 78, byte-proven by combatManager::ShowSpellMessage (0x5a8950).
+    // Its creature-spell dispatch is a jump table over 0x2a..0x4e and
+    // 0x4e is the TOP entry, with an arm of its own that prints one
+    // text row over the affected stack's name and nothing else - the
+    // shape every other creature-ability arm in that table has. The
+    // value is fixed at both ends by the same table: 0x4b AGE is the
+    // last already-proven rung below it, and the window closes at 0x4e.
+    SPELL_DISPEL_HELPFUL = 0x4e,
+    // The Mighty Gorgon's pseudo-spell row: army::do_post_attack
+    // (0x440bc0) plays akSpellTraits[0x4f].m_sample over its death
+    // stare, exactly as the Rust Dragon plays row 0x50's below.
+    // Bracketed by the proven 0x4e above and 0x50 below.
+    SPELL_DEATH_STARE = 0x4f,
+    // 80, the one row Complete's 81-wide influence table carries past
+    // the Dreamcast build's kNumSpellsAndCreatureEffects = 80: the
+    // Rust Dragon's acid. Byte-proven by check_special_attack
+    // (0x440500), whose rust-dragon arm stores 0x50 into the pending
+    // iPostPowSpellToCast gated on the victim's defenseSkill being
+    // positive - the defense-eating half of Acid Breath. NH3API
+    // spelling.
+    SPELL_ACID_BREATH_DEFENSE = 0x50,
+    // Dreamcast SpellID::kNumSpellsAndCreatureEffects (80 there, before Acid
+    // Breath): spell ids 0 .. SPELL_ACID_BREATH_DEFENSE, the rows of the
+    // spell-traits table and the width of each stack's influence/level
+    // arrays.
+    kNumSpellsAndCreatureEffects = SPELL_ACID_BREATH_DEFENSE + 1,
+    // Dreamcast SpellID's range enumerators: ten adventure spells from 0,
+    // sixty combat spells from 10, then the creature effects.
+    kNumSpells = 70,
+    eSpellFirstAdventureSpell = SPELL_SUMMON_BOAT,
+    eSpellFirstCombatSpell = SPELL_QUICKSAND,
+    kNumAdventureSpells = eSpellFirstCombatSpell - eSpellFirstAdventureSpell,
+    kNumCombatSpells = kNumSpells - eSpellFirstCombatSpell,
+    kNumCreatureEffects = kNumSpellsAndCreatureEffects - kNumSpells
+};
+
+// Bootstrap VIEW of the spell-traits record (136-byte stride proven
+// by get_spell_work_chance's spell*17*8 indexing at 0x44a4e2): only
+// the fields that function reads are modeled; the full roster gets
+// its own header when spell work begins in earnest.
+struct TSpellTraits {
+    int m_karma;              // <= 0 short-circuits to certain-work
+    // DC TSpellTraits.m_sample (members.csv TSpellTraits@4) - the WAV
+    // this spell plays. army::do_fire_shield (0x4409c0) is the witness:
+    // it hands `akSpellTraits[SPELL_FIRE_SHIELD].m_sample` straight to
+    // LoadPlaySample as `[akSpellTraits + 29*136 + 4]`. The record's
+    // first seven fields are UNSHIFTED against the DC roster (m_flags
+    // 12/+0xc, m_name 16/+0x10, m_abbreviated_name 20/+0x14,
+    // m_level 24/+0x18 all already agree here), so 4 is 4.
+
+    // +0x08 IS THE DC's m_effect: the SPRITE-EFFECT id this spell plays over
+    // its target. combatManager::AreaEffect
+    // (0x5a4970) is the witness - it loads
+    // `[akSpellTraits + spell*136 + 8]` and hands it straight to
+    // drawing.obj's hex-taking SpellEffect overload (0x496a10) as the
+    // effect argument, exactly as do_fire_shield hands +0x04 to
+    // LoadPlaySample. Both names are byte-proven, so both are declared for
+    // everyone.
+    const char* m_sample;     // +0x04
+    // DC TSpellTraits record 0x1f65: member type 0x1f15, TSpellEffectID.
+    TSpellEffectID m_effect;  // +0x08, int-wide enum
+    unsigned int m_flags;     // bit 10 gates one immunity family;
+                              // bit 12 (byte +0xd & 0x10) blocks the
+                              // spell against siege weapons
+    // +0x10 is the display name. SetShrineHelpText passes it as the string
+    // argument to the central shrine format after indexing this 136-byte row.
+    const char* m_name;
+    // Dreamcast-attested m_abbreviated_name; retail's loader duplicates
+    // sptraits.txt column 1 into this pointer.
+    const char* m_abbreviated_name;
+    int m_level;                // the dragons' magic-immunity gate
+    union {
+        TSpellSchool m_school;  // typed consumer view
+        unsigned int m_schoolBits;  // loader's OR-accumulator view
+    };                        // +0x1c
+    // +0x20, the per-mastery MANA COST row: GetManaCost indexes it
+    // `[base + 4*(mastery + spell*34) + 0x20]` with the mastery
+    // get_spell_level just returned.
+    int m_manaCost[4];         // +0x20
+    // Spell-power multiplier (NH3API m_power_factor): multiplied by the
+    // caster's power in get_resurrection_value (0x423d60),
+    // get_mass_damage_value (0x42540a) and ai_tactical's
+    // get_damage_spell_value (0x436f60: traits[spell*136 + 0x30]).
+    int m_power_factor;         // +0x30
+    // Per-mastery flat bonus row (NH3API m_mastery_bonus):
+    // get_damage_spell_value adds [spell*136 + mastery*4 + 0x34].
+    int m_mastery_bonus[4];     // +0x34
+    // +0x44, nine faction weights used by town::initialize_spells.
+    int m_townGetsItChance[9];
+    // A SECOND per-mastery dword row: get_enchantment_value indexes it
+    // as spell*34 + mastery dwords from the table base (0x423cab) =
+    // record +0x68 + mastery*4. Distinct from mastery_bonus - both
+    // rows are byte-proven by their own consumers. Name provisional.
+    int m_AI_value[4];    // +0x68
+    // Complete's four per-mastery descriptions. Dreamcast names this
+    // m_description at +0x74 before the added ninth town-probability dword;
+    // retail InitializeSpellTraits writes the shifted +0x78 row.
+    const char* m_description[4];  // +0x78
+};
+SIZE(TSpellTraits, 136);
+
+// The spell table is reached through a stored pointer, exactly like
+// akCreatureTypeTraits: retail loads [0x687f58] before indexing.
+// The 81-entry count is now retail-proven: spelldefs constructs 81 strings
+// and writes the contiguous 136-byte backing rows at 0x685450, whose exact
+// end is this pointer cell (0x685450 + 81*136 == 0x687f58).
+extern const TSpellTraits (&akSpellTraits)[81];
+
+unsigned char spellTargetsASingleArmy(int spell, int sslevel);
+
+// The special-ground MODE GetArmyMorale/GetArmyLuck dispatch on (the
+// dword param with sentinels 2..5): cursed ground zeroes the stat,
+// holy ground/evil fog swing morale by town alignment, the clover
+// field lifts neutral-town luck. NH3API terrain.hpp EMagicTerrain
+// spellings. NewmapCell::get_magic_terrain_type (0x4fcf40) proves the
+// remaining return values against its five-way special-terrain switch.
+enum EMagicTerrain {
+    MAGIC_TERRAIN_INVALID = -1,
+    MAGIC_TERRAIN_COAST = 0,
+    MAGIC_TERRAIN_MAGIC_PLAINS = 0x1,
+    MAGIC_TERRAIN_CURSED_GROUND = 0x2,
+    MAGIC_TERRAIN_HOLY_GROUND = 0x3,
+    MAGIC_TERRAIN_EVIL_FOG = 0x4,
+    MAGIC_TERRAIN_CLOVER_FIELD = 0x5,
+    MAGIC_TERRAIN_LUCID_POOLS = 0x6,
+    MAGIC_TERRAIN_FIERY_FIELDS = 0x7,
+    MAGIC_TERRAIN_ROCKLANDS = 0x8,
+    MAGIC_TERRAIN_MAGIC_CLOUDS = 0x9
+};
+
+// PROVEN layout: Dreamcast CodeView class size 56 with
+// armies @0 and numTroops @28, corroborated by retail codegen - the
+// 7-slot loops and the CREATURE_NONE sentinel in
+// GetNumArmies (0x44acc0) / IsMember (0x44ab80).
+// PROVEN layout: stride 116 from the retail index math
+// (idx*29 dwords in HasAllUndead/get_AI_value), attributes @0x10 and
+// AI_value @0x40 from the same bodies; field names are the NH3API
+// roster, which lands exactly on those offsets with cost[7].
+struct TCreatureTypeTraits {
+    int townType;
+    int level;
+    const char* cSamplePrefix;
+    const char* m_sprite_name;
+    unsigned int attributes;
+    const char* m_name;
+    const char* m_plural_name;
+    const char* special_ability;
+    int cost[NUM_RESOURCES];
+    int baseFightValue;
+    int AI_value;
+    int growthRate;
+    // SIXTEEN BITS, not 32: the crtraits.txt parser (0x47b480) stores this
+    // column's atoi result with `mov word ptr [esi+0x48], ax` where every
+    // neighbouring column takes a dword.
+    short horde_growth_rate;
+    // Two alignment bytes before hitPoints at +0x4c. Dreamcast declares
+    // horde_growth_rate as a short; retail parser 0x47b480 writes a word at +0x48.
+    // NH3API widens that field, so its int32 facade is not used here.
+    char m_paddingAfterHordeGrowth[2];
+    int hitPoints;
+    int speed;
+    int attackSkill;
+    int defenseSkill;
+    int damageLowBound;
+    int damageHighBound;
+    int numShots;
+    int m_hasSpell;
+    int wanderingLow;
+    int wanderingHigh;
+};
+SIZE(TCreatureTypeTraits, 116);
+
+// attributes bits proven by retail tests: 0x40000 by HasAllUndead
+// (0x44ab20); 0x40 by GetAlignments (0x44abb0), which skips such
+// creatures in the alignment census - the war-machine bit.
+const unsigned int g_ctaUndead = 0x40000;
+const unsigned int g_ctaSiegeWeapon = 0x40;
+// 0x20000 zeroes a stack's morale outright (GetArmyMorale 0x44b11e) -
+// the no-morale trait (undead/elemental/war-machine family).
+const unsigned int g_ctaNoMorale = 0x20000;
+// Bit 4, byte-proven by army::new_turn (0x446e30): the Elixir of Life
+// regenerates a stack only when its traits row carries this bit - the
+// living-creature marker (the Elixir does nothing for the undead and
+// the war machines).
+const unsigned int g_ctaAlive = 0x10;
+
+// Artifact ids as the IsWieldingArtifact gates surface them (NH3API
+// artifact.hpp spellings; every name is corroborated by the byte-
+// proven behavior at its call site). 0x54 zeroes POSITIVE morale
+// (GetArmyMorale 0x44b23a); 0x55 zeroes luck for BOTH sides when
+// either hero wields it (GetLuck 0x44b2e4). The rest are
+// get_spell_work_chance's immunity gates: the eight pendants block
+// exactly their lore spells, the Badge blocks the mind family, the
+// Sphere of Permanence blocks Dispel, the Orb of Vulnerability makes
+// work certain, and 0x86 - Power of the Dragon Father - blocks
+// level<=4 spells (the decode note's "Orb of Inhibition" inference
+// does not survive the NH3API roster: inhibition is 0x7e).
+
+// The traits table is reached through a stored pointer (reference
+// global): retail loads [0x6747b0] before indexing. NH3API names it
+// akCreatureTypeTraits (a const reference to the 150-entry array).
+extern const TCreatureTypeTraits (&akCreatureTypeTraits)[150];
+
+// CreatureBackgroundNames: neutral first, then the nine town alignments.
+// Index with alignment + 1 so neutral alignment -1 selects the first entry.
+extern const char* g_creatureBackgroundNames[10];
+
+// Army-size name tables (BSS at 0x6a5bb8, runtime-filled from game
+// text): nine threshold bands x three name sets, 12-byte row stride
+// proven by GetArmySizeName's nine reloc targets. The NAME is a
+// bootstrap invention (no Dreamcast/NH3API name survives for these).
+
+// GetMorale's two town-building tests are bitNumber[5] and bitNumber[22]
+// (0x66cdc0 and 0x66ce48; `bitNumber[i] == 1i64 << i` for every i < 48 in
+// the pinned image), spelled `built & bitNumber[TAVERN_ID]` and
+// `active & bitNumber[EXTRA_1_ID]` off town.h's own table - the Tavern and,
+// for a Castle, the Brotherhood of the Sword.
+
+// The game singleton and gpGame now live in their owner's header
+// (game.h); f_1f698 is the one field GetAlignments reads (nonzero ->
+// elementals keep their town alignment; zero -> they census as
+// neutral; likely the expansion/map-version gate).
+
+class armyGroup {
+public:
+    enum { ARMY_GROUP_SLOT_COUNT = 7 };
+
+    // Spelled int (not TCreatureType) so slot writes from int-typed
+    // parameters (Add) stay cast-free; the enum appears where the
+    // Dreamcast prototypes demand it - and game::ViewArmy (0x4c6c50) is
+    // the first body that needs the READING side typed as well, because
+    // it hands a slot straight to UpgradedCreatureType and
+    // get_upgrade_cost and both take the enum. A union of the two views
+    // over ONE storage keeps readers and writers alike cast-free, which
+    // this tree's zero enum-cast floor requires; `armyTypes` is the
+    // Dreamcast's own typing of the array and `armies` the writers'
+    // convenience. Retyping the array outright was measured and does
+    // NOT work: it breaks five int-typed slot writes in armygrp.cpp and
+    // one in townmgr.cpp.
+    union {
+        int m_armies[ARMY_GROUP_SLOT_COUNT];
+        TCreatureType m_armyTypes[ARMY_GROUP_SLOT_COUNT];
+    };
+
+    armyGroup();
+    armyGroup(TCreatureType type, int amount);
+    int m_numTroops[ARMY_GROUP_SLOT_COUNT];
+    void initialize();
+    int getAlignments(unsigned char* alignments) const;
+    int getHomogeneityMoraleAdjust() const;
+    void damageGroup(float casualtyRate);
+    long getAIValue() const;
+    int getCreatureTotal() const;
+    int getCreatureTotal(TCreatureType monType) const;
+    unsigned char isMember(TCreatureType monType) const;
+    int canJoin(int monType) const;
+    unsigned char hasAllUndead() const;
+    // Dreamcast armygrp.cpp:668. Complete retains the same source helper at
+    // its morale consumers; VC6 /Ob2 expands the loop and /OPT:REF removes
+    // the unreferenced out-of-line copy from retail.
+    unsigned char hasSomeUndead() const;
+    unsigned char merge(armyGroup* ag);
+    void mergeArmies(armyGroup& source);
+    void splitArmy(int srcIndex, armyGroup* ag, int destIndex,
+                   unsigned char inSrcRestricted,
+                   unsigned char inDestRestricted);
+    bool hasCreatures() const;
+    TTerrainType getNativeTerrain() const;
+    // Original DC GetLuck/GetMorale publics end in _N3@Z: both the
+    // cursed-ground and apply-limits flags are bool, despite CodeView's
+    // lowered unsigned-char display. Complete's added grouping byte is
+    // independent of those two native flags.
+    int getLuck(const class hero* ownerHero, const class town* ownerTown,
+                const class hero* otherHero, const armyGroup* otherGroup,
+                bool onCursedGround,
+                bool applyLimits) const;
+    int getMorale(const class hero* ownerHero, const class town* ownerTown,
+                  const class hero* otherHero, const armyGroup* otherGroup,
+                  bool onCursedGround,
+                  unsigned char groupAlignments,
+                  bool applyLimits) const;
+    int getArmyMorale(int index, const class hero* ownerHero,
+                      const class town* ownerTown, int mode,
+                      unsigned char arg5,
+                      unsigned char applyLimits) const;
+    int getArmyLuck(int index, const class hero* ownerHero,
+                    const class town* ownerTown, int mode,
+                    unsigned char applyLimits) const;
+    // The older DC description publics also use _N for cursed ground.
+    // Complete replaces it with the multi-valued magicTerrain argument.
+    std::basic_string<char, std::char_traits<char>, std::allocator<char> >
+        getMoraleDescription(TCreatureType creature, int morale,
+                               const class hero* ownerHero,
+                               const class town* ownerTown,
+                               const class hero* otherHero,
+                               const armyGroup* otherGroup,
+                               int magicTerrain,
+                               unsigned char groupAlignments) const;
+    // Retail Complete added CREATURE and widened the final magic-terrain
+    // parameter relative to the older Dreamcast prototype. The body indexes
+    // creature traits from the first argument and returns with `ret 20h`.
+    std::basic_string<char, std::char_traits<char>, std::allocator<char> >
+        getLuckDescription(TCreatureType creature, int luck,
+                             const class hero* ourHero,
+                             const class town* ourTown,
+                             const class hero* enemyHero,
+                             const armyGroup* enemyGroup,
+                             int magicTerrain) const;
+    int save(TAbstractFile* outfile);
+    int load(TAbstractFile* infile);
+    int add(int armyType, int newNumTroops, int newIndex);
+    void dismiss(int whichIndex);
+    void swap(int srcIndex, armyGroup* destGroup, int destIndex);
+    int getNumArmies() const;
+    static const char* getArmySizeName(int howMany, int nameSet);
+};
+SIZE(armyGroup, 56);
+
+// Live prototypes (claimed armygrp.cpp bodies; ai_combat's spell-work
+// chain calls both).
+float getSpellWorkChance(SpellID spell, TCreatureType targetArmyType,
+                            const class hero* const castingHero,
+                            const class hero* const targetHero);            // 0x44a4d0
+long modifySpellDamage(long damage, SpellID spell, TCreatureType creature);  // 0x44b4b0
+
+// --- TSplitWindow ---
+
+// E:\gamedcs\armygrp.cpp:668, dc 0x4eb88
+// E:\gamedcs\armygrp.cpp:748, dc 0x4ec98
+// E:\gamedcs\armygrp.cpp:885, dc 0x4ee08
+// E:\gamedcs\armygrp.cpp:1347, dc 0x4f708
+// E:\gamedcs\armygrp.cpp:1464, dc 0x4fab4
+
+#endif  /* HOMM3_ARMYGRP_H */

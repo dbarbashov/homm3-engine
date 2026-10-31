@@ -1,0 +1,34 @@
+// Options.h - the editor's saved settings (Options.cpp, name inferred from
+// its alphabetical slot; GOG only). Each setting is a file-local value
+// exported as a const reference and changed through its setter; load and
+// save keep them in the registry's "Settings" section. The namespace,
+// function and setting names are not recorded: they follow the registry
+// value names.
+#ifndef HOMM3_EDITOR_OPTIONS_H
+#define HOMM3_EDITOR_OPTIONS_H
+
+namespace SOptions {
+// The longest autosave period in minutes; a longer saved one turns
+// autosave off.
+const unsigned int kMaxAutosaveMinutes = 60;
+
+extern const int& kZoom;
+extern const bool& kGrid;
+extern const bool& kPassability;
+extern const bool& kAnimation;
+extern const bool& kCycling;
+extern const unsigned int& kAutosaveMinutes;
+extern const unsigned int& kSpecialTileFrequency;
+
+void load();
+void setZoom(int zoom);
+void setGrid(bool bGrid);
+void setPassability(bool bPassability);
+void setAnimation(bool bAnimation);
+void setCycling(bool bCycling);
+void setAutosaveMinutes(unsigned int minutes);
+void setSpecialTileFrequency(unsigned int frequency);
+void save();
+}
+
+#endif  /* HOMM3_EDITOR_OPTIONS_H */

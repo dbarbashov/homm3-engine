@@ -1,0 +1,907 @@
+// 39 functions in link order.
+#include "va.h"
+
+#include <limits>
+#include <math.h>
+#include <string.h>
+
+#include "palette.h"
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include "platform.h"
+
+// Dreamcast exposes this original helper boundary and its sole named local,
+// const unsigned long magic; inlined in HSVToRGB. Declared inline with
+// bitmap24.cpp's body because the editors' /Ob1 Libraries build expands it
+// too.
+// Original: ftol; palette.cpp:45
+DC_ADDRESS(0x10a244, 0x62)
+static inline long ftol(double d)
+{
+    const unsigned long magic = 0x59c00000;
+    d += *static_cast<const float*>(static_cast<const void*>(&magic));
+    return *static_cast<long*>(static_cast<void*>(&d));
+}
+
+VA(0x00522650, 0x16)
+DC_ADDRESS(0x10a2a8, 0x48)
+MAC_ADDRESS(0x13b73c, 0x40)
+TPalette16::TPalette16()
+    : resource(0, RESOURCE_TYPE_NONE)
+{
+}
+
+VA_COMPGEN(0x00522670, 0x21, SCALAR_DELETING_DTOR, TPalette16)
+
+// The raw 16-bit table overload: 0x80 dwords straight into the payload at
+// +0x1c, the same shape TPalette24's raw-data constructor has.
+VA(0x005226a0, 0x2D)
+DC_ADDRESS(0x10a2f0, 0x48)
+MAC_ADDRESS(0x13b77c, 0x68)
+TPalette16::TPalette16(const unsigned short* newData)
+    : resource(0, RESOURCE_TYPE_NONE)
+{
+    memcpy(Palette, newData, sizeof(Palette));
+}
+
+VA(0x005226d0, 0x9D)
+DC_ADDRESS(0x10a338, 0x72)
+MAC_ADDRESS(0x13b7e4, 0x88)
+TPalette16::TPalette16(const TPalette24& p24, int rbits, int rshift,
+                       int gbits, int gshift, int bbits, int bshift)
+    : resource(0, RESOURCE_TYPE_NONE)
+{
+    Convert24to16(p24.Palette, rbits, rshift, gbits, gshift,
+                  bbits, bshift);
+}
+
+// Original: TPalette16::TPalette16; palette.cpp:73
+DC_ADDRESS(0x10a3ac, 0x6e)
+TPalette16::TPalette16(const TRGBA* rgba, int rbits, int rshift,
+                       int gbits, int gshift, int bbits, int bshift)
+    : resource(0, RESOURCE_TYPE_NONE)
+{
+    ConvertRGBAto16(rgba, rbits, rshift, gbits, gshift, bbits, bshift);
+}
+
+// Original: TPalette16::TPalette16; palette.cpp:79
+DC_ADDRESS(0x10a41c, 0x7c)
+TPalette16::TPalette16(const tagRGBQUAD* quad, int rbits, int rshift,
+                       int gbits, int gshift, int bbits, int bshift)
+    : resource(0, RESOURCE_TYPE_NONE)
+{
+    ConvertRGBQUADto16(quad, rbits, rshift, gbits, gshift, bbits, bshift);
+}
+
+VA(0x00522770, 0x9F)
+DC_ADDRESS(0x10a498, 0x70)
+MAC_ADDRESS(0x13b86c, 0x84)
+TPalette16::TPalette16(const char* name, const TPalette24& p24,
+                       int rbits, int rshift, int gbits, int gshift,
+                       int bbits, int bshift)
+    : resource(name, RESOURCE_TYPE_PALETTE)
+{
+    Convert24to16(p24.Palette, rbits, rshift, gbits, gshift,
+                  bbits, bshift);
+}
+
+VA(0x00522810, 0xC6)
+DC_ADDRESS(0x10a508, 0xd8)
+MAC_ADDRESS(0x13b8f0, 0x120)
+TPalette16::TPalette16(const TPalette24& p24)
+    : resource(0, RESOURCE_TYPE_NONE)
+{
+    unsigned short* dst = Palette;
+    const unsigned int redScale = (red_mask + red_mask) & ~red_mask;
+    const unsigned int greenScale = (green_mask + green_mask) & ~green_mask;
+    const unsigned int blueScale = (blue_mask + blue_mask) & ~blue_mask;
+    const unsigned char* src = p24.Palette;
+    for (int index = 0; index < 256; ++index) {
+        unsigned int red = ((src[3 * index] * redScale) >> 8) & red_mask;
+        unsigned int green = ((src[3 * index + 1] * greenScale) >> 8) & green_mask;
+        unsigned int blue = ((src[3 * index + 2] * blueScale) >> 8) & blue_mask;
+        *dst = static_cast<unsigned short>(red | green | blue);
+        ++dst;
+    }
+}
+
+// Original: TPalette16::TPalette16; palette.cpp:116
+DC_ADDRESS(0x10a5e0, 0xc2)
+TPalette16::TPalette16(const TRGBA* rgba)
+    : resource(0, RESOURCE_TYPE_NONE)
+{
+    const unsigned int redScale = (red_mask + red_mask) & ~red_mask;
+    const unsigned int greenScale = (green_mask + green_mask) & ~green_mask;
+    const unsigned int blueScale = (blue_mask + blue_mask) & ~blue_mask;
+    unsigned short* destination = Palette;
+    for (int index = 0; index < 256; ++index) {
+        unsigned int red = ((rgba[index].Red * redScale) >> 8) & red_mask;
+        unsigned int green = ((rgba[index].Green * greenScale) >> 8) & green_mask;
+        unsigned int blue = ((rgba[index].Blue * blueScale) >> 8) & blue_mask;
+        *destination = static_cast<unsigned short>(red | green | blue);
+        ++destination;
+    }
+}
+
+// Original: TPalette16::TPalette16; palette.cpp:140
+DC_ADDRESS(0x10a6a4, 0xd8)
+TPalette16::TPalette16(const tagRGBQUAD* quad)
+    : resource(0, RESOURCE_TYPE_NONE)
+{
+    const unsigned int redScale = (red_mask + red_mask) & ~red_mask;
+    const unsigned int greenScale = (green_mask + green_mask) & ~green_mask;
+    const unsigned int blueScale = (blue_mask + blue_mask) & ~blue_mask;
+    unsigned short* destination = Palette;
+    for (int index = 0; index < 256; ++index) {
+        unsigned int red = ((quad[index].rgbRed * redScale) >> 8) & red_mask;
+        unsigned int green = ((quad[index].rgbGreen * greenScale) >> 8) & green_mask;
+        unsigned int blue = ((quad[index].rgbBlue * blueScale) >> 8) & blue_mask;
+        *destination = static_cast<unsigned short>(red | green | blue);
+        ++destination;
+    }
+}
+
+// Original: TPalette16::TPalette16; palette.cpp:165
+DC_ADDRESS(0x10a77c, 0xd6)
+TPalette16::TPalette16(const char* name, const TPalette24& p24)
+    : resource(name, RESOURCE_TYPE_PALETTE)
+{
+    const unsigned int redScale = (red_mask + red_mask) & ~red_mask;
+    const unsigned int greenScale = (green_mask + green_mask) & ~green_mask;
+    const unsigned int blueScale = (blue_mask + blue_mask) & ~blue_mask;
+    unsigned short* destination = Palette;
+    for (int index = 0; index < 256; ++index) {
+        unsigned int red = ((p24.Palette[3 * index] * redScale) >> 8) & red_mask;
+        unsigned int green = ((p24.Palette[3 * index + 1] * greenScale) >> 8) & green_mask;
+        unsigned int blue = ((p24.Palette[3 * index + 2] * blueScale) >> 8) & blue_mask;
+        *destination = static_cast<unsigned short>(red | green | blue);
+        ++destination;
+    }
+}
+
+// The pointer-taking copy constructor, and the payload-only assignment behind
+// it - both the TPalette24 shapes with the 0x200-byte table in place of the
+// 0x300-byte one, and the assignment keeps the resource identity.
+VA(0x005228e0, 0x30)
+DC_ADDRESS(0x10a854, 0x4a)
+MAC_ADDRESS(0x13ba10, 0x68)
+TPalette16::TPalette16(const TPalette16* copy)
+    : resource(0, RESOURCE_TYPE_NONE)
+{
+    memcpy(Palette, copy->Palette, sizeof(Palette));
+}
+
+VA(0x00522910, 0x21)
+DC_ADDRESS(0x10a8a0, 0x40)
+MAC_ADDRESS(0x13ba78, 0x48)
+TPalette16* TPalette16::operator=(const TPalette16* from)
+{
+    if (this != from)
+        memcpy(Palette, from->Palette, sizeof(Palette));
+    return this;
+}
+
+VA(0x00522940, 0xB)
+DC_ADDRESS(0x10a8e0, 0x2e)
+MAC_ADDRESS(0x13bac0, 0x60)
+TPalette16::~TPalette16()
+{
+}
+
+// DC palette.cpp:210 places the ordinary Convert24to16 body after the
+// destructor and before Cycle; its earlier constructors call this helper
+// (inlined). DC lines 211/224-226/228-229 retain the p16 destination
+// pointer, indexed RGB reads, and three independent truncations before the
+// final OR, here named ushort channels.
+DC_ADDRESS(0x10a910, 0x88)
+MAC_ADDRESS(0x13bb20, 0xa0)
+void TPalette16::Convert24to16(const unsigned char* p24, int rbits, int rshift,
+                               int gbits, int gshift, int bbits, int bshift)
+{
+    unsigned short* destination = Palette;
+    for (int index = 0; index < 256; ++index) {
+        unsigned short red = static_cast<unsigned short>(
+            (p24[3 * index] >> (8 - rbits)) << rshift);
+        unsigned short green = static_cast<unsigned short>(
+            (p24[3 * index + 1] >> (8 - gbits)) << gshift);
+        unsigned short blue = static_cast<unsigned short>(
+            (p24[3 * index + 2] >> (8 - bbits)) << bshift);
+        *destination = static_cast<unsigned short>(red | green | blue);
+        ++destination;
+    }
+}
+
+// Original: TPalette16::ConvertRGBAto16; palette.cpp:236
+DC_ADDRESS(0x10a998, 0x7e)
+void TPalette16::ConvertRGBAto16(const TRGBA* rgba, int rbits, int rshift,
+    int gbits, int gshift, int bbits, int bshift)
+{
+    unsigned short* destination = Palette;
+    for (int index = 0; index < 256; ++index) {
+        unsigned short red = static_cast<unsigned short>(
+            (rgba[index].Red >> (8 - rbits)) << rshift);
+        unsigned short green = static_cast<unsigned short>(
+            (rgba[index].Green >> (8 - gbits)) << gshift);
+        unsigned short blue = static_cast<unsigned short>(
+            (rgba[index].Blue >> (8 - bbits)) << bshift);
+        *destination = static_cast<unsigned short>(red | green | blue);
+        ++destination;
+    }
+}
+
+// Original: TPalette16::ConvertRGBQUADto16; palette.cpp:262
+DC_ADDRESS(0x10aa18, 0x7e)
+void TPalette16::ConvertRGBQUADto16(const tagRGBQUAD* quad, int rbits, int rshift,
+    int gbits, int gshift, int bbits, int bshift)
+{
+    unsigned short* destination = Palette;
+    for (int index = 0; index < 256; ++index) {
+        unsigned short red = static_cast<unsigned short>(
+            (quad[index].rgbRed >> (8 - rbits)) << rshift);
+        unsigned short green = static_cast<unsigned short>(
+            (quad[index].rgbGreen >> (8 - gbits)) << gshift);
+        unsigned short blue = static_cast<unsigned short>(
+            (quad[index].rgbBlue >> (8 - bbits)) << bshift);
+        *destination = static_cast<unsigned short>(red | green | blue);
+        ++destination;
+    }
+}
+
+VA(0x00522950, 0xBE)
+DC_ADDRESS(0x10aa98, 0xac)
+MAC_ADDRESS(0x13bbc0, 0xe0)
+void TPalette16::Cycle(int begin, int end, int step)
+{
+    if (step > 0) {
+        for (int i = 0; i < step; ++i) {
+            unsigned short saved = Palette[begin];
+            memmove(&Palette[begin], &Palette[begin + 1],
+                    (end - begin) * sizeof(Palette[0]));
+            Palette[end] = saved;
+        }
+    } else {
+        for (int i = 0; i < -step; ++i) {
+            unsigned short saved = Palette[end];
+            memmove(&Palette[begin + 1], &Palette[begin],
+                    (end - begin) * sizeof(Palette[0]));
+            Palette[begin] = saved;
+        }
+    }
+}
+
+// Original: TPalette16::Colorize; palette.cpp:315
+DC_ADDRESS(0x10ab44, 0x416)
+void TPalette16::Colorize(float hue, float saturation)
+{
+    const unsigned int redNorm = std::numeric_limits<int>::max() / red_mask;
+    const unsigned int greenNorm = std::numeric_limits<int>::max() / green_mask;
+    const unsigned int blueNorm = std::numeric_limits<int>::max() / blue_mask;
+    for (int i = 10; i < 256; ++i) {
+        unsigned int r = (Palette[i] & red_mask) * redNorm;
+        unsigned int g = (Palette[i] & green_mask) * greenNorm;
+        unsigned int b = (Palette[i] & blue_mask) * blueNorm;
+        const float value = static_cast<float>((r > g ? r : g) > b ? (r > g ? r : g) : b);
+        const float f = static_cast<float>(fmod(hue * 6.0f, 1.0));
+        const float p = value * (1.0f - saturation);
+        const float q = value * (1.0f - saturation * f);
+        const float t = value * (1.0f - saturation * (1.0f - f));
+        switch (static_cast<int>(hue * 6.0f)) {
+        case HSV_RED_SECTOR:     r = ftol(value); g = ftol(t); b = ftol(p); break;
+        case HSV_YELLOW_SECTOR:  r = ftol(q); g = ftol(value); b = ftol(p); break;
+        case HSV_GREEN_SECTOR:   r = ftol(p); g = ftol(value); b = ftol(t); break;
+        case HSV_CYAN_SECTOR:    r = ftol(p); g = ftol(q); b = ftol(value); break;
+        case HSV_BLUE_SECTOR:    r = ftol(t); g = ftol(p); b = ftol(value); break;
+        case HSV_MAGENTA_SECTOR: r = ftol(value); g = ftol(p); b = ftol(q); break;
+        }
+        Palette[i] = static_cast<unsigned short>(
+            ((r / redNorm) & red_mask) |
+            ((g / greenNorm) & green_mask) |
+            ((b / blueNorm) & blue_mask));
+    }
+}
+
+// Original: TPalette16::AdjustHue; palette.cpp:360
+DC_ADDRESS(0x10af5c, 0x28e)
+void TPalette16::AdjustHue(float hue, float amount)
+{
+    const unsigned int redNorm = std::numeric_limits<int>::max() / red_mask;
+    const unsigned int greenNorm = std::numeric_limits<int>::max() / green_mask;
+    const unsigned int blueNorm = std::numeric_limits<int>::max() / blue_mask;
+    for (int i = 10; i < 256; ++i) {
+        unsigned int r = (Palette[i] & red_mask) * redNorm;
+        unsigned int g = (Palette[i] & green_mask) * greenNorm;
+        unsigned int b = (Palette[i] & blue_mask) * blueNorm;
+        float h;
+        float s;
+        float v;
+        RGBToHSV(r, g, b, &h, &s, &v);
+        float delta = hue - h;
+        h += delta * amount;
+        if (fabs(delta) > 0.5) {
+            if (delta > 0.0)
+                h += 1.0f - amount;
+            else
+                h += amount;
+            if (h >= 1.0)
+                h -= 1.0;
+        }
+        HSVToRGB(h, s, v, &r, &g, &b);
+        Palette[i] = static_cast<unsigned short>(
+            ((r / redNorm) & red_mask) |
+            ((g / greenNorm) & green_mask) |
+            ((b / blueNorm) & blue_mask));
+    }
+}
+
+VA(0x00522a10, 0x122)
+DC_ADDRESS(0x10b1ec, 0x134)
+MAC_ADDRESS(0x13bca0, 0x160)
+void TPalette16::AdjustSaturation(float amount)
+{
+    const unsigned int redNorm =
+        std::numeric_limits<int>::max() / red_mask;
+    const unsigned int greenNorm =
+        std::numeric_limits<int>::max() / green_mask;
+    const unsigned int blueNorm =
+        std::numeric_limits<int>::max() / blue_mask;
+
+    for (int i = 10; i < 256; ++i) {
+        unsigned int r = (Palette[i] & red_mask) * redNorm;
+        unsigned int g = (Palette[i] & green_mask) * greenNorm;
+        unsigned int b = (Palette[i] & blue_mask) * blueNorm;
+
+        float h;
+        float s;
+        float v;
+        RGBToHSV(r, g, b, &h, &s, &v);
+
+        if (amount <= 1.0f) {
+            s *= amount;
+        } else {
+            s = 1.0f - (1.0f - s) / amount;
+        }
+
+        HSVToRGB(h, s, v, &r, &g, &b);
+
+        Palette[i] = static_cast<unsigned short>(
+            ((r / redNorm) & red_mask) |
+            ((g / greenNorm) & green_mask) |
+            ((b / blueNorm) & blue_mask));
+    }
+}
+
+#if 0  // @carcass
+
+// E:\gamedcs\palette.cpp:288
+// Retail body reconstructed above at 0x00522950; dc 0x10aa98.
+void TPalette16::cycle(int begin, int end, int step)
+{
+    // @stub
+}
+
+// E:\gamedcs\palette.cpp:412
+// Retail body reconstructed above at 0x00522a10; dc 0x10b1ec.
+void TPalette16::adjustSaturation(float amount)
+{
+    // @stub
+}
+
+#endif  // @carcass
+
+VA(0x00522b40, 0x6)
+MAC_ADDRESS(0x13be00, 0x8)  // TPalette16 vtable 0x640368 slot 2
+unsigned int TPalette16::getSize() const
+{
+    return sizeof(*this);
+}
+
+// Original: TPalette16::AdjustValue; palette.cpp:454
+DC_ADDRESS(0x10b320, 0x164)
+void TPalette16::AdjustValue(float amount)
+{
+    const unsigned int redNorm = std::numeric_limits<int>::max() / red_mask;
+    const unsigned int greenNorm = std::numeric_limits<int>::max() / green_mask;
+    const unsigned int blueNorm = std::numeric_limits<int>::max() / blue_mask;
+    for (int i = 10; i < 256; ++i) {
+        unsigned int r = (Palette[i] & red_mask) * redNorm;
+        unsigned int g = (Palette[i] & green_mask) * greenNorm;
+        unsigned int b = (Palette[i] & blue_mask) * blueNorm;
+        float h;
+        float s;
+        float v;
+        RGBToHSV(r, g, b, &h, &s, &v);
+        if (amount <= 1.0f)
+            v *= amount;
+        else
+            v = 1.0f - (1.0f - v) / amount;
+        HSVToRGB(h, s, v, &r, &g, &b);
+        Palette[i] = static_cast<unsigned short>(
+            ((r / redNorm) & red_mask) |
+            ((g / greenNorm) & green_mask) |
+            ((b / blueNorm) & blue_mask));
+    }
+}
+
+VA(0x00522b50, 0x1F5)
+DC_ADDRESS(0x10b484, 0x328)
+MAC_ADDRESS(0x13be08, 0x274)
+void TPalette16::AdjustHSV(float hue, float hueAdjust,
+                           float saturationAdjust, float valueAdjust)
+{
+    const unsigned int redNorm =
+        std::numeric_limits<int>::max() / red_mask;
+    const unsigned int greenNorm =
+        std::numeric_limits<int>::max() / green_mask;
+    const unsigned int blueNorm =
+        std::numeric_limits<int>::max() / blue_mask;
+
+    for (int i = 10; i < 256; ++i) {
+        unsigned int r = (Palette[i] & red_mask) * redNorm;
+        unsigned int g = (Palette[i] & green_mask) * greenNorm;
+        unsigned int b = (Palette[i] & blue_mask) * blueNorm;
+
+        float h;
+        float s;
+        float v;
+        RGBToHSV(r, g, b, &h, &s, &v);
+
+        if (hueAdjust >= 0.0f) {
+            float delta = hue - h;
+            h += delta * hueAdjust;
+            if (fabs(delta) > 0.5) {
+                if (delta > 0.0) {
+                    h += 1.0f - hueAdjust;
+                } else {
+                    h += hueAdjust;
+                }
+                if (h >= 1.0) {
+                    h -= 1.0;
+                }
+            }
+        }
+
+        if (saturationAdjust >= 0.0f) {
+            if (saturationAdjust <= 1.0f) {
+                s *= saturationAdjust;
+            } else {
+                s = 1.0f - (1.0f - s) / saturationAdjust;
+            }
+        }
+
+        if (valueAdjust >= 0.0) {
+            if (valueAdjust <= 1.0f) {
+                v *= valueAdjust;
+            } else {
+                v = 1.0f - (1.0f - v) / valueAdjust;
+            }
+        }
+
+        HSVToRGB(h, s, v, &r, &g, &b);
+
+        Palette[i] = static_cast<unsigned short>(
+            ((r / redNorm) & red_mask) |
+            ((g / greenNorm) & green_mask) |
+            ((b / blueNorm) & blue_mask));
+    }
+}
+
+VA(0x00522d50, 0xD6)
+DC_ADDRESS(0x10b7ac, 0xea)
+MAC_ADDRESS(0x13c07c, 0x170)
+void TPalette16::Gray()
+{
+    const unsigned int redNorm =
+        std::numeric_limits<int>::max() / red_mask;
+    const unsigned int greenNorm =
+        std::numeric_limits<int>::max() / green_mask;
+    const unsigned int blueNorm =
+        std::numeric_limits<int>::max() / blue_mask;
+
+#define max(a, b) ((a) > (b) ? (a) : (b))
+    for (int i = 10; i < 256; ++i) {
+        unsigned int red = (Palette[i] & red_mask) * redNorm;
+        unsigned int green = (Palette[i] & green_mask) * greenNorm;
+        unsigned int blue = (Palette[i] & blue_mask) * blueNorm;
+
+        unsigned int gray = max(max(red, green), blue);
+
+        Palette[i] = static_cast<unsigned short>(
+            ((gray / redNorm) & red_mask) |
+            ((gray / greenNorm) & green_mask) |
+            ((gray / blueNorm) & blue_mask));
+    }
+}
+#undef max
+
+VA(0x00522e30, 0x16)
+DC_ADDRESS(0x10b898, 0x6c)
+MAC_ADDRESS(0x13c1ec, 0x40)  // null-name resource ctor + TPalette24 vtable
+TPalette24::TPalette24()
+    : resource(0, RESOURCE_TYPE_NONE)
+{
+}
+
+VA_COMPGEN(0x00522e50, 0x21, SCALAR_DELETING_DTOR, TPalette24)
+
+VA(0x00522e80, 0x2D)
+DC_ADDRESS(0x10b904, 0x48)
+MAC_ADDRESS(0x13c22c, 0x68)
+TPalette24::TPalette24(const unsigned char* data)
+    : resource(0, RESOURCE_TYPE_NONE)
+{
+    memcpy(Palette, data, sizeof(Palette));
+}
+
+VA(0x00522eb0, 0x42)
+DC_ADDRESS(0x10b94c, 0x78)
+MAC_ADDRESS(0x13c294, 0x124)
+TPalette24::TPalette24(const TRGBA* rgba)
+    : resource(0, RESOURCE_TYPE_NONE)
+{
+    for (int index = 0; index < 256; ++index) {
+        Palette[3 * index + 0] = rgba->Red;
+        Palette[3 * index + 1] = rgba->Green;
+        Palette[3 * index + 2] = rgba->Blue;
+        ++rgba;
+    }
+}
+
+// Original: TPalette24::TPalette24; palette.cpp:622
+DC_ADDRESS(0x10b9c4, 0x78)
+TPalette24::TPalette24(const tagRGBQUAD* quad)
+    : resource(0, RESOURCE_TYPE_NONE)
+{
+    for (int index = 0; index < 256; ++index) {
+        Palette[3 * index] = quad->rgbRed;
+        Palette[3 * index + 1] = quad->rgbGreen;
+        Palette[3 * index + 2] = quad->rgbBlue;
+        ++quad;
+    }
+}
+
+VA(0x00522f00, 0x30)
+DC_ADDRESS(0x10ba3c, 0x4a)
+MAC_ADDRESS(0x13c3b8, 0x68)
+TPalette24::TPalette24(const TPalette24* copy)
+    : resource(0, RESOURCE_TYPE_NONE)
+{
+    memcpy(Palette, copy->Palette, sizeof(Palette));
+}
+
+VA(0x00522f30, 0x21)
+DC_ADDRESS(0x10ba88, 0x22)
+MAC_ADDRESS(0x13c420, 0x48)  // payload-only assignment; resource identity retained
+TPalette24& TPalette24::operator=(const TPalette24& from)
+{
+    if (this != &from)
+        memcpy(Palette, from.Palette, sizeof(Palette));
+    return *this;
+}
+
+VA(0x00522f60, 0x0b)
+DC_ADDRESS(0x10baac, 0x44)
+MAC_ADDRESS(0x13c468, 0x60)  // TPalette24 vtable 0x640374 + resource dtor tail
+TPalette24::~TPalette24()
+{
+}
+
+VA(0x00522f70, 0x06)
+MAC_ADDRESS(0x13c4c8, 0x8)  // TPalette24 vtable 0x640374 slot 2
+unsigned int TPalette24::getSize() const
+{
+    return sizeof(*this);
+}
+
+// Original: TPalette24::Cycle; palette.cpp:655
+DC_ADDRESS(0x10baf0, 0x102)
+void TPalette24::Cycle(int begin, int end, int step)
+{
+    begin *= 3;
+    end *= 3;
+    if (step > 0) {
+        for (int i = step; i > 0; --i) {
+            int r = Palette[begin];
+            int g = Palette[begin + 1];
+            int b = Palette[begin + 2];
+            memmove(Palette + begin, Palette + begin + 3, end - begin);
+            Palette[end] = static_cast<unsigned char>(r);
+            Palette[end + 1] = static_cast<unsigned char>(g);
+            Palette[end + 2] = static_cast<unsigned char>(b);
+        }
+    } else {
+        for (int i = -step; i > 0; --i) {
+            int r = Palette[end];
+            int g = Palette[end + 1];
+            int b = Palette[end + 2];
+            memmove(Palette + begin + 3, Palette + begin, end - begin);
+            Palette[begin] = static_cast<unsigned char>(r);
+            Palette[begin + 1] = static_cast<unsigned char>(g);
+            Palette[begin + 2] = static_cast<unsigned char>(b);
+        }
+    }
+}
+
+// Original: TPalette24::Colorize; palette.cpp:685
+DC_ADDRESS(0x10bbf4, 0x364)
+void TPalette24::Colorize(float hue, float saturation)
+{
+    for (int i = 10; i < 256; ++i) {
+        unsigned int r = Palette[3 * i];
+        unsigned int g = Palette[3 * i + 1];
+        unsigned int b = Palette[3 * i + 2];
+        const float value = static_cast<float>((r > g ? r : g) > b ? (r > g ? r : g) : b);
+        const int hextant = static_cast<int>(hue * 6.0f);
+        const float f = static_cast<float>(fmod(hue * 6.0f, 1.0));
+        const float p = value * (1.0f - saturation);
+        const float q = value * (1.0f - saturation * f);
+        const float t = value * (1.0f - saturation * (1.0f - f));
+        switch (hextant) {
+        case HSV_RED_SECTOR:     r = ftol(value); g = ftol(t); b = ftol(p); break;
+        case HSV_YELLOW_SECTOR:  r = ftol(q); g = ftol(value); b = ftol(p); break;
+        case HSV_GREEN_SECTOR:   r = ftol(p); g = ftol(value); b = ftol(t); break;
+        case HSV_CYAN_SECTOR:    r = ftol(p); g = ftol(q); b = ftol(value); break;
+        case HSV_BLUE_SECTOR:    r = ftol(t); g = ftol(p); b = ftol(value); break;
+        case HSV_MAGENTA_SECTOR: r = ftol(value); g = ftol(p); b = ftol(q); break;
+        }
+        Palette[3 * i] = static_cast<unsigned char>(r);
+        Palette[3 * i + 1] = static_cast<unsigned char>(g);
+        Palette[3 * i + 2] = static_cast<unsigned char>(b);
+    }
+}
+
+// Original: TPalette24::Gray; palette.cpp:723
+DC_ADDRESS(0x10bf58, 0x7a)
+void TPalette24::Gray()
+{
+    for (int i = 10; i < 256; ++i) {
+        unsigned int r = Palette[3 * i];
+        unsigned int g = Palette[3 * i + 1];
+        unsigned int b = Palette[3 * i + 2];
+        unsigned int gray = (r > g ? r : g) > b ? (r > g ? r : g) : b;
+        Palette[3 * i] = static_cast<unsigned char>(gray);
+        Palette[3 * i + 1] = static_cast<unsigned char>(gray);
+        Palette[3 * i + 2] = static_cast<unsigned char>(gray);
+    }
+}
+
+VA(0x00522f80, 0x20E)
+DC_ADDRESS(0x10bfd4, 0x39c)
+MAC_ADDRESS(0x13c4d0, 0x2c4)
+void TPalette24::AdjustHSV(float hue, float hueAdjust,
+                           float saturationAdjust, float valueAdjust)
+{
+    const unsigned int redNorm =
+        std::numeric_limits<int>::max() / 255;
+    const unsigned int greenNorm =
+        std::numeric_limits<int>::max() / 255;
+    const unsigned int blueNorm =
+        std::numeric_limits<int>::max() / 255;
+
+    for (int i = 10; i < 256; ++i) {
+        unsigned int r = Palette[3 * i + 0] * redNorm;
+        unsigned int g = Palette[3 * i + 1] * greenNorm;
+        unsigned int b = Palette[3 * i + 2] * blueNorm;
+
+        float h;
+        float s;
+        float v;
+        RGBToHSV(r, g, b, &h, &s, &v);
+
+        if (hueAdjust >= 0.0f) {
+            float delta = hue - h;
+            h += delta * hueAdjust;
+            if (fabs(delta) > 0.5) {
+                if (delta > 0.0) {
+                    h += 1.0f - hueAdjust;
+                } else {
+                    h += hueAdjust;
+                }
+                if (h >= 1.0) {
+                    h -= 1.0;
+                }
+            }
+        }
+
+        if (valueAdjust >= 0.0) {
+            if (valueAdjust <= 1.0f) {
+                v *= valueAdjust;
+            } else {
+                v = 1.0f - (1.0f - v) / valueAdjust;
+            }
+        }
+
+        if (saturationAdjust >= 0.0f) {
+            if (saturationAdjust <= 1.0f) {
+                s *= saturationAdjust;
+            } else if (v > 0.75 && s < 0.25) {
+                s = (1.0f - v) * s * saturationAdjust * 4.0f;
+            } else {
+                s = 1.0f - (1.0f - s) / saturationAdjust;
+            }
+        }
+
+        HSVToRGB(h, s, v, &r, &g, &b);
+
+        Palette[3 * i + 0] = static_cast<unsigned char>(r / redNorm);
+        Palette[3 * i + 1] = static_cast<unsigned char>(g / greenNorm);
+        Palette[3 * i + 2] = static_cast<unsigned char>(b / blueNorm);
+    }
+}
+
+// Original: RGBToHSV; palette.cpp:827
+VA(0x00523190, 0x160)
+DC_ADDRESS(0x10c370, 0x1f2)
+MAC_ADDRESS(0x13c794, 0x1c8)
+void RGBToHSV(unsigned int r, unsigned int g, unsigned int b,
+              float* h, float* s, float* v)
+{
+    static const float redHue = 0.0f;
+
+    const unsigned int max =
+        (r > g ? r : g) > b ? (r > g ? r : g) : b;
+    const unsigned int min =
+        (r < g ? r : g) < b ? (r < g ? r : g) : b;
+
+    *v = static_cast<float>(max) / std::numeric_limits<int>::max();
+
+    *s = max ? static_cast<float>(max - min) / static_cast<float>(max)
+             : 0.0f;
+
+    if (max - min) {
+        float rc = static_cast<float>(max - r) /
+                   static_cast<float>(max - min);
+        float gc = static_cast<float>(max - g) /
+                   static_cast<float>(max - min);
+        float bc = static_cast<float>(max - b) /
+                   static_cast<float>(max - min);
+
+        if (r == max) {
+            *h = (bc - gc) / 6.0f + redHue;
+        } else if (g == max) {
+            *h = (rc - bc) / 6.0f + 1.0f / 3.0f;
+        } else {
+            *h = (gc - rc) / 6.0f + 2.0f / 3.0f;
+        }
+
+        if (*h < 0.0f) {
+            *h += 1.0f;
+        }
+    } else {
+        *h = 0.0f;
+    }
+}
+
+// Original: HSVToRGB; palette.cpp:862
+VA(0x005232f0, 0x2EC)
+DC_ADDRESS(0x10c564, 0x34c)
+MAC_ADDRESS(0x13c95c, 0x248)
+void HSVToRGB(float h, float s, float v,
+              unsigned int* r, unsigned int* g, unsigned int* b)
+{
+    if (s != 0.0f) {
+        const float f = static_cast<float>(fmod(h * 6.0f, 1.0));
+
+        v *= static_cast<float>(std::numeric_limits<int>::max());
+        const float p = v * (1.0f - s);
+        const float q = v * (1.0f - s * f);
+        const float t = v * (1.0f - s * (1.0f - f));
+
+        switch (static_cast<int>(h * 6.0f)) {
+        case HSV_RED_SECTOR:
+            *r = ftol(v);
+            *g = ftol(t);
+            *b = ftol(p);
+            break;
+        case HSV_YELLOW_SECTOR:
+            *r = ftol(q);
+            *g = ftol(v);
+            *b = ftol(p);
+            break;
+        case HSV_GREEN_SECTOR:
+            *r = ftol(p);
+            *g = ftol(v);
+            *b = ftol(t);
+            break;
+        case HSV_CYAN_SECTOR:
+            *r = ftol(p);
+            *g = ftol(q);
+            *b = ftol(v);
+            break;
+        case HSV_BLUE_SECTOR:
+            *r = ftol(t);
+            *g = ftol(p);
+            *b = ftol(v);
+            break;
+        case HSV_MAGENTA_SECTOR:
+            *r = ftol(v);
+            *g = ftol(p);
+            *b = ftol(q);
+            break;
+        }
+    } else {
+        *r = *g = *b = ftol(
+            v * static_cast<float>(std::numeric_limits<int>::max()));
+    }
+}
+
+#if 0  // @carcass
+
+// E:\gamedcs\palette.cpp:496
+// Retail body reconstructed above at 0x00522b50; dc 0x10b484.
+void TPalette16::adjustHSV(float hue, float hue_adjust, float saturation_adjust, float value_adjust)
+{
+    // @stub
+}
+
+// E:\gamedcs\palette.cpp:571
+// Retail body reconstructed above at 0x00522d50; dc 0x10b7ac.
+void TPalette16::gray()
+{
+    // @stub
+}
+
+// E:\gamedcs\palette.cpp:598
+// Retail body reconstructed above; dc 0x10b898.
+void TPalette24::TPalette24()
+{
+    // @stub
+}
+
+// E:\gamedcs\palette.cpp:603
+// Retail body reconstructed above at 0x00522e80; dc 0x10b904.
+void TPalette24::TPalette24(const unsigned char* data)
+{
+    // @stub
+}
+
+// E:\gamedcs\palette.cpp:609
+// Retail body reconstructed above at 0x00522eb0; dc 0x10b94c.
+void TPalette24::TPalette24(const TRGBA* rgba)
+{
+    // @stub
+}
+
+// E:\gamedcs\palette.cpp:635
+// RETAIL_LOCATED(0x00522f00, 0x30): not reconstructed; dc-bracket forced, dc 0x10ba3c
+void TPalette24::TPalette24(const TPalette24* copy)
+{
+    // @stub
+}
+
+// E:\gamedcs\palette.cpp:640
+// RETAIL_LOCATED(0x00522f30, 0x21): not reconstructed; dc-bracket forced, dc 0x10ba88
+TPalette24* TPalette24::operator=(const TPalette24* from)
+{
+    // @stub
+}
+
+// E:\gamedcs\palette.cpp:650
+// Retail body reconstructed above; dc 0x10baac.
+void TPalette24::~TPalette24()
+{
+    // @stub
+}
+
+// E:\gamedcs\palette.cpp:740
+// Retail body reconstructed above at 0x00522f80; dc 0x10bfd4.
+void TPalette24::adjustHSV(float hue, float hue_adjust, float saturation_adjust, float value_adjust)
+{
+    // @stub
+}
+
+// E:\gamedcs\palette.cpp:827
+// Retail body reconstructed above at 0x00523190; dc 0x10c370.
+void RGBToHSV(unsigned r, unsigned g, unsigned b, float* h, float* s, float* v)
+{
+    // @stub
+}
+
+// E:\gamedcs\palette.cpp:862
+// Retail body reconstructed above at 0x005232f0; dc 0x10c564.
+void HSVToRGB(float h, float s, float v, unsigned* r, unsigned* g, unsigned* b)
+{
+    // @stub
+}
+
+#endif  // @carcass
