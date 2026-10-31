@@ -1,95 +1,66 @@
 # Heroes III shared engine
 
-The portable C++ runtime used by the browser and native authoritative server.
-This repository and [homm3-web](https://github.com/dbarbashov/homm3-web) are public.
-The Rust server and native authority implementations in `homm3-lobby` remain private.
+A portable C++ runtime for Heroes III, with native SDL and browser WebAssembly
+targets. It includes the recovered game rules, original interface and rendering,
+portability patches, media adapters and a deterministic test harness.
 
-## Ownership
-
-- This repository: pinned recovered rules, portability patches, original UI/rendering,
-  SDL/media adapters, shared integration interfaces, native/WASM parity harness.
-- `homm3-web`: public website, JavaScript browser/network presentation bridges,
-  asset loading, browser audio, bug reports and the public issue tracker.
-- `homm3-lobby`: Rust rooms/history/supervision and `worker/` C++ authority adapters.
-  Server implementations are not copied into this repository or the public client.
-
-The `server_*.h` headers and conditional patches here are shared integration
-contracts required to compile both targets; the worker implementations live in
-`homm3-lobby/worker`. The recovered engine includes rendering as well as rules:
-this is a repository boundary, not a rewrite of the original game's architecture.
-Existing gameplay paths (solo, legacy, simultaneous, authoritative) are preserved.
+The browser shell lives in [homm3-web](https://github.com/dbarbashov/homm3-web).
+Original game files are supplied by the player and are not included here.
 
 ## Build
 
-Use Python 3, CMake 3.20+, Clang, SDL2 and zlib. Install the pinned browser SDK:
+Requirements: Python 3, CMake 3.20+, Clang, SDL2 and zlib. For the browser target,
+install the pinned Emscripten SDK:
 
 ```sh
 python3 scripts/setup-port.py
 ```
 
-Both consumer repositories pin this repository's full commit in `engine.lock.json`.
-Their build entry points reject a different revision or modified tracked engine
-files. Update both locks together after validating a new engine revision.
+Build the native game client:
 
 ```sh
-# From homm3-web:
-HOMM3_ENGINE_ROOT=/path/to/homm3-engine npm run build
-# From homm3-lobby:
-python3 scripts/build-worker.py --engine /path/to/homm3-engine
+cmake -S . -B build/native -DCMAKE_BUILD_TYPE=Release
+cmake --build build/native -j5
 ```
 
-The browser build exports only `game.js`, `game.wasm`, and `engine-build.json`.
-Worker executables, saves, reports and retail assets are never
-copied into the public web directory. Browser artifacts contain client code and
-are inspectable by design; the server validates gameplay commands independently.
-Native workers use exactly the same pinned rules and patches as the WASM client.
+For the browser game, clone `homm3-web` alongside this repository, check out the
+engine revision specified in its `engine.lock.json`, and run `npm run build`
+from the browser repository. Its README includes the complete commands.
+The build exports `game.js`, `game.wasm` and an `engine-build.json` manifest.
 
-## Integration tests
-
-The client and its source-level tests can be built without server access.
-Run `npm test` for the standalone C++ input probes. The full legacy/authority
-comparison also needs the private server checkout; maintainers run that portion
-for public engine contributions. Supply explicit checkouts; the helper creates
-ignored links to the public client and never changes its tracked files:
+## Tests
 
 ```sh
-python3 scripts/setup-integration.py --web /path/to/homm3-web
-export HOMM3_WORKER_SOURCE=/path/to/homm3-lobby/worker
-python3 scripts/parity/build.py
-python3 scripts/test-authority-session.py --runtime /private/runtime --build /path/to/homm3-lobby/build/worker
-python3 scripts/test-authority-combat.py --runtime /private/runtime --build /path/to/homm3-lobby/build/worker
-python3 scripts/test-projection-determinism.py --worker /path/to/homm3-lobby/build/worker/homm3-worker --runtime /private/runtime
-python3 scripts/test-match-history.py --worker /path/to/homm3-lobby/build/worker/homm3-worker --relay /path/to/homm3-lobby/target/release/homm3-lobby --runtime /private/runtime
 npm test
+python3 scripts/setup-integration.py --web ../homm3-web
 ```
 
-The full parity runner accepts `--relay`, `--worker`, `--web` (harness WASM),
-`--runtime` and `--fixture`. Test game resources remain outside Git. Use isolated
-services and dummy/offline audio; do not restart an existing play session.
+The first command runs standalone C++ input probes without game resources.
+The second connects a browser checkout to the cross-runtime tests using ignored
+local links. Game and browser scenarios require your own original resources.
+
+The [parity harness](scripts/parity/README.md) compares recorded states, animation,
+audio and timing. Full network parity checks require compatible service and worker
+binaries; their paths are supplied explicitly. Maintainers run those checks for
+contributions. Use isolated test services and silent audio.
 
 ## Contributing
 
 Gameplay, rendering, animation and portability fixes are welcome as pull requests
-here. Website and JavaScript shell changes belong in `homm3-web`. Retail game data
-is supplied locally by each developer and must never be committed.
+here. Website and JavaScript changes belong in `homm3-web`.
 
-For a matching browser build, clone both public repositories, check out the engine
-commit named in the client's `engine.lock.json`, install the SDK here, then run
-`npm run build` from the client. The client README contains the complete commands.
-To test engine changes, commit them on your local branch and update the client's
-lock to that commit. Maintainers update the server pin and run private authority
-checks before releasing a shared revision. Native client builds use CMake with
-`HOMM3_SERVER=OFF` (the default) and do not require the private worker.
+To test an engine change in the browser, commit it on your local branch and update
+the browser checkout's `engine.lock.json` to that commit. Source builds reject a
+mismatched or dirty engine checkout. Maintained releases use a shared tested engine
+revision for all targets.
 
-## Provenance and publication
+Do not commit original game resources, saves, room credentials or generated builds.
+For bugs, include the scenario and reproduction steps; the in-game report button
+can attach a read-only reproduction link.
 
-Imported from the committed integration snapshot, preserving its license notices.
-The upstream pin and patches remain reviewable. See `LICENSE`, `THIRD_PARTY.md`
-and `licenses/`. The public main history contains the extracted shared engine.
-The mixed pre-split history, including server implementations, is retained in
-private `homm3-engine-history`; it must not be pushed to this repository.
+## Provenance and licenses
 
-FFmpeg remains LGPL. Its source and the application/linking sources are available;
-binary distributions must continue to include the applicable source and relinking
-materials. Opening this repository does not publish a new binary release or
-include any original retail game resources.
+The recovered source revision is pinned in `upstream.lock.json`. Portability and
+integration changes are recorded in `port/patches`; the upstream checkout remains
+unchanged. See `LICENSE`, `THIRD_PARTY.md` and `licenses/` for notices and dependencies.
+FFmpeg source and relinking materials must accompany applicable binary releases.
