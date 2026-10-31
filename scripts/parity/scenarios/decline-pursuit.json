@@ -1,0 +1,38 @@
+[
+  {
+    "name": "move-out",
+    "key": "ArrowDown",
+    "ms": 1024,
+    "expect": {
+      "game.y": 6
+    }
+  },
+  {
+    "name": "approach",
+    "key": "ArrowDown",
+    "ms": 1024,
+    "expect": {
+      "game.y": 7
+    }
+  },
+  {
+    "name": "encounter",
+    "key": "End",
+    "ms": 8192,
+    "expect": {
+      "hd.layers": 1,
+      "game.combat": 0
+    }
+  },
+  {
+    "name": "decline-pursuit",
+    "key": "Escape",
+    "ms": 2048,
+    "expect": {
+      "hd.layers": 0,
+      "game.combat": 0,
+      "game.x": 6,
+      "game.y": 8
+    }
+  }
+]

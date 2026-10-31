@@ -1,0 +1,51 @@
+[
+  {
+    "name": "move-out",
+    "key": "ArrowDown",
+    "ms": 1024
+  },
+  {
+    "name": "town-entry",
+    "key": "ArrowUp",
+    "ms": 1024
+  },
+  {
+    "name": "tavern",
+    "building": 5,
+    "ms": 1024
+  },
+  {
+    "name": "guild",
+    "widget": 11,
+    "ms": 2048,
+    "expect": {
+      "window.type": "19TThievesGuildWindow",
+      "video.paused": true
+    }
+  },
+  {
+    "name": "guild-idle",
+    "ms": 2048,
+    "expect": {
+      "window.type": "19TThievesGuildWindow",
+      "video.paused": true
+    }
+  },
+  {
+    "name": "guild-close",
+    "key": "Escape",
+    "ms": 512,
+    "expect": {
+      "window.type": "13TTavernWindow",
+      "video.paused": false
+    }
+  },
+  {
+    "name": "tavern-idle",
+    "ms": 1024,
+    "expect": {
+      "window.type": "13TTavernWindow",
+      "video.paused": false
+    }
+  }
+]

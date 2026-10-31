@@ -1,0 +1,30 @@
+--- a/src/viewwrld.cpp
++++ b/src/viewwrld.cpp
+@@ -1,3 +1,4 @@
++#include "authority_actions_client.h"
+ // 26 Dreamcast functions in link order; 20 compiler-generated $-thunks
+ // omitted. Complete adds the two retail-only level-button callbacks below.
+ #include "va.h"
+@@ -155,7 +156,9 @@
+         tileh = 544 - baseY;
+     if (tilew > 0 && tileh > 0) {
+         int owner = -1;
+-        if (thisCell->m_type == HERO)
++        const int authorityOwner=Port::AuthorityActionsClient::worldViewOwner(thisCell);
++        if (authorityOwner>=-1) owner=authorityOwner;
++        else if (thisCell->m_type == HERO)
+             owner = g_game->getHero(thisCell->m_extraInfo)->m_owner;
+         else if (hasFlag(thisCell->m_type))
+             owner = getFlaggedObjectOwner(thisCell);
+@@ -445,7 +448,10 @@
+     if (srcX < 0 || srcY < 0 || srcX >= g_mapWidth || srcY >= g_mapHeight)
+         return;
+ 
+-    NewmapCell* thisCell = getCell(type_point(srcX, srcY, z));
++    NewmapCell* thisCell = Port::AuthorityActionsClient::worldViewActive()
++        ? Port::AuthorityActionsClient::worldViewCell(srcX,srcY,z)
++        : getCell(type_point(srcX, srcY, z));
++    if (!thisCell) return;
+ 
+     if (!thisCell->m_isTrigger)
+         return;

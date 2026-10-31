@@ -1,0 +1,182 @@
+[
+  {
+    "name": "move-out",
+    "key": "ArrowDown",
+    "ms": 1024,
+    "expect": {
+      "game.y": 6
+    }
+  },
+  {
+    "name": "approach",
+    "key": "ArrowDown",
+    "ms": 1024,
+    "expect": {
+      "game.y": 7
+    }
+  },
+  {
+    "name": "encounter",
+    "key": "End",
+    "ms": 8192
+  },
+  {
+    "name": "encounter-confirm",
+    "key": "Enter",
+    "ms": 20000,
+    "expect": {
+      "game.combat": 1
+    },
+    "until": {
+      "game.combat": 1,
+      "combat.control": true,
+      "combat.processing": false,
+      "combat.slot": 0
+    }
+  },
+  {
+    "name": "battle-wait",
+    "click": [
+      720,
+      575
+    ],
+    "ms": 20000,
+    "expect": {
+      "game.combat": 1
+    },
+    "until": {
+      "game.combat": 1,
+      "combat.control": true,
+      "combat.processing": false,
+      "combat.slot": 1
+    }
+  },
+  {
+    "name": "battle-defend",
+    "click": [
+      770,
+      575
+    ],
+    "ms": 20000,
+    "expect": {
+      "game.combat": 1
+    },
+    "until": {
+      "game.combat": 1,
+      "combat.control": true,
+      "combat.processing": false,
+      "combat.slot": 2
+    }
+  },
+  {
+    "name": "spellbook",
+    "click": [
+      668,
+      575
+    ],
+    "ms": 512,
+    "expect": {
+      "hd.layers": 2
+    }
+  },
+  {
+    "name": "select-haste",
+    "spell": 53,
+    "ms": 512,
+    "expect": {
+      "hd.layers": 1
+    }
+  },
+  {
+    "name": "cast-haste",
+    "target": [
+      0,
+      0
+    ],
+    "ms": 20000,
+    "expect": {
+      "combat.stacks.0.effects": 1
+    },
+    "until": {
+      "game.combat": 1,
+      "combat.control": true,
+      "combat.processing": false,
+      "combat.slot": 2
+    }
+  },
+  {
+    "name": "battle-auto",
+    "click": [
+      178,
+      575
+    ],
+    "ms": 20000,
+    "expect": {
+      "screen": "combat-results"
+    }
+  },
+  {
+    "name": "battle-dismiss",
+    "key": "Enter",
+    "ms": 2048,
+    "expect": {
+      "game.combat": 0
+    }
+  },
+  {
+    "name": "second-plan",
+    "map": [
+      8,
+      9
+    ],
+    "ms": 512
+  },
+  {
+    "name": "second-walk",
+    "map": [
+      8,
+      9
+    ],
+    "ms": 4096
+  },
+  {
+    "name": "second-confirm",
+    "key": "Enter",
+    "when": {
+      "game.combat": 0,
+      "hd.layers": 1
+    },
+    "ms": 8192
+  },
+  {
+    "name": "second-ready",
+    "ms": 20000,
+    "expect": {
+      "game.combat": 1,
+      "window.type": "13TCombatWindow"
+    },
+    "until": {
+      "game.combat": 1,
+      "combat.control": true,
+      "combat.processing": false,
+      "combat.slot": 0
+    }
+  },
+  {
+    "name": "second-defend",
+    "click": [
+      770,
+      575
+    ],
+    "ms": 20000,
+    "expect": {
+      "game.combat": 1
+    },
+    "until": {
+      "game.combat": 1,
+      "combat.control": true,
+      "combat.processing": false,
+      "combat.slot": 1
+    }
+  }
+]

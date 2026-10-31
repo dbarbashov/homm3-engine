@@ -1,0 +1,16 @@
+--- a/src/advmgr.cpp
++++ b/src/advmgr.cpp
+@@ -1,3 +1,4 @@
++#include "authority_client.h"
+ #include "authority_actions_client.h"
+ #include "authority_client.h"
+ #ifdef HOMM3_SERVER
+@@ -778,7 +779,7 @@
+     m_bottomViewType = BOTTOM_VIEW_DEFAULT;
+     overrideBottomView(BOTTOM_VIEW_DEFAULT, -1);
+     g_soundManager->adjustSoundVolumes();
+-    g_game->resetAllPlayerVisibility();
++    if(!Port::AuthorityClient::enabled())g_game->resetAllPlayerVisibility();
+     setInitialMapOrigin();
+     redrawAdvScreen(1, 0);
+ 

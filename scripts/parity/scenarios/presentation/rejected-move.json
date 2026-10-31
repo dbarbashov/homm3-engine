@@ -1,0 +1,17 @@
+[
+  {
+    "name": "before",
+    "ms": 512
+  },
+  {
+    "name": "reject",
+    "fault": "reject-move",
+    "key": "ArrowRight",
+    "ms": 2048
+  },
+  {
+    "name": "dismiss",
+    "key": "Enter",
+    "ms": 2048
+  }
+]

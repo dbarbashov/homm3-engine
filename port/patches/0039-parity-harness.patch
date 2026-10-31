@@ -1,0 +1,39 @@
+--- a/src/kb.cpp
++++ b/src/kb.cpp
+@@ -5066,6 +5066,9 @@
+
+ // Same entry sequence as oldmain's runGame branch, exposed to the portable host.
+ void portableAdventureLoop(bool newGame){
++#ifdef HOMM3_HARNESS
++  Port::Harness::loadFixture();
++#endif
+   for(;;){
+     bool scored=g_inCampaign && g_game->m_campaign.m_currentMap>=0
+         && g_game->m_campaign.m_mapScores[g_game->m_campaign.m_currentMap].m_completed;
+--- a/include/game.h
++++ b/include/game.h
+@@ -1016,6 +1016,10 @@
+ // armyGroup and the map record at once, and two headers cannot each
+ // define the class.)
+ class game {
++#ifdef HOMM3_HARNESS
++    friend bool Port::Harness::loadFixture();
++    friend void Port::Harness::exportFixture(const char*);
++#endif
+ public:
+     game();
+     ~game();
+--- a/src/philai.cpp
++++ b/src/philai.cpp
+@@ -140,6 +140,11 @@
+ MAC_ADDRESS(0x13d5b8, 0xc8)
+ void checkDoMain(int forceMouseCheck, int mouseOnly)
+ {
++#ifdef HOMM3_HARNESS
++    // This polling loop gates the message pump on elapsed time. A virtual
++    // clock must progress here too, otherwise transfer/AI waits deadlock.
++    if (Port::Harness::accelerated()) Port::Harness::pump();
++#endif
+     if (!(g_mainLoopInitFlags & 1)) {
+         g_mainLoopInitFlags |= 1;
+         g_lastFrameRateTimer = GameTime::get();

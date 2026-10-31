@@ -1,0 +1,447 @@
+--- a/src/kb.cpp
++++ b/src/kb.cpp
+@@ -1,3 +1,6 @@
++#ifdef HOMM3_SERVER
++#include "server_authority.h"
++#endif
+ #include "fast_game.h"
+ #include "frontend_bridge.h"
+ #include "va.h"
+@@ -3060,7 +3063,11 @@
+                      -1, 0, -1, 0, -1, 0, -1, 0);
+     } else {
+         for (i = 0; i < g_gamePlayerCount; i++)
+-            if (!g_game->m_playerDisabled[i] && (Port::Fast::executing() ? g_game->isHuman(i) : g_game->isLocalHuman(i)))
++            if (!g_game->m_playerDisabled[i] && (
++#ifdef HOMM3_SERVER
++                Port::Authority::active() ||
++#endif
++                Port::Fast::executing() ? g_game->isHuman(i) : g_game->isLocalHuman(i)))
+                 break;
+         if (i == g_gamePlayerCount) {
+             g_gameOver = 1;
+@@ -4578,6 +4585,11 @@
+     int resType1, int resExtra1, int resType2, int resExtra2,
+     int special, int timeout, int resType3, int resExtra3)
+ {
++#ifdef HOMM3_SERVER
++    if (Port::Authority::active()) {
++        Port::Authority::normalChoice(text,mbType,resType1,resExtra1,resType2,resExtra2,special,resType3,resExtra3); return;
++    }
++#endif
+     if (Port::Fast::executing()) { g_windowManager->m_dialogReturn=DIALOG_RETURN_ACCEPT; return; }
+     TNormalDialogInfo dialogInfo;
+     dialogInfo.m_dialogText = text;
+@@ -4938,6 +4950,15 @@
+                      std::vector<type_dialog_resource>& resources,
+                      long x, long y, long timeout)
+ {
++#ifdef HOMM3_SERVER
++    if (Port::Authority::active()) {
++        if (!g_currentPlayer->isHuman()) { g_windowManager->m_dialogReturn=DIALOG_RETURN_OK; return; }
++        Port::Authority::Choice c;c.actor=Port::Authority::activeActor();c.kind="normal";c.text=text?text:"";c.options={DIALOG_RETURN_OK};
++        c.metadata="{\"mbType\":1,\"icons\":[";
++        for(size_t i=0;i<resources.size();++i){if(i)c.metadata+=",";c.metadata+="["+std::to_string(resources[i].m_resource)+","+std::to_string(resources[i].m_qualifier)+"]";}
++        c.metadata+="]}";g_windowManager->m_dialogReturn=Port::Authority::choose(c).value;return;
++    }
++#endif
+     long i = 0;
+ 
+     do {
+--- a/src/winmgr.cpp
++++ b/src/winmgr.cpp
+@@ -1,3 +1,6 @@
++#ifdef HOMM3_SERVER
++#include "server_authority.h"
++#endif
+ #include "fast_game.h"
+ #include "va.h"
+ #include "hd_view.h"
+@@ -245,6 +248,9 @@
+ int heroWindowManager::doDialog(heroWindow* dialogWindow,
+                                 TDialogHandler dialogFunction, int fadeIn)
+ {
++#ifdef HOMM3_SERVER
++    if (Port::Authority::active()) throw std::runtime_error("Missing typed server window adapter");
++#endif
+     if (Port::Fast::executing()) { m_dialogReturn=1; return 1; }
+     int endFlag;
+ 
+--- a/src/exec.cpp
++++ b/src/exec.cpp
+@@ -1,3 +1,6 @@
++#ifdef HOMM3_SERVER
++#include "server_authority.h"
++#endif
+ #include "fast_game.h"
+ #include "va.h"
+ 
+@@ -68,6 +71,9 @@
+ MAC_ADDRESS(0x0c3af4, 0x2c0)
+ int executive::doDialog(baseManager* newDialog)
+ {
++#ifdef HOMM3_SERVER
++    if (Port::Authority::active()) throw std::runtime_error("Missing typed server manager adapter");
++#endif
+     if (Port::Fast::executing()) { g_windowManager->m_dialogReturn=1; return 1; }
+     executive dialogExec;
+     baseManager* savedMgr[20];
+--- a/src/events.cpp
++++ b/src/events.cpp
+@@ -1,3 +1,6 @@
++#ifdef HOMM3_SERVER
++#include "server_authority.h"
++#endif
+ #include "fast_game.h"
+ #include "text.h"
+ #include "va.h"
+@@ -585,6 +588,9 @@
+ void advManager::eraseAndFizzle(NewmapCell* eventCell, type_point point,
+                                 int fizzleSound)
+ {
++#ifdef HOMM3_SERVER
++    if (Port::Authority::active()) { eraseObj(eventCell,point,true); return; }
++#endif
+     unsigned char savedFlag = g_colorCyclingEnabled;
+     g_colorCyclingEnabled = 0;
+     unsigned char savedPause = m_animCtrPaused;
+@@ -660,6 +666,12 @@
+         return;
+     }
+ 
++#ifdef HOMM3_SERVER
++    if (Port::Authority::active()) {
++        Port::Authority::normalChoice("Build a boat?",2,GOLD,-101000,WOOD,-100010,-1,-1,0);
++        g_windowManager->m_dialogReturn = g_windowManager->m_dialogReturn == DIALOG_RETURN_ACCEPT ? DIALOG_RETURN_OK : DIALOG_RETURN_CANCEL;
++    } else
++#endif
+     doShipyard(0);
+     if (g_windowManager->m_dialogReturn == DIALOG_RETURN_OK
+         && g_game->createBoat(
+@@ -1366,7 +1378,7 @@
+     if (experienceGained > 0)
+         currentHero->giveExperience(experienceGained, 1, 1);
+     if (humanPlayer)
+-        m_advWindow->updateHeroLocators(-1, 1, 1);
++        { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
+     updBottomView(1, 1, 1);
+     return rewardGiven;
+ }
+@@ -1928,7 +1940,7 @@
+     currentHero->m_maxMovePoints += 400;
+     currentHero->m_movePoints += 400;
+     if (humanPlayer)
+-        m_advWindow->updateHeroLocators(-1, 1, 1);
++        { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
+ }
+ 
+ VA(0x004a2710, 0xE4)
+@@ -2415,7 +2427,7 @@
+         cell->fillMagicSpring(0);
+     }
+     if (humanPlayer)
+-        m_advWindow->updateHeroLocators(-1, 1, 1);
++        { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
+     updBottomView(1, 1, 1);
+ }
+ 
+@@ -2448,7 +2460,7 @@
+     game* g = g_game;
+     g->setInfoFlag(MagicWellInfo, g_netLocalGamePos);
+     if (humanPlayer)
+-        m_advWindow->updateHeroLocators(-1, 1, 1);
++        { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
+     updBottomView(1, 1, 1);
+ }
+ 
+@@ -2584,7 +2596,7 @@
+     currentHero->m_maxMovePoints += 800;
+     currentHero->m_movePoints += 800;
+     if (humanPlayer)
+-        m_advWindow->updateHeroLocators(-1, 1, 1);
++        { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
+ }
+ 
+ VA(0x004a3dc0, 0xE4)
+@@ -2672,7 +2684,7 @@
+ 
+     CMCRecruitHero change(heroID, point, g_netLocalGamePos);
+     sendMapChange(&change);
+-    m_advWindow->updateHeroLocators(-1, 1, 1);
++    { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
+ }
+ 
+ // The spell is written back BEFORE the hero is asked whether he can carry
+@@ -2766,9 +2778,9 @@
+     currentHero->m_luckBonus++;
+     currentHero->m_maxMovePoints += 400;
+     currentHero->m_movePoints += 400;
+-    m_advWindow->updateHeroLocators(-1, 0, 0);
++    { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 0, 0); }
+     if (humanPlayer)
+-        m_advWindow->updateHeroLocators(-1, 1, 1);
++        { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
+     updBottomView(1, 1, 1);
+ }
+ 
+@@ -3271,7 +3283,7 @@
+         currentHero->m_maxMovePoints += g_stablesMovementBonus;
+         currentHero->m_movePoints += g_stablesMovementBonus;
+         if (humanPlayer)
+-            m_advWindow->updateHeroLocators(-1, 1, 1);
++            { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
+         granted = STABLES_MOVEMENT;
+     }
+     // 10 and 11 are the Cavalier and its Champion upgrade; the reward
+@@ -3764,7 +3776,7 @@
+ 
+     monstersGiveReward(currentHero, cell, humanPlayer);
+     if (humanPlayer) {
+-        m_advWindow->updateResourceDisplay(1, 1);
++        { if (m_advWindow) m_advWindow->updateResourceDisplay(1, 1); }
+         updBottomView(1, 1, 1);
+     }
+ 
+@@ -4066,7 +4078,7 @@
+     currentHero->m_maxMovePoints += 400;
+     currentHero->m_movePoints += 400;
+     if (humanPlayer)
+-        m_advWindow->updateHeroLocators(-1, 1, 1);
++        { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
+ }
+ 
+ VA(0x004a7fc0, 0xBD)
+@@ -4756,7 +4768,7 @@
+             g_mouseManager->setPointer(0, mouseManager::ADVENTURE_SET);
+             g_mouseManager->showPointer(1);
+             doMapTavern(point);
+-            m_advWindow->updateHeroLocators(-1, 1, 1);
++            { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
+         }
+         break;
+     }
+@@ -4897,20 +4909,24 @@
+     hero* currentHero = g_game->getCurrHero();
+ 
+     reseed(0, 0);
++#ifndef HOMM3_SERVER
+     eventSound(eventCell);
++#endif
+     dispatchEvent(currentHero, eventCell, point, 1);
+ 
++#ifndef HOMM3_SERVER
+     updateRadar(1, 1, 0, 0, 0);
+-    m_advWindow->updateHeroLocators(-1, 1, 0);
+-    m_advWindow->updateTownLocators(-1, 1, 0);
++    { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 0); }
++    { if (m_advWindow) m_advWindow->updateTownLocators(-1, 1, 0); }
+     m_advWindow->updateQuestLogButton(1);
+     m_advWindow->updateSpellButton(currentHero);
+     m_advWindow->updateSleepButton(currentHero);
+     updBottomView(1, 1, 1);
+-    m_advWindow->updateResourceDisplay(1, 1);
++    { if (m_advWindow) m_advWindow->updateResourceDisplay(1, 1); }
+ 
+     if (!g_soundManager->m_mp3Playing)
+         g_soundManager->resumeStream();
++#endif
+     if (g_game->m_mapHeader.m_victoryCondition.checkForTotalCreatures())
+         checkEndGame(0);
+     if (g_game->m_mapHeader.m_victoryCondition.checkForTotalResources())
+@@ -4980,6 +4996,9 @@
+ MAC_ADDRESS(0x0b7eec, 0x164)
+ void advManager::heroSwap(hero* leftHero, hero* rightHero)
+ {
++#ifdef HOMM3_SERVER
++    if (Port::Authority::active()) throw std::runtime_error("Hero exchange needs a typed server adapter");
++#endif
+     swapManager* manager = new swapManager(leftHero, rightHero);
+     if (!manager)
+         memError();
+@@ -5038,8 +5057,8 @@
+         if (g_gameOver)
+             return;
+         updateRadar(1, 1, 0, 0, 0);
+-        m_advWindow->updateHeroLocators(-1, 1, 1);
+-        m_advWindow->updateTownLocators(-1, 1, 1);
++        { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
++        { if (m_advWindow) m_advWindow->updateTownLocators(-1, 1, 1); }
+         if (g_game->m_mapHeader.m_victoryCondition
+                 .checkForArtifactTransportWin(currentHero, point))
+         {
+@@ -5086,8 +5105,8 @@
+             if (g_gameOver)
+                 return;
+             updateRadar(1, 1, 0, 0, 0);
+-            m_advWindow->updateHeroLocators(-1, 1, 1);
+-            m_advWindow->updateTownLocators(-1, 1, 1);
++            { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
++            { if (m_advWindow) m_advWindow->updateTownLocators(-1, 1, 1); }
+         }
+     }
+ 
+@@ -5695,7 +5714,7 @@
+ 
+     updateRadar(1, 1, 0, 0, 0);
+ #ifndef HOMM3_SERVER
+-    m_advWindow->updateHeroLocators(-1, 1, 1);
++    { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
+ #endif
+     if (g_game->m_mapHeader.m_lossCondition.heroKilled(who)) {
+         g_game->m_mapHeader.m_lossCondition.m_playerLoser = owner;
+@@ -5742,6 +5761,9 @@
+ MAC_ADDRESS(0x0ba25c, 0x10c)
+ void advManager::fizzleCenter(int whichSound)
+ {
++#ifdef HOMM3_SERVER
++    if (Port::Authority::active()) return;
++#endif
+     if (!g_completeDrawEnabled)
+         return;
+     switch (whichSound) {
+--- a/src/hero.cpp
++++ b/src/hero.cpp
+@@ -1,3 +1,6 @@
++#ifdef HOMM3_SERVER
++#include "server_authority.h"
++#endif
+ #include "fast_game.h"
+ #include "text.h"
+ #include "va.h"
+@@ -1972,6 +1975,11 @@
+                     m_lastMagicSchoolLevel = m_level;
+             }
+ 
++#ifdef HOMM3_SERVER
++            if (Port::Authority::active() && !g_inSetup && m_owner >= 0 && g_game->isHuman(m_owner)) {
++                Port::Authority::levelChoice(m_owner,m_id,stat,skills[0],skills[1]);
++            } else
++#endif
+             if (!g_inSetup && m_owner >= 0 &&
+                 g_game->isLocalHuman(m_owner)) {
+                 launchSample("nwherolv.82m", -1, 3);
+--- a/src/game.cpp
++++ b/src/game.cpp
+@@ -1,3 +1,6 @@
++#ifdef HOMM3_SERVER
++#include "server_authority.h"
++#endif
+ #include "fast_game.h"
+ #include "host_path.h"
+ #include "prefs.h"
+@@ -6810,6 +6813,9 @@
+ MAC_ADDRESS(0x0dd7dc, 0x89c)  // dc-name/order + retail caller/callee/body
+ void game::nextPlayer()
+ {
++#ifdef HOMM3_SERVER
++    if (Port::Authority::active()) { Port::Authority::advanceTurn(); return; }
++#endif
+     if (Port::Fast::enabled()) { if (Port::Fast::nativeUI()) Port::Fast::request(5); return; }
+     int toWho;
+     int humans;
+@@ -9286,6 +9292,9 @@
+ MAC_ADDRESS(0x0e3dbc, 0x4f0)
+ void game::doNewTurn()
+ {
++#ifdef HOMM3_SERVER
++    if (Port::Authority::active()) { Port::Authority::beginTurn(); return; }
++#endif
+     int newHero;
+     char sample[13];
+     char temp[50];
+@@ -9726,8 +9735,12 @@
+         }
+     }
+ 
+-    if (g_currentPlayer->isLocalHuman()) {
+-        g_advManager->m_advWindow->updateResourceDisplay(1, 1);
++    if (g_currentPlayer->isLocalHuman()
++#ifdef HOMM3_SERVER
++        || (Port::Authority::active() && g_currentPlayer->isHuman())
++#endif
++    ) {
++        if(g_advManager->m_advWindow) g_advManager->m_advWindow->updateResourceDisplay(1, 1);
+         extendedDialog(thisEvent->Message.c_str(), rewards, -1, -1, 0);
+ 
+         if (g_inCampaign) {
+--- a/src/advmgr.cpp
++++ b/src/advmgr.cpp
+@@ -1,3 +1,6 @@
++#ifdef HOMM3_SERVER
++#include "server_authority.h"
++#endif
+ #include "fast_game.h"
+ // The DC roster identifies source interfaces; retained retail addresses
+ // are corroborated with bodies, calls and vtables. Several DC helpers have
+@@ -3969,9 +3972,10 @@
+     }
+ 
+     currHero->m_movePoints = 0;
++#ifndef HOMM3_SERVER
+     updBottomView(1, 1, 1);
+-
+     checkDimHero();
++#endif
+ 
+     reseed(0, 0);
+     return 1;
+@@ -6903,6 +6907,9 @@
+ MAC_ADDRESS(0x0166b0, 0x1b4)
+ void advManager::updBottomView(unsigned char forceUpdate, unsigned char drawWindow, unsigned char update)
+ {
++#ifdef HOMM3_SERVER
++    if (Port::Authority::active()) return;
++#endif
+     if (m_bottomViewOverride == BOTTOM_VIEW_8)
+         return;
+ 
+@@ -7371,6 +7378,9 @@
+ MAC_ADDRESS(0x017b38, 0x18c)
+ void advManager::redrawAdvScreen(unsigned char update, unsigned char forceSaveBorder)
+ {
++#ifdef HOMM3_SERVER
++    if (Port::Authority::active()) return;
++#endif
+     const int playerId = g_game->getLocalPlayerGamePos();
+     Bitmap816* const bmp = ResourceManager::GetBitmap816("AdvMap.pcx");
+ 
+@@ -8242,6 +8252,9 @@
+ MAC_ADDRESS(0x019a20, 0x78)
+ void advManager::checkDimNextHeroBut()
+ {
++#ifdef HOMM3_SERVER
++    if (Port::Authority::active()) return;
++#endif
+     if (g_currentPlayer->isLocalHuman() && g_currentPlayer->hasMobileHero())
+         m_advWindow->widgetClearStatus(11, widget::WIDGET_UPDATE | widget::WIDGET_DIMMED);
+     else
+--- a/src/town.cpp
++++ b/src/town.cpp
+@@ -1,3 +1,6 @@
++#ifdef HOMM3_SERVER
++#include "server_authority.h"
++#endif
+ #include "va.h"
+ 
+ #include <algorithm>
+@@ -714,6 +717,9 @@
+ MAC_ADDRESS(0x1b3664, 0x104)
+ void town::view(int alreadyFaded)
+ {
++#ifdef HOMM3_SERVER
++    if (Port::Authority::active()) return;
++#endif
+     int threshold = g_highMemBuffer + 0x514;
+     g_townViewActive = 1;
+     if (threshold > 0xb54)
+--- a/src/philai.cpp
++++ b/src/philai.cpp
+@@ -2270,7 +2270,7 @@
+         return;
+ 
+     g_aiHeroMoveActive = 0;
+-    g_advManager->m_advWindow->animateBottomView(0);
++    if (g_advManager->m_advWindow) g_advManager->m_advWindow->animateBottomView(0);
+     if (currentHero->m_movePoints > 0) {
+         if (!g_config.m_blackoutComputer && !g_remoteOn
+             && mapExtraPosAndAdjacentsSet(

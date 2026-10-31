@@ -1,0 +1,27 @@
+[
+  {
+    "name": "plan",
+    "map": [
+      2,
+      23
+    ],
+    "ms": 512
+  },
+  {
+    "name": "collect",
+    "map": [
+      2,
+      23
+    ],
+    "ms": 4096
+  },
+  {
+    "name": "settled",
+    "ms": 512
+  },
+  {
+    "name": "step-onto-resource",
+    "key": "ArrowUp",
+    "ms": 2048
+  }
+]

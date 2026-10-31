@@ -1,0 +1,91 @@
+[
+  {
+    "name": "idle",
+    "ms": 512
+  },
+  {
+    "name": "move-out",
+    "key": "ArrowDown",
+    "ms": 1024
+  },
+  {
+    "name": "town-entry",
+    "key": "ArrowUp",
+    "ms": 1024,
+    "expect": {
+      "hd.layers": 1
+    }
+  },
+  {
+    "name": "occupied-tavern",
+    "building": 5,
+    "expect": {
+      "hd.layers": 2
+    }
+  },
+  {
+    "name": "occupied-tavern-close",
+    "key": "Escape",
+    "expect": {
+      "hd.layers": 1
+    }
+  },
+  {
+    "name": "garrison",
+    "key": "Space"
+  },
+  {
+    "name": "tavern",
+    "building": 5,
+    "expect": {
+      "hd.layers": 2
+    }
+  },
+  {
+    "name": "hire",
+    "widget": 12,
+    "ms": 8192,
+    "expect": {
+      "hd.layers": 1
+    }
+  },
+  {
+    "name": "swap-residents",
+    "key": "Space"
+  },
+  {
+    "name": "swap-residents-back",
+    "key": "Space"
+  },
+  {
+    "name": "swap-for-exit",
+    "key": "Space"
+  },
+  {
+    "name": "town-exit",
+    "key": "Escape",
+    "expect": {
+      "hd.layers": 0
+    }
+  },
+  {
+    "name": "move-after-town",
+    "key": "ArrowDown",
+    "ms": 1024,
+    "expect": {
+      "game.y": 6
+    }
+  },
+  {
+    "name": "town-reenter",
+    "key": "ArrowUp",
+    "ms": 1024,
+    "expect": {
+      "hd.layers": 1
+    }
+  },
+  {
+    "name": "reenter-swap",
+    "key": "Space"
+  }
+]

@@ -1,0 +1,66 @@
+[
+  {
+    "name": "idle",
+    "ms": 512
+  },
+  {
+    "name": "visit",
+    "key": "ArrowUp",
+    "ms": 2048
+  },
+  {
+    "name": "accept",
+    "key": "Enter",
+    "when": {
+      "window.type": "10TDialogBox"
+    },
+    "ms": 8192
+  },
+  {
+    "name": "select-level",
+    "widget": 2010,
+    "when": {
+      "window.type": "14TLevelUpWindow"
+    }
+  },
+  {
+    "name": "confirm-level",
+    "key": "Enter",
+    "when": {
+      "window.type": "14TLevelUpWindow"
+    },
+    "ms": 2048
+  },
+  {
+    "name": "settled",
+    "ms": 512,
+    "expect": {
+      "hd.layers": 0
+    }
+  },
+  {
+    "name": "leave",
+    "key": "ArrowDown",
+    "ms": 1024
+  },
+  {
+    "name": "revisit",
+    "key": "ArrowUp",
+    "ms": 2048
+  },
+  {
+    "name": "accept-again",
+    "key": "Enter",
+    "when": {
+      "window.type": "10TDialogBox"
+    },
+    "ms": 4096
+  },
+  {
+    "name": "settled-again",
+    "ms": 512,
+    "expect": {
+      "hd.layers": 0
+    }
+  }
+]

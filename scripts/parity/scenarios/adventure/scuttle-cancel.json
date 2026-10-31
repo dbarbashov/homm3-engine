@@ -1,0 +1,34 @@
+[
+  {
+    "name": "idle",
+    "ms": 512
+  },
+  {
+    "name": "move-out",
+    "key": "ArrowDown",
+    "ms": 1024
+  },
+  {
+    "name": "spellbook",
+    "key": "c",
+    "ms": 512
+  },
+  {
+    "name": "cast",
+    "spell": 1,
+    "ms": 2048
+  },
+  {
+    "name": "close",
+    "key": "Escape",
+    "ms": 2048
+  },
+  {
+    "name": "confirm-cancel",
+    "key": "Enter"
+  },
+  {
+    "name": "settled",
+    "ms": 512
+  }
+]

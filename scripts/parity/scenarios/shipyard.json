@@ -1,0 +1,81 @@
+[
+  {
+    "name": "plan",
+    "map": [
+      23,
+      24
+    ],
+    "ms": 512
+  },
+  {
+    "name": "visit",
+    "map": [
+      23,
+      24
+    ],
+    "ms": 4096,
+    "expect": {
+      "window.type": "11TShipWindow"
+    }
+  },
+  {
+    "name": "cancel",
+    "key": "Escape",
+    "ms": 2048
+  },
+  {
+    "name": "leave",
+    "key": "ArrowDown",
+    "ms": 2048
+  },
+  {
+    "name": "replan",
+    "map": [
+      23,
+      24
+    ],
+    "ms": 512
+  },
+  {
+    "name": "revisit",
+    "map": [
+      23,
+      24
+    ],
+    "ms": 4096,
+    "expect": {
+      "window.type": "11TShipWindow"
+    }
+  },
+  {
+    "name": "buy",
+    "key": "Enter",
+    "ms": 4096
+  },
+  {
+    "name": "leave-built",
+    "key": "ArrowDown",
+    "ms": 2048
+  },
+  {
+    "name": "blocked-plan",
+    "map": [
+      23,
+      24
+    ],
+    "ms": 512
+  },
+  {
+    "name": "blocked-visit",
+    "map": [
+      23,
+      24
+    ],
+    "ms": 4096
+  },
+  {
+    "name": "blocked-close",
+    "key": "Enter",
+    "ms": 1024
+  }
+]

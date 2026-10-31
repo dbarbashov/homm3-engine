@@ -1,0 +1,59 @@
+[
+  {
+    "name": "move-out",
+    "key": "ArrowDown",
+    "ms": 1024,
+    "expect": {
+      "game.y": 6
+    }
+  },
+  {
+    "name": "approach",
+    "key": "ArrowDown",
+    "ms": 1024,
+    "expect": {
+      "game.y": 7
+    }
+  },
+  {
+    "name": "encounter",
+    "key": "End",
+    "ms": 20000,
+    "until": {
+      "game.combat": 1,
+      "combat.control": true,
+      "combat.processing": false
+    }
+  },
+  {
+    "name": "encounter-confirm",
+    "ms": 512,
+    "expect": {
+      "game.combat": 1
+    },
+    "until": {
+      "game.combat": 1,
+      "combat.control": true,
+      "combat.processing": false
+    }
+  },
+  {
+    "name": "battle-auto",
+    "click": [
+      178,
+      575
+    ],
+    "ms": 120000,
+    "until": {
+      "screen": "combat-results"
+    }
+  },
+  {
+    "name": "battle-dismiss",
+    "key": "Enter",
+    "ms": 2048,
+    "expect": {
+      "game.combat": 0
+    }
+  }
+]

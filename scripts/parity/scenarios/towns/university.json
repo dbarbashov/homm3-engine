@@ -1,0 +1,44 @@
+[
+  {
+    "name": "idle",
+    "ms": 512
+  },
+  {
+    "name": "move-out",
+    "key": "ArrowDown",
+    "ms": 1024
+  },
+  {
+    "name": "town-entry",
+    "key": "ArrowUp",
+    "ms": 1024,
+    "expect": {
+      "hd.layers": 1
+    }
+  },
+  {
+    "name": "university",
+    "building": 21,
+    "expect": {
+      "hd.layers": 2
+    }
+  },
+  {
+    "name": "choose-school",
+    "widget": 104
+  },
+  {
+    "name": "buy-school",
+    "click": [
+      315,
+      523
+    ]
+  },
+  {
+    "name": "university-close",
+    "key": "Escape",
+    "expect": {
+      "hd.layers": 1
+    }
+  }
+]

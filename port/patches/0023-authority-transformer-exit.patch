@@ -1,0 +1,17 @@
+--- a/src/sacrifice_window.cpp
++++ b/src/sacrifice_window.cpp
+@@ -2,5 +2,6 @@
+ #include "va.h"
+ 
+ #include "sacrifice_window.h"
++static void moveAllArmies(armyGroup* source, armyGroup* dest);
+ 
+ #include "border.h"
+@@ -2031,6 +2032,7 @@
+ MAC_ADDRESS(0x15cc44, 0x2c)
+ int type_skeleton_window::exitDialog(message& msg)
+ {
++    if(Port::AuthorityClient::enabled())moveAllArmies(m_armies[1],m_armies[0]);
+     msg.m_id = MESSAGE_WIDGET;
+     g_windowManager->m_dialogReturn = 0;
+     msg.m_codeX = msg.m_codeY = widget::WIDGET_END_DIALOG;

@@ -1,0 +1,156 @@
+--- a/src/townmgr.cpp
++++ b/src/townmgr.cpp
+@@ -1,3 +1,4 @@
++#include "authority_guild_client.h"
+ #include "authority_actions_client.h"
+ #ifdef HOMM3_SERVER
+ #include "server_authority.h"
+@@ -2756,7 +2757,9 @@
+     switch (codeY) {
+     case HERO_P0: case HERO_P1: case HERO_P2: case HERO_P3:
+     case HERO_P4: case HERO_P5: case HERO_P6: case HERO_P7:
+-        strcpy(g_text, g_game->getHero(g_heroWidgetMap[codeY - HERO_P0])->m_name);
++        strcpy(g_text, Port::AuthorityGuildClient::active()
++            ? Port::AuthorityGuildClient::heroName(codeY - HERO_P0)
++            : g_game->getHero(g_heroWidgetMap[codeY - HERO_P0])->m_name);
+         break;
+     case CREATURE_P0: case CREATURE_P1: case CREATURE_P2: case CREATURE_P3:
+     case CREATURE_P4: case CREATURE_P5: case CREATURE_P6: case CREATURE_P7:
+@@ -5420,6 +5423,7 @@
+             if (m_townToView->hasBuilding(MARKETPLACE_ID,true)) { doMarketplace(); redrawTownScreen(); }
+             break;
+         case 0x22: { // G: thieves' guild.
++            if (Port::AuthorityClient::enabled()) { Port::AuthorityGuildClient::requestTown(m_townToView->m_id); break; }
+             TThievesGuildWindow guild(-1); guild.doModal(0); redrawTownScreen(); break;
+         }
+         case KEYCODE_F10:
+@@ -6593,6 +6597,7 @@
+         case widget::WIDGET_DESELECT:
+             switch (msg.m_codeY) {
+             case THIEVES_GUILD_BUTTON_ID:
++                if (Port::AuthorityClient::enabled()) { Port::AuthorityGuildClient::requestTavern(); break; }
+                 g_thievesGuildWindow = new TThievesGuildWindow(-1);
+                 if (!g_thievesGuildWindow)
+                     memError();
+@@ -7968,6 +7973,7 @@
+     // DC line 9243 constructs the original `msg` before the player/stat passes.
+     message msg;
+ 
++    if (Port::AuthorityGuildClient::active()) thievesGuilds = Port::AuthorityGuildClient::tier();
+     int gamePos = g_game->getLocalPlayerGamePos();
+     if (thievesGuilds == -1)
+         thievesGuilds = g_game->getNumThievesGuilds(gamePos);
+@@ -7987,7 +7993,7 @@
+     int k;
+     int slot;
+     for (k = 0; k < NUM_PLAYERS; k++) {
+-        if (g_game->m_playerDisabled[k])
++        if (Port::AuthorityGuildClient::disabled(k))
+             numDisabled++;
+     }
+ 
+@@ -8004,19 +8010,19 @@
+     long value[8];
+     signed char index[8];
+     for (int category = 0; category < numCategories; category++) {
+-        getCategoryStats(category, value, index);
+-        sortStats(value, index);
++        if (Port::AuthorityGuildClient::active()) Port::AuthorityGuildClient::rankStats(category, value, index);
++        else { getCategoryStats(category, value, index); sortStats(value, index); }
+ 
+         int start = 0;
+         int last = 0;
+         for (int rankColumn = 0; rankColumn < NUM_PLAYERS; rankColumn++) {
+             if (start
+-                == g_game->m_numPlayers - numDisabled)
++                == Port::AuthorityGuildClient::playerCount() - numDisabled)
+                 break;
+             int group = 1;
+-            while (last + 1 < g_game->m_numPlayers
++            while (last + 1 < Port::AuthorityGuildClient::playerCount()
+                    && value[last + 1] == value[last]
+-                   && !g_game->m_playerDisabled[index[last + 1]]) {
++                   && !Port::AuthorityGuildClient::disabled(index[last + 1])) {
+                 group++;
+                 last++;
+             }
+@@ -8042,7 +8048,7 @@
+     int playerIndex = 0;
+     for (int column = 0; column < NUM_PLAYERS; column++) {
+         int who = playerIndex;
+-        while (who < NUM_PLAYERS && g_game->m_playerDisabled[who])
++        while (who < NUM_PLAYERS && Port::AuthorityGuildClient::disabled(who))
+             who++;
+         if (who == TTownScreenWindow::GUILD_PLAYER_COLUMNS)
+             break;
+@@ -8056,6 +8062,8 @@
+ 
+         bestHero = 0;
+         if (thievesGuilds >= 1) {
++            if (Port::AuthorityGuildClient::active()) bestHero = Port::AuthorityGuildClient::bestHero(who);
++            else {
+             bestStrength = 0;
+             for (k = 0; k < g_game->m_players[who].m_numHeroes; k++) {
+                 int id = g_game->m_players[who].m_heroes[k];
+@@ -8066,11 +8074,12 @@
+                     bestHero = h;
+                 }
+             }
++            }
+             if (bestHero) {
+                 g_heroWidgetMap[column] = bestHero->m_id;
+                 // DC 9413/9414 re-fetch the hero by the recorded id before
+                 // reading its portrait; retail expands that getHero here.
+-                hero* portraitHero = g_game->getHero(g_heroWidgetMap[column]);
++                hero* portraitHero = Port::AuthorityGuildClient::active() ? bestHero : g_game->getHero(g_heroWidgetMap[column]);
+                 m_widgets.push_back(new bitmapBorder(
+                     66 * column + 0x104, 0x168, 0x30, 0x20,
+                     column + HERO_P0,
+@@ -8121,7 +8130,7 @@
+                 }
+                 if (thievesGuilds >= 3) {
+                     strcpy(g_text,
+-                           g_personality[g_game->m_players[who].m_personality]);
++                           g_personality[Port::AuthorityGuildClient::personality(who)]);
+                     m_widgets.push_back(new textWidget(
+                         66 * column + 0xfb, 0x1c4, 0x42, 0x14, g_text,
+                         DATA_COMPGEN(0x0065f2f8, combatChatSmallFont,
+@@ -8131,6 +8140,10 @@
+                     if (thievesGuilds >= 4) {
+                         bestCreature = -1;
+                         bestValue = 0;
++                        if (Port::AuthorityGuildClient::active()) {
++                            bestCreature = Port::AuthorityGuildClient::creature(who);
++                            Port::AuthorityGuildClient::creatureDisplay(who, g_creatureArmies[column], g_creatureWidgetMap1[column]);
++                        } else {
+                         for (k = 0; k < g_game->m_players[who].m_numTowns; k++) {
+                             int id = g_game->m_players[who].m_townIds[k];
+                             town* t = g_game->getTown(id);
+@@ -8164,6 +8177,7 @@
+                                     g_creatureWidgetMap1[column] = slot;
+                                 }
+                             }
++                        }
+                         }
+                         if (bestCreature != -1) {
+                             m_widgets.push_back(new iconWidget(
+--- a/src/events.cpp
++++ b/src/events.cpp
+@@ -2,6 +2,7 @@
+ #include "server_authority.h"
+ #include "server_encounters.h"
+ #include "server_map_services.h"
++#include "server_guild.h"
+ #include "server_combat.h"
+ #endif
+ #include "fast_game.h"
+@@ -4806,6 +4807,9 @@
+         normalDialog((*g_adventureEventText)[
+                          ADV_EVENT_TEXT_THIEVES_DEN],
+                      1, -1, -1, -1, 0, -1, 0, -1, 0, -1, 0);
++#ifdef HOMM3_SERVER
++        if (Port::Authority::active()) { Port::Authority::guildEncounter(currentHero->m_owner, true); break; }
++#endif
+         TThievesGuildWindow* guildWindow =
+             new TThievesGuildWindow(99);
+         if (!guildWindow)

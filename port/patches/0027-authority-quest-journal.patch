@@ -1,0 +1,76 @@
+--- a/include/seerhut.h
++++ b/include/seerhut.h
+@@ -3,6 +3,7 @@
+ #define HOMM3_SEERHUT_H
+ 
+ #include "va.h"
++#include "authority_quest_client.h"
+ 
+ #include <string>
+ #include <vector>
+@@ -53,6 +54,7 @@
+     bool questActiveforPlayer(
+         const unsigned char playerNum) const
+     {
++        if(Port::AuthorityQuestClient::enabled())return Port::AuthorityQuestClient::active(this,playerNum);
+         return m_quest
+             && m_quest->questTexts().m_text4.length()
+             && playerHasInfo(playerNum)
+@@ -219,6 +221,7 @@
+     bool questActiveforPlayer(
+         const unsigned char playerNum) const
+     {
++        if(Port::AuthorityQuestClient::enabled())return Port::AuthorityQuestClient::active(this,playerNum);
+         return m_quest
+             && m_quest->questTexts().m_text4.length()
+             && playerHasInfo(playerNum)
+--- a/src/seerhut.cpp
++++ b/src/seerhut.cpp
+@@ -1806,6 +1806,7 @@
+ MAC_ADDRESS(0x16943c, 0xc8)
+ std::string TQuestGuard::getQuestLogText()
+ {
++    if(Port::AuthorityQuestClient::enabled())return Port::AuthorityQuestClient::text(this,2);
+     return formatString(
+         m_quest->questTexts().m_text4.c_str(),
+         m_quest->getRequirementText().c_str());
+@@ -1815,6 +1816,7 @@
+ MAC_ADDRESS(0x169504, 0x110)
+ std::string TQuestGuard::getQuickInfoText(int player)
+ {
++    if(Port::AuthorityQuestClient::enabled())return Port::AuthorityQuestClient::text(this,0);
+     std::string text;
+     text = g_quickViewText[215];
+ 
+@@ -1830,6 +1832,7 @@
+ MAC_ADDRESS(0x169614, 0x110)
+ std::string TQuestGuard::getRolloverText(int player)
+ {
++    if(Port::AuthorityQuestClient::enabled())return Port::AuthorityQuestClient::text(this,1);
+     std::string text;
+     text = g_quickViewText[215];
+ 
+@@ -2351,6 +2354,7 @@
+ MAC_ADDRESS(0x16a6c4, 0x108)  // UpdateQuestLocator caller; HD twin 0x574440
+ std::string TSeerHut::getSeerLogText()
+ {
++    if(Port::AuthorityQuestClient::enabled())return Port::AuthorityQuestClient::text(this,2);
+     std::string logFormat =
+         m_quest->questTexts().m_text4;
+     return formatString(
+@@ -2365,6 +2369,7 @@
+ MAC_ADDRESS(0x16a7cc, 0x150)
+ std::string TSeerHut::getRolloverText(int player) const
+ {
++    if(Port::AuthorityQuestClient::enabled())return Port::AuthorityQuestClient::text(this,1);
+     if (!playerHasInfo(static_cast<unsigned char>(player)))
+         return g_quickViewText[83];
+ 
+@@ -2385,6 +2390,7 @@
+ MAC_ADDRESS(0x16a91c, 0x150)
+ std::string TSeerHut::getQuickInfoText(int player) const
+ {
++    if(Port::AuthorityQuestClient::enabled())return Port::AuthorityQuestClient::text(this,0);
+     if (!playerHasInfo(static_cast<unsigned char>(player)))
+         return g_quickViewText[83];
+ 

@@ -1,0 +1,30 @@
+[
+  {
+    "name": "idle",
+    "ms": 512
+  },
+  {
+    "name": "move-out",
+    "key": "ArrowDown",
+    "ms": 1024
+  },
+  {
+    "name": "spellbook",
+    "key": "c",
+    "ms": 512
+  },
+  {
+    "name": "cast",
+    "spell": 2,
+    "ms": 2048
+  },
+  {
+    "name": "confirm",
+    "key": "Enter",
+    "ms": 2048
+  },
+  {
+    "name": "settled",
+    "ms": 512
+  }
+]

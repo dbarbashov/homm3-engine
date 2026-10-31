@@ -1,0 +1,23 @@
+--- a/src/events.cpp
++++ b/src/events.cpp
+@@ -673,8 +673,7 @@
+ 
+ #ifdef HOMM3_SERVER
+     if (Port::Authority::active()) {
+-        Port::Authority::normalChoice("Build a boat?",2,GOLD,-101000,WOOD,-100010,-1,-1,0);
+-        g_windowManager->m_dialogReturn = g_windowManager->m_dialogReturn == DIALOG_RETURN_ACCEPT ? DIALOG_RETURN_OK : DIALOG_RETURN_CANCEL;
++        Port::Authority::shipyardChoice(0);
+     } else
+ #endif
+     doShipyard(0);
+--- a/src/kb.cpp
++++ b/src/kb.cpp
+@@ -4591,7 +4591,7 @@
+ {
+ #ifdef HOMM3_SERVER
+     if (Port::Authority::active()) {
+-        Port::Authority::normalChoice(text,mbType,resType1,resExtra1,resType2,resExtra2,special,resType3,resExtra3); return;
++        Port::Authority::normalChoice(text,mbType,resType1,resExtra1,resType2,resExtra2,special,resType3,resExtra3,x,y); return;
+     }
+ #endif
+     if (Port::Fast::executing()) { g_windowManager->m_dialogReturn=DIALOG_RETURN_ACCEPT; return; }

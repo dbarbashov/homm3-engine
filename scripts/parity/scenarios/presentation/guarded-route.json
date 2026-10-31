@@ -1,0 +1,44 @@
+[
+  {
+    "name": "move-out",
+    "key": "ArrowDown",
+    "ms": 2048
+  },
+  {
+    "name": "approach",
+    "key": "ArrowDown",
+    "ms": 2048
+  },
+  {
+    "name": "plan-monster",
+    "map": [
+      6,
+      8
+    ],
+    "ms": 512
+  },
+  {
+    "name": "plan-0",
+    "map": [
+      7,
+      9
+    ],
+    "ms": 512
+  },
+  {
+    "name": "plan-1",
+    "map": [
+      5,
+      9
+    ],
+    "ms": 512
+  },
+  {
+    "name": "plan-2",
+    "map": [
+      9,
+      9
+    ],
+    "ms": 512
+  }
+]

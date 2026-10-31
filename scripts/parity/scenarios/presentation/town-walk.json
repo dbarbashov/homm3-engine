@@ -1,0 +1,28 @@
+[
+  {
+    "name": "leave-town",
+    "key": "ArrowDown",
+    "ms": 2048
+  },
+  {
+    "name": "plan-town",
+    "map": [
+      7,
+      5
+    ],
+    "ms": 512
+  },
+  {
+    "name": "walk-into-town",
+    "map": [
+      7,
+      5
+    ],
+    "ms": 8192
+  },
+  {
+    "name": "close-town",
+    "key": "Escape",
+    "ms": 2048
+  }
+]

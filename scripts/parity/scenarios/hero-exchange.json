@@ -1,0 +1,44 @@
+[
+  {
+    "name": "plan",
+    "map": [
+      9,
+      15
+    ],
+    "ms": 512
+  },
+  {
+    "name": "meet",
+    "map": [
+      9,
+      15
+    ],
+    "ms": 8192,
+    "expect": {
+      "window.type": "11TSwapWindow"
+    }
+  },
+  {
+    "name": "exchange-idle",
+    "ms": 2048,
+    "expect": {
+      "window.type": "11TSwapWindow"
+    }
+  },
+  {
+    "name": "close",
+    "ms": 2048,
+    "widget": 30720,
+    "expect": {
+      "window.type": "19TAdventureMapWindow"
+    }
+  },
+  {
+    "name": "move-away",
+    "key": "ArrowDown",
+    "ms": 2048,
+    "expect": {
+      "game.y": 16
+    }
+  }
+]

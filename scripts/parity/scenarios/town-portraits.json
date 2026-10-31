@@ -1,0 +1,65 @@
+[
+  {
+    "name": "move-out",
+    "key": "ArrowDown",
+    "ms": 1024
+  },
+  {
+    "name": "town-entry",
+    "key": "ArrowUp",
+    "ms": 1024
+  },
+  {
+    "name": "to-garrison",
+    "key": "Space",
+    "ms": 1024
+  },
+  {
+    "name": "garrison-select",
+    "click": [
+      275,
+      425
+    ],
+    "ms": 512
+  },
+  {
+    "name": "garrison-open",
+    "click": [
+      275,
+      425
+    ],
+    "ms": 512,
+    "expect": {
+      "window.type": "17THeroScreenWindow"
+    }
+  },
+  {
+    "name": "hero-close",
+    "key": "Escape",
+    "ms": 512
+  },
+  {
+    "name": "to-visitor",
+    "key": "Space",
+    "ms": 1024
+  },
+  {
+    "name": "visitor-select",
+    "click": [
+      275,
+      525
+    ],
+    "ms": 512
+  },
+  {
+    "name": "visitor-open",
+    "click": [
+      275,
+      525
+    ],
+    "ms": 512,
+    "expect": {
+      "window.type": "17THeroScreenWindow"
+    }
+  }
+]

@@ -1,0 +1,14 @@
+--- a/src/game.cpp
++++ b/src/game.cpp
+@@ -9597,7 +9597,10 @@
+             seen++;
+         if (seen == selected) {
+             m_rumourState[i] = 1;
+-            strcpy(m_currentRumour, g_cannedRumours[selected]);
++            // The recovered routine selects 1..256, but the table has 256
++            // entries. Preserve every in-range retail lookup; at the invalid
++            // upper bound use the actual available slot instead of reading OOB.
++            strcpy(m_currentRumour, g_cannedRumours[selected < 256 ? selected : i]);
+             return;
+         }
+     }

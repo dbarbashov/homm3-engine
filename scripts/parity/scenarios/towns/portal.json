@@ -1,0 +1,95 @@
+[
+  {
+    "name": "idle",
+    "ms": 512
+  },
+  {
+    "name": "move-out",
+    "key": "ArrowDown",
+    "ms": 1024
+  },
+  {
+    "name": "town-entry",
+    "key": "ArrowUp",
+    "ms": 1024
+  },
+  {
+    "name": "mana-vortex-confirm",
+    "key": "Enter",
+    "when": {
+      "window.type": "10TDialogBox"
+    }
+  },
+  {
+    "name": "experience-confirm",
+    "key": "Enter",
+    "when": {
+      "window.type": "10TDialogBox"
+    }
+  },
+  {
+    "name": "levelup-select",
+    "widget": 2010,
+    "when": {
+      "window.type": "14TLevelUpWindow"
+    }
+  },
+  {
+    "name": "levelup-confirm",
+    "key": "Enter",
+    "when": {
+      "hd.layers": 2
+    },
+    "expect": {
+      "hd.layers": 1
+    }
+  },
+  {
+    "name": "portal",
+    "building": 22,
+    "expect": {
+      "hd.layers": 2
+    }
+  },
+  {
+    "name": "portal-close",
+    "key": "Enter",
+    "expect": {
+      "hd.layers": 1
+    }
+  },
+  {
+    "name": "town-exit",
+    "key": "Escape",
+    "expect": {
+      "hd.layers": 0
+    }
+  },
+  {
+    "name": "leave-again",
+    "key": "ArrowDown",
+    "ms": 1024
+  },
+  {
+    "name": "reenter",
+    "key": "ArrowUp",
+    "ms": 1024,
+    "expect": {
+      "hd.layers": 1
+    }
+  },
+  {
+    "name": "portal-again",
+    "building": 22,
+    "expect": {
+      "hd.layers": 2
+    }
+  },
+  {
+    "name": "portal-again-close",
+    "key": "Enter",
+    "expect": {
+      "hd.layers": 1
+    }
+  }
+]

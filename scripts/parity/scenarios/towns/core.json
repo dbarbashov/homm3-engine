@@ -1,0 +1,139 @@
+[
+  {
+    "name": "idle",
+    "ms": 512
+  },
+  {
+    "name": "move-out",
+    "key": "ArrowDown",
+    "ms": 1024
+  },
+  {
+    "name": "town-entry",
+    "key": "ArrowUp",
+    "ms": 1024,
+    "expect": {
+      "hd.layers": 1
+    }
+  },
+  {
+    "name": "hall",
+    "building": 11,
+    "ms": 512,
+    "expect": {
+      "hd.layers": 2
+    }
+  },
+  {
+    "name": "build-city-select",
+    "expect": {
+      "hd.layers": 3
+    },
+    "build_choice": 12
+  },
+  {
+    "name": "build-city-confirm",
+    "key": "Enter",
+    "ms": 8192,
+    "expect": {
+      "hd.layers": 1
+    }
+  },
+  {
+    "name": "recruit",
+    "click": [
+      40,
+      475
+    ],
+    "expect": {
+      "hd.layers": 2
+    }
+  },
+  {
+    "name": "recruit-max",
+    "key": "m"
+  },
+  {
+    "name": "recruit-confirm",
+    "key": "Enter",
+    "ms": 1024,
+    "expect": {
+      "hd.layers": 1
+    }
+  },
+  {
+    "name": "select-town-stack",
+    "widget": 101
+  },
+  {
+    "name": "move-town-to-hero",
+    "widget": 128
+  },
+  {
+    "name": "select-hero-stack",
+    "widget": 126
+  },
+  {
+    "name": "split-dialog",
+    "modifiers": [
+      "Shift"
+    ],
+    "expect": {
+      "hd.layers": 2
+    },
+    "click": [
+      515,
+      505
+    ]
+  },
+  {
+    "name": "split-quantity-focus",
+    "widget": 5
+  },
+  {
+    "name": "split-quantity-clear",
+    "key": "Backspace"
+  },
+  {
+    "name": "split-quantity",
+    "key": "7"
+  },
+  {
+    "name": "split-confirm",
+    "key": "Enter",
+    "expect": {
+      "hd.layers": 1
+    }
+  },
+  {
+    "name": "swap-all",
+    "key": "F10"
+  },
+  {
+    "name": "swap-all-back",
+    "key": "F10"
+  },
+  {
+    "name": "garrison",
+    "key": "Space"
+  },
+  {
+    "name": "visitor",
+    "key": "Space"
+  },
+  {
+    "name": "town-exit",
+    "key": "Escape",
+    "expect": {
+      "hd.layers": 0
+    }
+  },
+  {
+    "name": "move-after-town",
+    "key": "ArrowDown",
+    "ms": 1024,
+    "expect": {
+      "game.y": 6
+    }
+  }
+]

@@ -1,0 +1,24 @@
+--- a/src/hero.cpp
++++ b/src/hero.cpp
+@@ -5230,7 +5230,8 @@
+     }
+ 
+     if (&g_game->m_players[m_owner] == g_currentPlayer
+-        && g_advManager->m_status == baseManager::STATUS_ACTIVE)
++        && g_advManager->m_status == baseManager::STATUS_ACTIVE
++        && g_advManager->m_advWindow)
+         g_advManager->m_advWindow->updateResourceDisplay(1, 1);
+ 
+     g_game->isHuman(m_owner);
+--- a/src/advmgr.cpp
++++ b/src/advmgr.cpp
+@@ -7009,6 +7009,9 @@
+ MAC_ADDRESS(0x016990, 0x8c)  // anchor-global
+ void advManager::bvResMsg(const char* msg, int resType, int resQty)
+ {
++#ifdef HOMM3_SERVER
++    if(Port::Authority::active()){Port::Authority::present("resource",g_netLocalGamePos,resType,resQty,msg);return;}
++#endif
+     m_bottomViewResourceType = resType;
+     m_bottomViewResourceQuantity = resQty;
+     m_bottomViewMessage = msg;

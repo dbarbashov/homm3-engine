@@ -1,0 +1,53 @@
+--- a/src/game.cpp
++++ b/src/game.cpp
+@@ -8324,6 +8324,9 @@
+ MAC_ADDRESS(0x0e1a24, 0x1d8)
+ void game::showComputerScreen()
+ {
++#ifdef HOMM3_SERVER
++    return; // AI blackout and progress widgets are presentation only.
++#endif
+     setComputerScreenWidgetsEnabled(0);
+ 
+     if (g_config.m_blackoutComputer && !g_currentPlayer->isHuman()) {
+--- a/src/cmbtmgr.cpp
++++ b/src/cmbtmgr.cpp
+@@ -2488,7 +2488,7 @@
+     hexcell& anchor = m_cells[obstacle->m_hex];
+     anchor.m_attributes &= ~hexcell::obstacleOrigin;
+     anchor.m_obstacleIndex = -1;
+-    ResourceManager::Dispose(obstacle->m_sprite);
++    if (obstacle->m_sprite) ResourceManager::Dispose(obstacle->m_sprite);
+     obstacle->m_sprite = 0;
+ }
+ 
+--- a/src/events.cpp
++++ b/src/events.cpp
+@@ -6092,11 +6092,9 @@
+     if (g_goSolo && g_goSoloTest) {
+         replay = 1;
+     }
+-    if (
+-#ifdef HOMM3_SERVER
+-        !Port::Authority::active() &&
+-#endif
+-        (Port::Fast::executing() || (!rightHuman && !leftHuman && !replay))) {
++    // Ordinary AI-versus-AI keeps the original quick resolution policy.
++    // Human battles reach the authoritative manual loop below.
++    if (Port::Fast::executing() || (!rightHuman && !leftHuman && !replay)) {
+         int winner;
+         NewmapCell* target = g_game->getCell(point);
+         if (aiQuickCombat(leftHero, rightHero, *rightArmyGroup, rightTown,
+--- a/src/spells.cpp
++++ b/src/spells.cpp
+@@ -1484,6 +1484,10 @@
+     // index and the obstacle's optional replacement effect.
+     case SPELL_REMOVE_OBSTACLE: {
+         int obstacleIndex = m_cells[targetIndex].m_obstacleIndex;
++        if (suppressCombatPresentation()) {
++            removeObstacle(obstacleIndex);
++            break;
++        }
+         int replacementEffect = getObstacle(obstacleIndex).m_dispelEffect;
+         spellEffect(traits->m_effect, targetIndex, 100, 0);
+         if (replacementEffect == -1) {

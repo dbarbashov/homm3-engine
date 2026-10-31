@@ -1,0 +1,103 @@
+--- a/src/town.cpp
++++ b/src/town.cpp
+@@ -718,7 +718,7 @@
+ void town::view(int alreadyFaded)
+ {
+ #ifdef HOMM3_SERVER
+-    if (Port::Authority::active()) return;
++    if (Port::Authority::active()) { Port::Authority::present("open_town",m_owner,m_id); return; }
+ #endif
+     int threshold = g_highMemBuffer + 0x514;
+     g_townViewActive = 1;
+--- a/src/events.cpp
++++ b/src/events.cpp
+@@ -1,5 +1,6 @@
+ #ifdef HOMM3_SERVER
+ #include "server_authority.h"
++#include "server_encounters.h"
+ #include "server_combat.h"
+ #endif
+ #include "fast_game.h"
+@@ -4839,6 +4840,12 @@
+         break;
+     }
+     case UNIVERSITY:
++#ifdef HOMM3_SERVER
++        if (Port::Authority::active() && humanPlayer) {
++            Port::Authority::universityEncounter(*currentHero,*cell->getUniversity());
++            g_game->setInfoFlag(UniversityInfo,g_netLocalGamePos);break;
++        }
++#endif
+         if (!humanPlayer || g_goSolo) {
+             aiVisitUniversity(currentHero,
+                                 cell->getUniversity());
+@@ -4867,6 +4874,13 @@
+             if (g_windowManager->m_dialogReturn != DIALOG_RETURN_ACCEPT)
+                 break;
+             short quantity = 4000;
++#ifdef HOMM3_SERVER
++            if (Port::Authority::active()) {
++                const int creatures[4]={CREATURE_BALLISTA,CREATURE_FIRST_AID_TENT,CREATURE_AMMO_CART,-1};
++                short* amounts[4]={&quantity,&quantity,&quantity,0};
++                Port::Authority::recruitEncounter(*currentHero,creatures,amounts,false,true);break;
++            }
++#endif
+             recruitUnit* unitRecruiter = new recruitUnit(
+                 currentHero, CREATURE_BALLISTA, &quantity,
+                 CREATURE_FIRST_AID_TENT, &quantity,
+@@ -4998,7 +5012,7 @@
+ void advManager::heroSwap(hero* leftHero, hero* rightHero)
+ {
+ #ifdef HOMM3_SERVER
+-    if (Port::Authority::active()) throw std::runtime_error("Hero exchange needs a typed server adapter");
++    if (Port::Authority::active()) { Port::Authority::present("hero_exchange",leftHero->m_owner,leftHero->m_id,rightHero->m_id); return; }
+ #endif
+     swapManager* manager = new swapManager(leftHero, rightHero);
+     if (!manager)
+@@ -5275,6 +5289,12 @@
+ MAC_ADDRESS(0x0b8914, 0xa8)
+ short advManager::recruitEvent(hero* who, TCreatureType creature, short available)
+ {
++#ifdef HOMM3_SERVER
++    if (Port::Authority::active() && who->belongsToHuman()) {
++        const int creatures[4]={creature,-1,-1,-1};short* amounts[4]={&available,0,0,0};
++        Port::Authority::recruitEncounter(*who,creatures,amounts);return available;
++    }
++#endif
+     if (who->belongsToHuman()) {
+         recruitUnit dialog(&who->m_army, 0, creature, &available,
+                            CREATURE_NONE, 0, CREATURE_NONE, 0,
+@@ -5329,6 +5349,13 @@
+             return;
+     }
+ 
++#ifdef HOMM3_SERVER
++    if (Port::Authority::active() && who->belongsToHuman()) {
++        const int creatures[4]={currentGenerator.m_type[0],currentGenerator.m_type[1],currentGenerator.m_type[2],currentGenerator.m_type[3]};
++        short* amounts[4]={&currentGenerator.m_population[0],&currentGenerator.m_population[1],&currentGenerator.m_population[2],&currentGenerator.m_population[3]};
++        Port::Authority::recruitEncounter(*who,creatures,amounts,currentGenerator.getOwner()!=g_netLocalGamePos&&currentGenerator.getOwner()>=0);return;
++    }
++#endif
+     recruitUnit* manager = new recruitUnit(&who->m_army, 0,
+         currentGenerator.m_type[0], &currentGenerator.m_population[0],
+         currentGenerator.m_type[1], &currentGenerator.m_population[1],
+--- a/src/recruit.cpp
++++ b/src/recruit.cpp
+@@ -1,4 +1,5 @@
+ #include "fast_game.h"
++#include "authority_client.h"
+ #include "text.h"
+ #include "va.h"
+ #include "includes.h"
+@@ -931,6 +932,11 @@
+                 if (m_numberToBuy == 0 && m_monType2 == CREATURE_NONE)
+                     return finishRecruitUnit(msg);
+ 
++                if (Port::AuthorityClient::recruitChoiceActive()) {
++                    Port::AuthorityClient::chooseRecruit(m_monsterType,m_numberToBuy);
++                    m_numberToBuy=0;
++                    return finishRecruitUnit(msg);
++                }
+                 if (Port::Fast::nativeUI()) {
+                     Port::Fast::requestRecruit(m_currArmyGroup,m_numAvail,m_monsterType,m_numberToBuy);
+                     m_numberToBuy=0;

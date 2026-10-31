@@ -1,0 +1,187 @@
+[
+  {
+    "name": "walk-00",
+    "key": "ArrowRight",
+    "ms": 2048
+  },
+  {
+    "name": "walk-01",
+    "key": "ArrowRight",
+    "ms": 2048
+  },
+  {
+    "name": "walk-02",
+    "key": "ArrowRight",
+    "ms": 2048
+  },
+  {
+    "name": "walk-03",
+    "key": "ArrowRight",
+    "ms": 2048
+  },
+  {
+    "name": "walk-04",
+    "key": "ArrowRight",
+    "ms": 2048
+  },
+  {
+    "name": "walk-05",
+    "key": "ArrowRight",
+    "ms": 2048
+  },
+  {
+    "name": "walk-06",
+    "key": "ArrowRight",
+    "ms": 2048
+  },
+  {
+    "name": "walk-07",
+    "key": "ArrowRight",
+    "ms": 2048
+  },
+  {
+    "name": "walk-08",
+    "key": "ArrowRight",
+    "ms": 2048
+  },
+  {
+    "name": "walk-09",
+    "key": "ArrowRight",
+    "ms": 2048
+  },
+  {
+    "name": "walk-10",
+    "key": "ArrowRight",
+    "ms": 2048
+  },
+  {
+    "name": "walk-11",
+    "key": "ArrowRight",
+    "ms": 2048
+  },
+  {
+    "name": "plan-route",
+    "map": [
+      23,
+      15
+    ],
+    "ms": 512
+  },
+  {
+    "name": "walk-route",
+    "map": [
+      23,
+      15
+    ],
+    "ms": 16000
+  },
+  {
+    "name": "exhausted-idle",
+    "ms": 512
+  },
+  {
+    "name": "end-red",
+    "key": "e",
+    "ms": 512
+  },
+  {
+    "name": "end-red-confirm",
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 2048
+  },
+  {
+    "name": "blue-accept-0",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 2048
+  },
+  {
+    "name": "blue-accept-1",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 2048
+  },
+  {
+    "name": "blue-accept-2",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 2048
+  },
+  {
+    "name": "blue-accept-3",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 2048
+  },
+  {
+    "name": "end-blue",
+    "seat": 1,
+    "key": "e",
+    "ms": 512
+  },
+  {
+    "name": "end-blue-confirm",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 2048
+  },
+  {
+    "name": "red-accept-0",
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "red-accept-1",
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "red-accept-2",
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "red-accept-3",
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "new-day-route",
+    "ms": 512
+  },
+  {
+    "name": "continue-route",
+    "key": "m",
+    "ms": 4096
+  }
+]

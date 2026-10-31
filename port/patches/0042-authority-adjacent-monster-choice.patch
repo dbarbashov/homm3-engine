@@ -1,0 +1,22 @@
+--- a/src/cursor.cpp
++++ b/src/cursor.cpp
+@@ -1,4 +1,7 @@
+ #include "authority_client.h"
++#ifdef HOMM3_SERVER
++#include "server_authority.h"
++#endif
+ #include "fast_game.h"
+ #include "town.h"
+ #include "va.h"
+@@ -783,6 +786,11 @@
+         NewmapCell* monsterCell = getCell(monster);
+         getCell(curr->getLocation());
+         doEventWanderingMonster(monsterCell, curr, monster,
++#ifdef HOMM3_SERVER
++                                Port::Authority::active()
++                                    ? g_currentPlayer->isHuman()
++                                    :
++#endif
+                                 g_currentPlayer->isLocalHuman()
+                                     && !g_goSolo);
+         *foughtBattle = 1;

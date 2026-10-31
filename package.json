@@ -1,0 +1,8 @@
+{
+  "name": "homm3-engine",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  }
+}

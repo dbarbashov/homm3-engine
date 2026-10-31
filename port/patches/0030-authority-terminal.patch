@@ -1,0 +1,19 @@
+--- a/src/kb.cpp
++++ b/src/kb.cpp
+@@ -1,5 +1,6 @@
+ #ifdef HOMM3_SERVER
+ #include "server_authority.h"
++#include "server_terminal.h"
+ #endif
+ #include "fast_game.h"
+ #include "frontend_bridge.h"
+@@ -3001,6 +3002,9 @@
+ MAC_ADDRESS(0x114cdc, 0x380)
+ void checkEndGame(int forceWin)
+ {
++#ifdef HOMM3_SERVER
++    if(Port::Authority::active()){Port::Authority::checkTerminal(forceWin);return;}
++#endif
+     int gameWon;
+     int gameLost;
+     int liveOpponents;

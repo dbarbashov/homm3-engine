@@ -1,0 +1,804 @@
+[
+  {
+    "name": "idle",
+    "ms": 512
+  },
+  {
+    "name": "handoff-01",
+    "seat": 0,
+    "key": "e",
+    "ms": 256
+  },
+  {
+    "name": "confirm-01",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1,
+      "game.player": 0
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-01-1",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-01-2",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-01-3",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-01-4",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096,
+    "expect_both": {
+      "game.player": 1,
+      "game.day": 1,
+      "game.week": 1
+    }
+  },
+  {
+    "name": "handoff-02",
+    "seat": 1,
+    "key": "e",
+    "ms": 256
+  },
+  {
+    "name": "confirm-02",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1,
+      "game.player": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-02-1",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-02-2",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-02-3",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-02-4",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096,
+    "expect_both": {
+      "game.player": 0,
+      "game.day": 2,
+      "game.week": 1
+    }
+  },
+  {
+    "name": "handoff-03",
+    "seat": 0,
+    "key": "e",
+    "ms": 256
+  },
+  {
+    "name": "confirm-03",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1,
+      "game.player": 0
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-03-1",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-03-2",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-03-3",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-03-4",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096,
+    "expect_both": {
+      "game.player": 1,
+      "game.day": 2,
+      "game.week": 1
+    }
+  },
+  {
+    "name": "handoff-04",
+    "seat": 1,
+    "key": "e",
+    "ms": 256
+  },
+  {
+    "name": "confirm-04",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1,
+      "game.player": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-04-1",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-04-2",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-04-3",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-04-4",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096,
+    "expect_both": {
+      "game.player": 0,
+      "game.day": 3,
+      "game.week": 1
+    }
+  },
+  {
+    "name": "handoff-05",
+    "seat": 0,
+    "key": "e",
+    "ms": 256
+  },
+  {
+    "name": "confirm-05",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1,
+      "game.player": 0
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-05-1",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-05-2",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-05-3",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-05-4",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096,
+    "expect_both": {
+      "game.player": 1,
+      "game.day": 3,
+      "game.week": 1
+    }
+  },
+  {
+    "name": "handoff-06",
+    "seat": 1,
+    "key": "e",
+    "ms": 256
+  },
+  {
+    "name": "confirm-06",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1,
+      "game.player": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-06-1",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-06-2",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-06-3",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-06-4",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096,
+    "expect_both": {
+      "game.player": 0,
+      "game.day": 4,
+      "game.week": 1
+    }
+  },
+  {
+    "name": "handoff-07",
+    "seat": 0,
+    "key": "e",
+    "ms": 256
+  },
+  {
+    "name": "confirm-07",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1,
+      "game.player": 0
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-07-1",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-07-2",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-07-3",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-07-4",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096,
+    "expect_both": {
+      "game.player": 1,
+      "game.day": 4,
+      "game.week": 1
+    }
+  },
+  {
+    "name": "handoff-08",
+    "seat": 1,
+    "key": "e",
+    "ms": 256
+  },
+  {
+    "name": "confirm-08",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1,
+      "game.player": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-08-1",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-08-2",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-08-3",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-08-4",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096,
+    "expect_both": {
+      "game.player": 0,
+      "game.day": 5,
+      "game.week": 1
+    }
+  },
+  {
+    "name": "handoff-09",
+    "seat": 0,
+    "key": "e",
+    "ms": 256
+  },
+  {
+    "name": "confirm-09",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1,
+      "game.player": 0
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-09-1",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-09-2",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-09-3",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-09-4",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096,
+    "expect_both": {
+      "game.player": 1,
+      "game.day": 5,
+      "game.week": 1
+    }
+  },
+  {
+    "name": "handoff-10",
+    "seat": 1,
+    "key": "e",
+    "ms": 256
+  },
+  {
+    "name": "confirm-10",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1,
+      "game.player": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-10-1",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-10-2",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-10-3",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-10-4",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096,
+    "expect_both": {
+      "game.player": 0,
+      "game.day": 6,
+      "game.week": 1
+    }
+  },
+  {
+    "name": "handoff-11",
+    "seat": 0,
+    "key": "e",
+    "ms": 256
+  },
+  {
+    "name": "confirm-11",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1,
+      "game.player": 0
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-11-1",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-11-2",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-11-3",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-11-4",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096,
+    "expect_both": {
+      "game.player": 1,
+      "game.day": 6,
+      "game.week": 1
+    }
+  },
+  {
+    "name": "handoff-12",
+    "seat": 1,
+    "key": "e",
+    "ms": 256
+  },
+  {
+    "name": "confirm-12",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1,
+      "game.player": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-12-1",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-12-2",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-12-3",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-12-4",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096,
+    "expect_both": {
+      "game.player": 0,
+      "game.day": 7,
+      "game.week": 1
+    }
+  },
+  {
+    "name": "handoff-13",
+    "seat": 0,
+    "key": "e",
+    "ms": 256
+  },
+  {
+    "name": "confirm-13",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1,
+      "game.player": 0
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-13-1",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-13-2",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-13-3",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-13-4",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096,
+    "expect_both": {
+      "game.player": 1,
+      "game.day": 7,
+      "game.week": 1
+    }
+  },
+  {
+    "name": "handoff-14",
+    "seat": 1,
+    "key": "e",
+    "ms": 256
+  },
+  {
+    "name": "confirm-14",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1,
+      "game.player": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-14-1",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-14-2",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-14-3",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-14-4",
+    "seat": 0,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096,
+    "expect_both": {
+      "game.player": 0,
+      "game.day": 1,
+      "game.week": 2
+    }
+  }
+]

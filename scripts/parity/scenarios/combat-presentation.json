@@ -1,0 +1,163 @@
+[
+  {
+    "name": "move-out",
+    "key": "ArrowDown",
+    "ms": 1024,
+    "expect": {
+      "game.y": 6
+    }
+  },
+  {
+    "name": "approach",
+    "key": "ArrowDown",
+    "ms": 1024,
+    "expect": {
+      "game.y": 7
+    }
+  },
+  {
+    "name": "encounter",
+    "key": "End",
+    "ms": 8192
+  },
+  {
+    "name": "encounter-confirm",
+    "key": "Enter",
+    "ms": 20000,
+    "expect": {
+      "game.combat": 1
+    },
+    "until": {
+      "game.combat": 1,
+      "combat.control": true,
+      "combat.processing": false,
+      "combat.slot": 0
+    }
+  },
+  {
+    "name": "battle-hover",
+    "target": [
+      0,
+      0
+    ],
+    "hover": true,
+    "ms": 256
+  },
+  {
+    "name": "battle-fidget",
+    "ms": 5000
+  },
+  {
+    "name": "battle-wait",
+    "click": [
+      720,
+      575
+    ],
+    "ms": 20000,
+    "expect": {
+      "game.combat": 1
+    },
+    "until": {
+      "game.combat": 1,
+      "combat.control": true,
+      "combat.processing": false,
+      "combat.slot": 1
+    }
+  },
+  {
+    "name": "battle-defend",
+    "click": [
+      770,
+      575
+    ],
+    "ms": 20000,
+    "expect": {
+      "game.combat": 1
+    },
+    "until": {
+      "game.combat": 1,
+      "combat.control": true,
+      "combat.processing": false,
+      "combat.slot": 2
+    }
+  },
+  {
+    "name": "spellbook",
+    "click": [
+      668,
+      575
+    ],
+    "ms": 512,
+    "expect": {
+      "hd.layers": 2
+    }
+  },
+  {
+    "name": "select-haste",
+    "spell": 53,
+    "ms": 512,
+    "expect": {
+      "hd.layers": 1
+    }
+  },
+  {
+    "name": "cast-haste",
+    "target": [
+      0,
+      0
+    ],
+    "ms": 20000,
+    "expect": {
+      "combat.stacks.0.effects": 1
+    },
+    "until": {
+      "game.combat": 1,
+      "combat.control": true,
+      "combat.processing": false,
+      "combat.slot": 2
+    }
+  },
+  {
+    "name": "second-phase",
+    "click": [
+      720,
+      575
+    ],
+    "ms": 20000,
+    "until": {
+      "combat.control": true,
+      "combat.processing": false,
+      "combat.secondPhase": true
+    }
+  },
+  {
+    "name": "wait-disabled",
+    "click": [
+      720,
+      575
+    ],
+    "ms": 1024,
+    "expect": {
+      "combat.secondPhase": true
+    }
+  },
+  {
+    "name": "battle-auto",
+    "click": [
+      178,
+      575
+    ],
+    "ms": 20000,
+    "expect": {
+      "screen": "combat-results"
+    }
+  },
+  {
+    "name": "battle-dismiss",
+    "key": "Enter",
+    "ms": 2048,
+    "expect": {
+      "game.combat": 0
+    }
+  }
+]

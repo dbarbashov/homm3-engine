@@ -1,0 +1,55 @@
+--- a/src/cursor.cpp
++++ b/src/cursor.cpp
+@@ -430,7 +430,15 @@
+ {
+     if (Port::Fast::nativeUI()) {
+         const int id=g_currentPlayer->m_currHeroId;
+-        const bool ok=Port::Fast::request(1,id,direction);
++        // Keep the original quiet exhaustion boundary; never submit a doomed
++        // step or erase the selected destination at the next-day route edge.
++        if(Port::AuthorityClient::enabled() && id>=0){
++            auto& h=g_game->m_heroes[id];
++            if(h.m_movePoints<=0 || h.m_movePoints<getTerrainCost(&h,h.getLocation(),direction,h.m_movePoints)){
++                *noMove=1;*foughtBattle=0;triggerPoint.m_x=-1;stopCursor(true);return nullptr;
++            }
++        }
++        const bool ok=Port::AuthorityClient::enabled()?Port::AuthorityClient::requestMove(id,direction,standEnd):Port::Fast::request(1,id,direction);
+         *noMove=!ok || id<0 || g_game->m_heroes[id].m_owner!=g_netLocalGamePos;
+         if(ok && !Port::AuthorityClient::enabled() && id>=0 && g_game->m_heroes[id].m_owner==g_netLocalGamePos){
+             auto& h=g_game->m_heroes[id];
+--- a/src/events.cpp
++++ b/src/events.cpp
+@@ -594,7 +594,7 @@
+                                 int fizzleSound)
+ {
+ #ifdef HOMM3_SERVER
+-    if (Port::Authority::active()) { eraseObj(eventCell,point,true); return; }
++    if (Port::Authority::active()) { eraseObj(eventCell,point,true); fizzleCenter(fizzleSound); return; }
+ #endif
+     unsigned char savedFlag = g_colorCyclingEnabled;
+     g_colorCyclingEnabled = 0;
+@@ -4950,9 +4950,7 @@
+     hero* currentHero = g_game->getCurrHero();
+ 
+     reseed(0, 0);
+-#ifndef HOMM3_SERVER
+     eventSound(eventCell);
+-#endif
+     dispatchEvent(currentHero, eventCell, point, 1);
+ 
+ #ifndef HOMM3_SERVER
+@@ -5816,7 +5814,13 @@
+ void advManager::fizzleCenter(int whichSound)
+ {
+ #ifdef HOMM3_SERVER
+-    if (Port::Authority::active()) return;
++    if (Port::Authority::active()) {
++        if(g_currentPlayer && g_currentPlayer->isHuman()){
++            if(whichSound==FIZZLE_SOUND_KILL_FADE)Port::Authority::adventureSound("killfade.82M");
++            else if(whichSound==FIZZLE_SOUND_PICKUP){char name[32];std::snprintf(name,sizeof(name),"pickup%02d.82M",random(1,7));Port::Authority::adventureSound(name);}
++        }
++        return;
++    }
+ #endif
+     if (!g_completeDrawEnabled)
+         return;

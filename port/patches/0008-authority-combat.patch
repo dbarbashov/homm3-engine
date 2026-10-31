@@ -1,0 +1,1424 @@
+--- a/include/cmbtmgr.h
++++ b/include/cmbtmgr.h
+@@ -12,6 +12,8 @@
+ #include "hexcell.h"
+ #include "struct.h"
+ #include "winmgr.h"
++
++namespace Port { namespace Authority { struct CombatEngine; } }
+ 
+ class Bitmap16Bit;
+ class CNetMsgHandlerPause;
+@@ -1093,6 +1095,15 @@
+     int experienceValueOfStack(int whichGroup);
+     void makeCreaturesVanish();
+     bool isQuickCombat() const;
++    // Presentation suppression is independent of the battle rules (notably tactics).
++    bool suppressCombatPresentation() const {
++#ifdef HOMM3_SERVER
++        return true;
++#else
++        return isQuickCombat();
++#endif
++    }
++    friend struct Port::Authority::CombatEngine;
+     // ?show_eagle_eye@combatManager@@AAAXHH@Z (two ints),
+     // ?DoVictory@combatManager@@QAAXH@Z (one int) and
+     // ?show_looted_artifacts@combatManager@@AAAXAAV?$vector@Utype_artifact@@...@Z,
+--- a/src/army.cpp
++++ b/src/army.cpp
+@@ -114,7 +114,7 @@
+ MAC_ADDRESS(0x048ec4, 0x68)
+ void army::playSample(army::TSampleID id)
+ {
+-    if (!g_combatManager->isQuickCombat()
++    if (!g_combatManager->suppressCombatPresentation()
+         && m_armySample[id]) {
+         g_soundManager->memorySample(m_armySample[id]);
+     }
+@@ -125,7 +125,7 @@
+ MAC_ADDRESS(0x048f2c, 0x6c)
+ void army::stopSample(army::TSampleID id)
+ {
+-    if (!g_combatManager->isQuickCombat()
++    if (!g_combatManager->suppressCombatPresentation()
+         && m_armySample[id]) {
+         g_soundManager->stopSample(m_armySample[id]->memSample.memHSample);
+     }
+@@ -169,7 +169,7 @@
+ MAC_ADDRESS(0x048f98, 0x70)
+ inline void army::waitSample(army::TSampleID which)
+ {
+-    if (!g_combatManager->isQuickCombat()
++    if (!g_combatManager->suppressCombatPresentation()
+         && m_armySample[which]) {
+         g_soundManager->waitSample(m_armySample[which]->memSample.memHSample, -1);
+     }
+@@ -261,7 +261,7 @@
+ MAC_ADDRESS(0x04941c, 0x774)
+ void army::loadResources()
+ {
+-    if (g_combatManager->isQuickCombat())
++    if (g_combatManager->suppressCombatPresentation())
+         return;
+ 
+     memcpy(m_monFrameInfo.m_missileOffset, &g_monFrameInfo[m_creatureType],
+@@ -568,7 +568,7 @@
+     int powY;
+     if (g_combatManager->m_battleOver != 0)
+         return;
+-    if (g_combatManager->isQuickCombat())
++    if (g_combatManager->suppressCombatPresentation())
+         return;
+ 
+     y += m_ySpecialMod;
+@@ -926,7 +926,7 @@
+ MAC_ADDRESS(0x04ad08, 0x8c)
+ void army::endWalk()
+ {
+-    if (!g_combatManager->isQuickCombat()) {
++    if (!g_combatManager->suppressCombatPresentation()) {
+         playSample(POST_WALK_SAMPLE);
+         if (m_armySample[WALK_SAMPLE])
+             g_soundManager->stopSample(
+@@ -964,7 +964,7 @@
+         m_drawPriority = 3;
+     if (direction == COMBAT_DIRECTION_2 || direction == COMBAT_DIRECTION_3)
+         m_drawPriority = 7;
+-    if (!g_combatManager->isQuickCombat()) {
++    if (!g_combatManager->suppressCombatPresentation()) {
+         if (initialWalk) {
+             playSample(PRE_WALK_SAMPLE);
+             playAnimation(20, -1, 0);
+@@ -991,7 +991,7 @@
+ MAC_ADDRESS(0x04afa0, 0x68c)  // MAC_ABSTRACTION_FROM(tokens1:1b8626a2ce74,31.8986): Windows recovery of the SLimitData/s_combatAreaLimits identities and DC's else-if missile chain; CW reallocates the restructured body (masked 255 -> 241 of 419).
+ void army::animateMissile(army* armyToAttack)
+ {
+-    if (g_combatManager->isQuickCombat())
++    if (g_combatManager->suppressCombatPresentation())
+         return;
+ 
+     int targetX = armyToAttack->midX();
+@@ -1138,7 +1138,7 @@
+     if (m_creatureType == CREATURE_MAGOG) {
+         long effect = akSpellTraits[SPELL_FIREBALL].m_effect;
+         if (effect != -1
+-            && !g_combatManager->isQuickCombat()) {
++            && !g_combatManager->suppressCombatPresentation()) {
+             launchSample(akSpellTraits[SPELL_FIREBALL].m_sample, -1, 3);
+             CSprite* spr =
+                 ResourceManager::GetSprite(g_spellEffectTraits[effect]
+@@ -1198,7 +1198,7 @@
+                || m_creatureType == CREATURE_POWER_LICH) {
+         long effect = akSpellTraits[SPELL_DEATH_CLOUD].m_effect;
+         if (effect != -1
+-            && !g_combatManager->isQuickCombat()) {
++            && !g_combatManager->suppressCombatPresentation()) {
+             launchSample(akSpellTraits[SPELL_DEATH_CLOUD].m_sample, -1,
+                           3);
+             CSprite* spr =
+@@ -1261,7 +1261,7 @@
+         g_combatManager->powEffect(eSpellEffectNone, 0);
+         g_combatManager->damageMessage(getName(), m_numTroops, damage,
+                                         armyToAttack, killed);
+-        if (g_combatManager->isQuickCombat())
++        if (g_combatManager->suppressCombatPresentation())
+             return;
+         Port::traceCombat("shot-animation-end", group, index);
+         waitSample(SHOOT_SAMPLE);
+@@ -1510,12 +1510,12 @@
+     }
+     int killed = damage(damageAmount);
+     SAMPLE2 sample;
+-    if (!g_combatManager->isQuickCombat())
++    if (!g_combatManager->suppressCombatPresentation())
+         sample = loadPlaySample(akSpellTraits[SPELL_FIRE_SHIELD].m_sample);
+     g_combatManager->powEffect(eSpellEffectFireShield, 0);
+     g_combatManager->damageMessage(akSpellTraits[SPELL_FIRE_SHIELD].m_name, 1,
+                                     damageAmount, this, killed);
+-    if (!g_combatManager->isQuickCombat())
++    if (!g_combatManager->suppressCombatPresentation())
+         waitEndSample(sample, -1);
+ }
+ 
+@@ -1573,7 +1573,7 @@
+                         text += formatString(g_generalText->GetText(GENERAL_TEXT_LIFE_DRAIN_RAISE_MANY_SUFFIX_FORMAT),
+                                               deadVampires);
+                 }
+-                if (!g_combatManager->isQuickCombat()) {
++                if (!g_combatManager->suppressCombatPresentation()) {
+                     g_combatManager->m_combatWindow->combatMessage(
+                         text.c_str(), 1, 0);
+                     SAMPLE2 sample = loadPlaySample(
+@@ -1609,7 +1609,7 @@
+                                          target->getName(dead),
+                                          getName());
+                 SAMPLE2 sample;
+-                if (!g_combatManager->isQuickCombat()) {
++                if (!g_combatManager->suppressCombatPresentation()) {
+                     g_combatManager->m_combatWindow->combatMessage(
+                         text.c_str(), 1, 0);
+                     sample = loadPlaySample(
+@@ -1618,7 +1618,7 @@
+                 }
+                 target->damage(damage);
+                 g_combatManager->powEffect(eSpellEffectNone, 1);
+-                if (!g_combatManager->isQuickCombat())
++                if (!g_combatManager->suppressCombatPresentation())
+                     waitEndSample(sample, -1);
+             }
+         }
+@@ -1636,7 +1636,7 @@
+                 if (damage > 0) {
+                     std::string text;
+                     SAMPLE2 sample;
+-                    if (!g_combatManager->isQuickCombat()) {
++                    if (!g_combatManager->suppressCombatPresentation()) {
+                         text = formatString(
+                             g_generalText->GetText(GENERAL_TEXT_LIGHTNING_STRIKE_FORMAT),
+                             target->getName());
+@@ -1654,7 +1654,7 @@
+                         damage, target, killed);
+                     target->m_showPowEffect = 1;
+                     g_combatManager->powEffect(eSpellEffectLightningDust, 1);
+-                    if (!g_combatManager->isQuickCombat())
++                    if (!g_combatManager->suppressCombatPresentation())
+                         waitEndSample(sample, -1);
+                 }
+             }
+@@ -1688,7 +1688,7 @@
+             if (damage > 0) {
+                 std::string text;
+                 SAMPLE2 sample;
+-                if (!g_combatManager->isQuickCombat())
++                if (!g_combatManager->suppressCombatPresentation())
+                     sample = loadPlaySample(
+                         akSpellTraits[SPELL_ACID_BREATH_DEFENSE]
+                             .m_sample);
+@@ -1696,7 +1696,7 @@
+                 g_combatManager->damageMessage(
+                     akSpellTraits[SPELL_ACID_BREATH_DEFENSE].m_name, 1,
+                     damage, target, killed);
+-                if (!g_combatManager->isQuickCombat()) {
++                if (!g_combatManager->suppressCombatPresentation()) {
+                     g_combatManager->spellEffect(81, target, 100, 0);
+                     waitEndSample(sample, -1);
+                 }
+@@ -1795,7 +1795,7 @@
+     g_combatManager->computeMaxExtent();
+     m_showAttackFrames = 1;
+     if (m_creatureType != CREATURE_HYDRA && m_creatureType != CREATURE_CHAOS_HYDRA
+-        && !g_combatManager->isQuickCombat()) {
++        && !g_combatManager->suppressCombatPresentation()) {
+         if (direction == COMBAT_DIRECTION_WIDE_UPPER
+             || direction == COMBAT_DIRECTION_5
+             || direction == COMBAT_DIRECTION_0) {
+@@ -2033,7 +2033,7 @@
+         // Mac 0x4e084 calls sRandom; Windows folds its body with random.
+         if (sRandom(1, 24) <= min(m_luck, 3)) {
+             m_luckStatus = 1;
+-            if (!g_combatManager->isQuickCombat()) {
++            if (!g_combatManager->suppressCombatPresentation()) {
+                 launchSample(DATA_COMPGEN(0x00660a20, goodLuckSampleName,
+                                            "goodluck.82m"),
+                               -1, 3);
+@@ -2522,7 +2522,7 @@
+         if (hates) {
+             bonus += baseDamage / 2;
+             if (announce) {
+-                if (!g_combatManager->isQuickCombat()) {
++                if (!g_combatManager->suppressCombatPresentation()) {
+                     std::string text;
+                     if (m_numTroops == 1)
+                         text = formatString(
+@@ -2590,7 +2590,7 @@
+         if (!simulateOnly
+             && sRandom(1, 100) <= g_artilleryDoubleChances[mastery]) {
+             result += baseDamage;
+-            if (!g_combatManager->isQuickCombat()) {
++            if (!g_combatManager->suppressCombatPresentation()) {
+                 std::string text;
+                 const char* creatureName;
+                 creatureName = getName();
+@@ -2606,7 +2606,7 @@
+     case CREATURE_DREAD_KNIGHT:
+         if (!simulateOnly && sRandom(1, 100) <= 20) {
+             result += baseDamage;
+-            if (!g_combatManager->isQuickCombat()) {
++            if (!g_combatManager->suppressCombatPresentation()) {
+                 std::string text;
+                 if (m_numTroops == 1)
+                     text = formatString((*g_generalText)[GENERAL_TEXT_DOUBLE_DAMAGE_ONE_FORMAT],
+@@ -3646,7 +3646,7 @@
+ MAC_ADDRESS(0x051fa4, 0x64c)  // anchor-callee
+ void army::attackWall(TWallTargetId wall, long levelsDestroyed)
+ {
+-    if (g_combatManager->isQuickCombat()) {
++    if (g_combatManager->suppressCombatPresentation()) {
+         g_combatManager->damageWall(wall, levelsDestroyed);
+         return;
+     }
+@@ -3951,7 +3951,7 @@
+ MAC_ADDRESS(0x052aac, 0x15c)
+ void army::setupAnimation()
+ {
+-    if (g_combatManager->isQuickCombat())
++    if (g_combatManager->suppressCombatPresentation())
+         return;
+     hexcell* cell = &g_combatManager->m_cells[m_gridIndex];
+     g_combatManager->m_extent = heroWindowManager::s_nullLimits;
+@@ -3979,7 +3979,7 @@
+ MAC_ADDRESS(0x052c08, 0x420)
+ void army::playAnimation(int sequence, int nframes, int startFrame)
+ {
+-    if (g_combatManager->isQuickCombat())
++    if (g_combatManager->suppressCombatPresentation())
+         return;
+     if (nframes < 0)
+         nframes = m_stdIcon->GetNumFrames(sequence) - startFrame;
+@@ -4132,7 +4132,7 @@
+             long heal = m_topCreatureDamage;
+             long amount = heal > 50 ? 50 : heal;
+             m_topCreatureDamage = heal - amount;
+-            if (!g_combatManager->isQuickCombat()) {
++            if (!g_combatManager->suppressCombatPresentation()) {
+                 SAMPLE2 sample = loadPlaySample(
+                     DATA_COMPGEN(0x00660a94, regenerSampleName,
+                                  "Regener.wav"));
+@@ -4194,13 +4194,13 @@
+             m_showPowEffect = 1;
+             m_someUnitsDamaged = 1;
+             SAMPLE2 sample;
+-            if (!g_combatManager->isQuickCombat()) {
++            if (!g_combatManager->suppressCombatPresentation()) {
+                 sample = loadPlaySample(
+                     DATA_COMPGEN(0x00660aa0, poisonWaveName, "Poison.wav"));
+                 g_combatManager->showSpellMessage(1, SPELL_POISON, this);
+             }
+             g_combatManager->powEffect(eSpellEffectPoison, 1);
+-            if (!g_combatManager->isQuickCombat())
++            if (!g_combatManager->suppressCombatPresentation())
+                 waitEndSample(sample, -1);
+         }
+     }
+@@ -4283,7 +4283,7 @@
+         }
+     }
+ 
+-    if (g_combatManager->isQuickCombat())
++    if (g_combatManager->suppressCombatPresentation())
+         return;
+     if (g_combatManager->IsHuman[getControllingSide()]) {
+         const char* fmt =
+@@ -4358,11 +4358,11 @@
+     if (!target)
+         return;
+     SAMPLE2 sound;
+-    if (!g_combatManager->isQuickCombat())
++    if (!g_combatManager->suppressCombatPresentation())
+         sound = loadPlaySample(DATA_COMPGEN(
+             0x00660af4, resurrectSampleName, "Resurect.wav"));
+     g_combatManager->resurrect(target, m_numTroops * 100, 0);
+-    if (!g_combatManager->isQuickCombat())
++    if (!g_combatManager->suppressCombatPresentation())
+         waitEndSample(sound, -1);
+ }
+ 
+@@ -4594,7 +4594,7 @@
+             break;
+     }
+ 
+-    if (!g_combatManager->isQuickCombat()) {
++    if (!g_combatManager->suppressCombatPresentation()) {
+         long side = getControllingSide();
+         army* stack = g_combatManager->m_armies[side];
+         for (long i = 0; i < g_combatManager->m_numArmies[side]; i++, stack++) {
+@@ -4618,7 +4618,7 @@
+ void army::castSpell(long hex)
+ {
+     long originalFacing = m_facing;
+-    if (!g_combatManager->isQuickCombat()) {
++    if (!g_combatManager->suppressCombatPresentation()) {
+         long targetX = g_combatManager->m_cells[hex].m_refX;
+         long targetY = g_combatManager->m_cells[hex].m_refY;
+         long myX = midX();
+@@ -4707,7 +4707,7 @@
+     waitSample(SHOOT_SAMPLE);
+     g_combatManager->m_extent = heroWindowManager::s_nullLimits;
+     if (originalFacing != m_facing
+-        && !g_combatManager->isQuickCombat())
++        && !g_combatManager->suppressCombatPresentation())
+         turn(1);
+ }
+ 
+--- a/src/cmbtmgr.cpp
++++ b/src/cmbtmgr.cpp
+@@ -663,7 +663,7 @@
+     g_soundManager->stopAllSamples(1);
+     ResourceManager::del_Spr_from_Cache();  // DC cmbtmgr.cpp:599
+ 
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         char name[20];
+         sprintf(name,
+                 DATA_COMPGEN(0x0066fee8, battleSampleFormat,
+@@ -708,7 +708,7 @@
+     g_chatMan.pauseTimeOuts();
+     m_combatShowIt = 1;
+ 
+-    if (isQuickCombat()) {
++    if (suppressCombatPresentation()) {
+         m_combatWindow = 0;
+     } else {
+         m_combatWindow = new TCombatWindow(m_creaturePlacement);
+@@ -719,7 +719,7 @@
+ 
+     updateArmyLuckAndMorale();
+     m_inSecondPhase = 0;
+-    if (m_creaturePlacement && !isQuickCombat()) {
++    if (m_creaturePlacement && !suppressCombatPresentation()) {
+         m_currentSide = m_placementBoundaryDepth <= 0;
+         if (!g_game->isLocalHuman(m_playerIds[m_currentSide])) {
+             m_combatWindow->widgetSetStatus(
+@@ -729,7 +729,7 @@
+         }
+     }
+ 
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         drawFrame(1, 0, 0, 0, 1, 0);
+         m_combatWindow->drawWindow(1, -65535, 65535);
+         g_timers[0] = GameTime::get();
+@@ -768,7 +768,7 @@
+             && g_game->isLocalHuman(m_playerIds[m_currentSide])
+             && g_game->m_players[m_playerIds[m_currentSide]]
+                    .m_placementHelpEnabled
+-            && !isQuickCombat()) {
++            && !suppressCombatPresentation()) {
+         normalDialogTimeOut(
+             g_generalText->GetText(GENERAL_TEXT_COMBAT_PLACEMENT_HELP),
+             1, 10000, -1, -1, -1, 0, -1, 0, -1, -1, 0);
+@@ -786,7 +786,7 @@
+ MAC_ADDRESS(0x06e7e4, 0x154)
+ void combatManager::close()
+ {
+-    if (!isQuickCombat())
++    if (!suppressCombatPresentation())
+         g_windowManager->fadeScreen(1, 4, 1);
+ 
+     g_combatActive = 0;
+@@ -1559,7 +1559,7 @@
+     if (sRandom(1, 24) > stack->getMorale(1))
+         return;
+     stack->m_monInfo.attributes = (stack->m_monInfo.attributes & ~creatureDone) | creatureMorale;
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         SAMPLE2 sample = loadPlaySample(
+             DATA_COMPGEN(0x0066ff6c, goodMoraleSampleName, "GoodMrle.wav"));
+         spellEffect(20, stack, 100, 0);
+@@ -1582,7 +1582,7 @@
+         if (sRandom(1, 12) <= -stack->getMorale(1)) {
+             if (IsHuman[group] || sRandom(1, 4) != 1) {
+                 stack->m_monInfo.attributes |= creatureDone;
+-                if (!isQuickCombat()) {
++                if (!suppressCombatPresentation()) {
+                     SAMPLE2 sample = loadPlaySample(DATA_COMPGEN(
+                         0x0066ff7c, badMoraleSampleName, "BadMrle.wav"));
+                     sprintf(g_text,
+@@ -1623,7 +1623,7 @@
+         return 0;
+ 
+     selected->m_monInfo.attributes |= creatureDone;
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         SAMPLE2 sample = loadPlaySample(DATA_COMPGEN(
+             0x0066ff88, fearSampleName, "Fear.wav"));
+         sprintf(g_text,
+@@ -1818,7 +1818,7 @@
+                 drained->m_mana = static_cast<short>(drained->m_mana - 2);
+                 if (drained->m_mana < 0)
+                     drained->m_mana = 0;
+-                if (!isQuickCombat()) {
++                if (!suppressCombatPresentation()) {
+                     SAMPLE2 sample = loadPlaySample(DATA_COMPGEN(
+                         0x0066ff94, manaDrainSampleName, "ManaDrai.wav"));
+                     std::string result;
+@@ -2039,7 +2039,7 @@
+     int startX;
+     int startY;
+ 
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         int destX = target->midX();
+         const int destY = target->midY();
+         int facing;
+@@ -2101,7 +2101,7 @@
+     target->cancelSpellType(ARMY_CANCEL_SPELLS_AFTER_DAMAGE);
+     powEffect(eSpellEffectNone, 1);
+ 
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         while (archer->m_frame
+                 < archer->m_sprite->GetNumFrames(armyDir) - 1) {
+             archer->m_frame++;
+@@ -2113,7 +2113,7 @@
+     archer->m_frame = 0;
+     drawFrame(1, 0, 0, 0, 1, 0);
+ 
+-    if (!isQuickCombat())
++    if (!suppressCombatPresentation())
+         waitEndSample(sample, -1);
+ }
+ 
+@@ -2221,7 +2221,7 @@
+             }
+ 
+             TObstacle obstacle;
+-            obstacle.m_sprite = ResourceManager::GetSprite(shape->m_spriteName);
++            obstacle.m_sprite = suppressCombatPresentation() ? nullptr : ResourceManager::GetSprite(shape->m_spriteName);
+             obstacle.m_shape = shape;
+             obstacle.m_hex = static_cast<unsigned char>(hex);
+             obstacle.m_owner = -1;
+@@ -2317,7 +2317,7 @@
+ 
+                 TObstacle newLandmine;
+                 newLandmine.m_sprite =
+-                    ResourceManager::GetSprite(s_landMineInfo[0].m_spriteName);
++                    suppressCombatPresentation() ? nullptr : ResourceManager::GetSprite(s_landMineInfo[0].m_spriteName);
+                 newLandmine.m_shape = &s_landMineInfo[0];
+                 newLandmine.m_hex = static_cast<unsigned char>(hex);
+                 newLandmine.m_owner = 1;
+@@ -2506,9 +2506,9 @@
+         akCreatureTypeTraits[info.m_creatureType].m_sprite_name;
+ 
+     archer->m_type = info.m_creatureType;
+-    locals.m_sprite = ResourceManager::GetSprite(locals.m_spriteName);
++    locals.m_sprite = suppressCombatPresentation() ? nullptr : ResourceManager::GetSprite(locals.m_spriteName);
+     archer->m_sprite = locals.m_sprite;
+-    locals.m_sprite = ResourceManager::GetSprite(info.m_missileName);
++    locals.m_sprite = suppressCombatPresentation() ? nullptr : ResourceManager::GetSprite(info.m_missileName);
+     archer->m_missile = locals.m_sprite;
+     archer->m_x = info.m_mainBuildingX;
+     archer->m_y = info.m_mainBuildingY;
+@@ -2520,9 +2520,9 @@
+         return;
+ 
+     m_archers[eArcherLowerTower].m_type = info.m_creatureType;
+-    locals.m_sprite = ResourceManager::GetSprite(locals.m_spriteName);
++    locals.m_sprite = suppressCombatPresentation() ? nullptr : ResourceManager::GetSprite(locals.m_spriteName);
+     m_archers[eArcherLowerTower].m_sprite = locals.m_sprite;
+-    locals.m_sprite = ResourceManager::GetSprite(info.m_missileName);
++    locals.m_sprite = suppressCombatPresentation() ? nullptr : ResourceManager::GetSprite(info.m_missileName);
+     m_archers[eArcherLowerTower].m_missile = locals.m_sprite;
+     m_archers[eArcherLowerTower].m_x = info.m_lowerTowerX;
+     m_archers[eArcherLowerTower].m_y = info.m_lowerTowerY;
+@@ -2531,9 +2531,9 @@
+     m_archers[eArcherLowerTower].m_frame = 0;
+ 
+     m_archers[eArcherUpperTower].m_type = info.m_creatureType;
+-    locals.m_sprite = ResourceManager::GetSprite(locals.m_spriteName);
++    locals.m_sprite = suppressCombatPresentation() ? nullptr : ResourceManager::GetSprite(locals.m_spriteName);
+     m_archers[eArcherUpperTower].m_sprite = locals.m_sprite;
+-    locals.m_sprite = ResourceManager::GetSprite(info.m_missileName);
++    locals.m_sprite = suppressCombatPresentation() ? nullptr : ResourceManager::GetSprite(info.m_missileName);
+     m_archers[eArcherUpperTower].m_missile = locals.m_sprite;
+     m_archers[eArcherUpperTower].m_x = info.m_upperTowerX;
+     m_archers[eArcherUpperTower].m_y = info.m_upperTowerY;
+@@ -2566,7 +2566,7 @@
+     int height;
+     int side;
+     int index;
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         resetLimitCreature();
+         for (side = 0; side < 2; side++) {
+             for (index = 0; index < m_numArmies[side]; index++) {
+@@ -2596,7 +2596,7 @@
+         }
+     }
+ 
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         g_windowManager->saveFizzleSourceX(x, y, width, height);
+         drawFrame(0, 0, 1, 0, 1, 0);
+         g_windowManager->fizzleForwardX(
+@@ -2631,7 +2631,7 @@
+ MAC_ADDRESS(0x0733d0, 0xdc)
+ void combatManager::lowerDoor()
+ {
+-    if (isQuickCombat()) {
++    if (suppressCombatPresentation()) {
+         m_drawbridgeState = DRAWBRIDGE_DOWN;
+         return;
+     }
+@@ -2653,7 +2653,7 @@
+ MAC_ADDRESS(0x0734ac, 0xd0)
+ void combatManager::raiseDoor()
+ {
+-    if (isQuickCombat()) {
++    if (suppressCombatPresentation()) {
+         m_drawbridgeState = DRAWBRIDGE_UP;
+         return;
+     }
+@@ -2860,7 +2860,7 @@
+ void combatManager::shootBallisticMissile(int startX, int startY, int destX,
+                                           int destY, const CSprite* missile)
+ {
+-    if (isQuickCombat())
++    if (suppressCombatPresentation())
+         return;
+ 
+     const int deltaX = destX - startX;
+@@ -2926,7 +2926,7 @@
+                                          const float* angles,
+                                          const char* const* fileNames)
+ {
+-    if (isQuickCombat())
++    if (suppressCombatPresentation())
+         return;
+ 
+     const int deltaX = destX - startX;
+@@ -3038,7 +3038,7 @@
+ void combatManager::shootMissile(int startX, int startY, int destX, int destY,
+                                  const float* angles, const CSprite* missile)
+ {
+-    if (isQuickCombat())
++    if (suppressCombatPresentation())
+         return;
+ 
+     const int deltaX = destX - startX;
+@@ -3226,7 +3226,7 @@
+     int side;
+     int slot;
+ 
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         for (side = 0; side < 2; side++) {
+             for (slot = 0; slot < m_numArmies[side]; slot++) {
+                 army& stack = m_armies[side][slot];
+@@ -3342,7 +3342,7 @@
+                                             < stack.m_stdIcon->GetNumFrames(
+                                                 stack.m_currFrameType) - 1)))) {
+                             if (stack.m_currFrameType != stack.m_nextFrameType) {
+-                                if (!isQuickCombat()) {
++                                if (!suppressCombatPresentation()) {
+                                     if (stack.m_showAttackFrames)
+                                         stack.playSample(army::ATTACK_SAMPLE);
+                                     else if (stack.m_nextFrameType == cs_wince)
+@@ -3391,7 +3391,7 @@
+         }
+     }
+ 
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         int framesChanged = 1;
+         while (framesChanged) {
+             framesChanged = 0;
+@@ -3491,7 +3491,7 @@
+                 continue;
+ 
+             stack->m_monInfo.attributes |= creatureDone;
+-            if (!isQuickCombat())
++            if (!suppressCombatPresentation())
+                 launchSample(akSpellTraits[SPELL_RESURRECTION].m_sample,
+                               -1, 3);
+             resurrect(stack, stack->m_monInfo.hitPoints * resurrected, 0);
+@@ -3656,7 +3656,7 @@
+ MAC_ADDRESS(0x076204, 0x2c0)
+ void combatManager::damageMessage(const char* attacker, long attackerQty, long damage, const army* defender, long deaths)
+ {
+-    if (isQuickCombat())
++    if (suppressCombatPresentation())
+         return;
+ 
+     std::string message;
+@@ -3892,6 +3892,9 @@
+ MAC_ADDRESS(0x076bc8, 0xac)
+ bool combatManager::isQuickCombat() const
+ {
++#ifdef HOMM3_SERVER
++    return false; // Ordinary authority battles retain human/tactics rules.
++#endif
+     if (g_game->m_isTutorial)
+         return false;
+     if (!g_remoteOn || !IsHuman[0] || !IsHuman[1])
+--- a/src/command.cpp
++++ b/src/command.cpp
+@@ -217,7 +217,7 @@
+ MAC_ADDRESS(0x0822b4, 0xd0)
+ void combatManager::doAnimations()
+ {
+-    if (isQuickCombat())
++    if (suppressCombatPresentation())
+         return;
+ 
+     if (GameTime::isPast(g_timers[0])) {
+@@ -248,7 +248,7 @@
+     m_actingSide = 1;
+     m_actingSlot = 0;
+     m_turnNumber = 0;
+-    if (!isQuickCombat())
++    if (!suppressCombatPresentation())
+         m_combatWindow->endPlacementPhase();
+     resetRound();
+ }
+@@ -1195,7 +1195,7 @@
+     }
+ 
+     if (!m_creaturePlacement
+-            && !isQuickCombat()) {
++            && !suppressCombatPresentation()) {
+         m_combatWindow->combatMessage(
+             (*g_generalText)[GENERAL_TEXT_COMBAT_ROUND], 1, 0);
+     }
+@@ -1813,8 +1813,16 @@
+             m_heroes[1]->applyBattleLossTemps();
+     }
+ 
++#ifdef HOMM3_SERVER
++    // The ordinary experience/loot/necromancy path above already ran. Human
++    // experience is deferred by retail only for its result window.
++    if (winningGroup >= 0 && m_heroes[winningGroup] && IsLocalHuman[winningGroup])
++        m_heroes[winningGroup]->giveExperience(experience, 0, 1);
+     freeArmies();
+-    if (!isQuickCombat())
++    return;
++#endif
++    freeArmies();
++    if (!suppressCombatPresentation())
+         m_combatWindow->combatMessage("", 0, 0);
+     g_mouseManager->m_noChangePointer = 0;
+     g_mouseManager->setPointer(6, mouseManager::COMBAT_SET);
+@@ -1822,7 +1830,7 @@
+     // DC command.cpp:2710 follows ShowPointer with this header helper;
+     // Complete shares the pointer restoration before its result branches.
+     g_mouseManager->enable();
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         g_windowManager->m_screenBitmap->Darken(0, 0, 800, 600);
+         g_windowManager->updateScreen();
+     }
+@@ -1911,7 +1919,7 @@
+ MAC_ADDRESS(0x085d6c, 0xcc)
+ void combatManager::checkChangeSelector()
+ {
+-    if (isQuickCombat())
++    if (suppressCombatPresentation())
+         return;
+ 
+     army* currentArmy = getCurrentArmy();
+@@ -1953,7 +1961,7 @@
+ MAC_ADDRESS(0x085f28, 0x258)
+ void combatManager::checkChangeHighlighter(int currentIndex)
+ {
+-    if (isQuickCombat())
++    if (suppressCombatPresentation())
+         return;
+     if (m_battleOver)
+         return;
+@@ -2140,7 +2148,7 @@
+         g_inputManager->flush();
+ 
+     if (m_status == STATUS_ACTIVE
+-            && !isQuickCombat())
++            && !suppressCombatPresentation())
+         g_mouseManager->setPointer(6, mouseManager::COMBAT_SET);
+ 
+     checkChangeSelector();
+@@ -2263,7 +2271,7 @@
+ MAC_ADDRESS(0x086cf8, 0xb4)
+ void combatManager::resetMouse()
+ {
+-    if (isQuickCombat())
++    if (suppressCombatPresentation())
+         return;
+ 
+     if (m_thisNetHasControl && m_playerIds[m_currentSide] >= 0
+@@ -2348,7 +2356,7 @@
+         targetArmy->m_topCreatureDamage -= result;
+         currentArmy->m_monInfo.attributes |= creatureDone;
+ 
+-        if (!isQuickCombat()) {
++        if (!suppressCombatPresentation()) {
+             SAMPLE2 sample = loadPlaySample(
+                 DATA_COMPGEN(0x00660a94, regenerSampleName,
+                              "Regener.wav"));
+@@ -2376,7 +2384,7 @@
+ MAC_ADDRESS(0x0871d0, 0xb3c)  // anchor-callee exhaustive + single-fn gap
+ int combatManager::processNextAction(message& msg, bool automaticTurn)
+ {
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         m_combatWindow->clearCombatMessages();
+         m_combatWindow->m_heroSubWindows[0]->unShow();
+         m_combatWindow->m_heroSubWindows[1]->unShow();
+@@ -2387,7 +2395,7 @@
+     }
+ 
+     g_processingCombatAction = 1;
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         if (m_nextAction)
+             g_mouseManager->setPointer(6, mouseManager::COMBAT_SET);
+         updateMouseGrid(-1, 1);
+@@ -2537,7 +2545,7 @@
+                     message = formatString((*g_generalText)[GENERAL_TEXT_COMBAT_DEFEND_MANY_FORMAT],
+                                             currentArmy->getName(),
+                                             currentArmy->m_defendBonus);
+-                m_combatWindow->combatMessage(message.c_str(), 1, 0);
++                if (m_combatWindow) m_combatWindow->combatMessage(message.c_str(), 1, 0);
+             }
+             currentArmy->m_monInfo.defenseSkill += currentArmy->m_defendBonus;
+         }
+@@ -2556,7 +2564,7 @@
+             else
+                 message = formatString((*g_generalText)[GENERAL_TEXT_COMBAT_WAIT_MANY_FORMAT],
+                                         currentArmy->getName());
+-            m_combatWindow->combatMessage(message.c_str(), 1, 0);
++            if (m_combatWindow) m_combatWindow->combatMessage(message.c_str(), 1, 0);
+         }
+         memset(m_obstacleAttackVisited, 0, COMBAT_GRID_CELLS);
+         currentArmy->checkObstacleAttacks(0);
+@@ -2740,7 +2748,7 @@
+         m_numArmies[side]++;
+ 
+     if (fizzleItIn
+-            && !isQuickCombat()) {
++            && !suppressCombatPresentation()) {
+         resetLimitCreature();
+         markCreatureEffect(side, slot);
+         computeMaxExtent();
+--- a/src/drawing.cpp
++++ b/src/drawing.cpp
+@@ -319,7 +319,7 @@
+ void combatManager::combatMessage(int command)
+ {
+     if (!m_combatShowIt
+-            || isQuickCombat())
++            || suppressCombatPresentation())
+         return;
+ 
+     army* currentArmy = getCurrentArmy();
+@@ -478,7 +478,7 @@
+ MAC_ADDRESS(0x0a4ef0, 0x7c)  // MAC_ABSTRACTION_FROM(tokens1:a5bce575ad68,100.0000): restore DC 0x83e80's coordinate update overload; Mac expands the same bounds, but the wrapper changes width/height instruction scheduling.
+ void combatManager::updateCombatArea()
+ {
+-    if (!isQuickCombat()
++    if (!suppressCombatPresentation()
+             && m_combatShowIt) {
+         g_windowManager->updateScreen(
+             combatManager::s_combatAreaLimits.m_minX,
+@@ -604,7 +604,7 @@
+ MAC_ADDRESS(0x0a4f6c, 0x1c8)
+ void combatManager::setupGridForArmy(const army* thisArmy)
+ {
+-    if (isQuickCombat())
++    if (suppressCombatPresentation())
+         return;
+     if (thisArmy->m_creatureType == army::ARMY_CREATURE_ARROW_TOWER)
+         return;
+@@ -642,7 +642,7 @@
+ MAC_ADDRESS(0x0a5134, 0x4b8)
+ int combatManager::updateGrid(int postGridIsClean, int setupGrid)
+ {
+-    if (isQuickCombat())
++    if (suppressCombatPresentation())
+         return 0;
+ 
+     army* currentArmy = getCurrentArmy();
+@@ -761,7 +761,7 @@
+ MAC_ADDRESS(0x0a55ec, 0x230)
+ void combatManager::drawBackground()
+ {
+-    if (isQuickCombat())
++    if (suppressCombatPresentation())
+         return;
+     if (m_backgroundDrawn)
+         return;
+@@ -827,7 +827,7 @@
+     static std::vector<long> oldHexes;
+ 
+     if (m_battleOver
+-            || isQuickCombat()
++            || suppressCombatPresentation()
+             || !g_config.m_showCombatMouseHex)
+         return;
+     if (newMouseGridIndex == lastMouseGridIndex && !forceUpdate)
+@@ -957,7 +957,7 @@
+                               bool doDelayTil)
+ {
+     if (m_battleOver
+-            || isQuickCombat()
++            || suppressCombatPresentation()
+             || !m_combatShowIt)
+         return;
+ 
+@@ -1953,7 +1953,7 @@
+ void combatManager::spellEffect(int effect, army* targetArmy, int delay,
+                                 bool doWince)
+ {
+-    if (isQuickCombat())
++    if (suppressCombatPresentation())
+         return;
+     if (effect == -1)
+         return;
+@@ -2004,7 +2004,7 @@
+ void combatManager::spellEffect(int effect, int hex, int delay,
+                                 bool leaveLastFrame)
+ {
+-    if (isQuickCombat())
++    if (suppressCombatPresentation())
+         return;
+     if (effect == -1)
+         return;
+--- a/src/spells.cpp
++++ b/src/spells.cpp
+@@ -571,13 +571,13 @@
+ 
+     SAMPLE2 sample;
+ 
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         sample = loadPlaySample(
+             DATA_COMPGEN(0x00688410, landMineSoundName, "landkill.wav"));
+         currentArmy->m_showPowEffect = 1;
+     }
+     powEffect(eSpellEffectLandMineExplosion, 1);
+-    if (!isQuickCombat())
++    if (!suppressCombatPresentation())
+         waitEndSample(sample, -1);
+ 
+     if (currentArmy->m_numTroops > 0 && isWalking)
+@@ -629,7 +629,7 @@
+ MAC_ADDRESS(0x1904c8, 0x78)
+ void combatManager::animateMagicArrow(int x, int y, army* target)
+ {
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         shootAnimatedMissile(x, y, target->midX(), target->midY(), 5,
+                              g_magicArrowAngles, g_magicArrowSprites);
+     }
+@@ -697,7 +697,7 @@
+         castingHero->useSpell(manaCost);
+         m_spellsCast[m_currentSide] = 1;
+         if (g_game->isHuman(m_playerIds[m_currentSide]) && !m_debugNoSpellLimit
+-            && !isQuickCombat())
++            && !suppressCombatPresentation())
+             m_combatWindow->widgetSetStatus(0x7d8, 0x4008);
+     }
+ 
+@@ -715,8 +715,8 @@
+         target = 0;
+     }
+ 
+-    int castX;
+-    int castY;
++    int castX = 0;
++    int castY = 0;
+     if (!isMonsterSpell) {
+         monsterPower = m_spellPower[m_currentSide];
+         if (traits->m_flags & 4)
+@@ -726,7 +726,7 @@
+     // Dreamcast line 721 has the original `!bIsMonsterSpell` hero arm.
+     // Complete extends that exact arm for artifact casts; retail +0x2db
+     // tests the already-nonzero value against SPELL_CASTER_ARTIFACT.
+-    if (!isMonsterSpell || isMonsterSpell == SPELL_CASTER_ARTIFACT) {
++    if (!suppressCombatPresentation() && (!isMonsterSpell || isMonsterSpell == SPELL_CASTER_ARTIFACT)) {
+         if (m_currentSide == 0)
+             castX = g_combatHeroSprites[akHeroClassTraits[castingHero->m_heroClass].m_townType][
+                 akHeroTraits[castingHero->m_id].m_sex].m_castX - 43;
+@@ -746,7 +746,7 @@
+         }
+     } else {
+         army* caster = getCurrentArmy();
+-        if (!isQuickCombat()) {
++        if (!suppressCombatPresentation()) {
+             castX = caster->midX();
+             castY = caster->midY();
+         }
+@@ -781,7 +781,7 @@
+                                      isMonsterSpell);
+ 
+     if (spellWorks) {
+-        if (!isQuickCombat())
++        if (!suppressCombatPresentation())
+             launchSample(traits->m_sample, -1, 3);
+ 
+         switch (spellId) {
+@@ -792,7 +792,7 @@
+     case SPELL_QUICKSAND: {
+         const int nhexes = g_quicksandCountByMastery[mastery];
+         sample* sample2b;
+-        if (!isQuickCombat())
++        if (!suppressCombatPresentation())
+             sample2b = ResourceManager::GetSample(
+                 DATA_COMPGEN(0x006884a0, quicksandSampleName,
+                              "Quiksand.wav"));
+@@ -811,13 +811,13 @@
+                 break;
+ 
+             ds_memsample* placeSample;
+-            if (!isQuickCombat())
++            if (!suppressCombatPresentation())
+                 placeSample = g_soundManager->memorySample(sample2b);
+ 
+             spellEffect(traits->m_effect, hex, 100, 1);
+ 
+             TObstacle newQuicksand = {
+-                ResourceManager::GetSprite(s_quicksandInfo[0].m_spriteName),
++                suppressCombatPresentation() ? nullptr : ResourceManager::GetSprite(s_quicksandInfo[0].m_spriteName),
+                 &s_quicksandInfo[0],
+                 static_cast<unsigned char>(hex),
+                 static_cast<signed char>(m_currentSide),
+@@ -831,13 +831,13 @@
+             placeObstacle(newQuicksand, obstacleSlot, hex, hexcell::quicksand);
+             drawFrame(1, 0, 0, 0, 1, 0);
+ 
+-            if (!isQuickCombat())
++            if (!suppressCombatPresentation())
+                 g_soundManager->waitSample(placeSample, -1);
+         }
+         showSpellMessage(isMonsterSpell, spellId, 0);
+         // DC 860/936 names ResourceManager::Dispose. Complete Mac
+         // 0x190d64/0x190ff8 expands its null-guarded virtual disposal.
+-        if (!isQuickCombat())
++        if (!suppressCombatPresentation())
+             ResourceManager::Dispose(sample2b);
+         break;
+     }
+@@ -847,7 +847,7 @@
+         const int damage = computeSpellDamage(SPELL_LAND_MINE, monsterPower,
+                                               mastery, 0, 0, 0, 0);
+         sample* sample2b;
+-        if (!isQuickCombat())
++        if (!suppressCombatPresentation())
+             sample2b = ResourceManager::GetSample(
+                 DATA_COMPGEN(0x00688490, landMineSampleName,
+                              "landmine.wav"));
+@@ -866,13 +866,13 @@
+                 break;
+ 
+             ds_memsample* placeSample;
+-            if (!isQuickCombat())
++            if (!suppressCombatPresentation())
+                 placeSample = g_soundManager->memorySample(sample2b);
+ 
+             spellEffect(traits->m_effect, hex, 100, 1);
+ 
+             TObstacle newLandmine = {
+-                ResourceManager::GetSprite(s_landMineInfo[0].m_spriteName),
++                suppressCombatPresentation() ? nullptr : ResourceManager::GetSprite(s_landMineInfo[0].m_spriteName),
+                 &s_landMineInfo[0],
+                 static_cast<unsigned char>(hex),
+                 static_cast<signed char>(m_currentSide),
+@@ -886,13 +886,13 @@
+             placeObstacle(newLandmine, obstacleSlot, hex, hexcell::landMine);
+             drawFrame(1, 0, 0, 0, 1, 0);
+ 
+-            if (!isQuickCombat())
++            if (!suppressCombatPresentation())
+                 g_soundManager->waitSample(placeSample, -1);
+         }
+         showSpellMessage(isMonsterSpell, spellId, 0);
+         // DC 860/936 names ResourceManager::Dispose. Complete Mac
+         // 0x190d64/0x190ff8 expands its null-guarded virtual disposal.
+-        if (!isQuickCombat())
++        if (!suppressCombatPresentation())
+             ResourceManager::Dispose(sample2b);
+         break;
+     }
+@@ -906,7 +906,7 @@
+             shape = &s_wallObstacleInfo[1];
+ 
+         TObstacle newWall = {
+-            ResourceManager::GetSprite(shape->m_spriteName),
++            suppressCombatPresentation() ? nullptr : ResourceManager::GetSprite(shape->m_spriteName),
+             shape,
+             static_cast<unsigned char>(targetIndex),
+             static_cast<signed char>(m_currentSide),
+@@ -931,7 +931,7 @@
+             spellEffect(traits->m_effect, targetIndex, 100, 1);
+ 
+             TObstacle newWall = {
+-                ResourceManager::GetSprite(s_wallObstacleInfo[4].m_spriteName),
++                suppressCombatPresentation() ? nullptr : ResourceManager::GetSprite(s_wallObstacleInfo[4].m_spriteName),
+                 &s_wallObstacleInfo[4],
+                 static_cast<unsigned char>(
+                     getSpellWallHex(targetIndex, i, m_currentSide)),
+@@ -973,7 +973,7 @@
+     }
+ 
+     case SPELL_ICE_BOLT: {
+-        if (!isQuickCombat()) {
++        if (!suppressCombatPresentation()) {
+             shootAnimatedMissile(castX, castY, target->midX(), target->midY(),
+                                  5, g_iceBoltAngles, g_iceBoltSprites);
+         }
+@@ -982,14 +982,14 @@
+                                         target, 1);
+         int deaths = target->damage(damage);
+         SAMPLE2 iceraySample;
+-        if (!isQuickCombat()) {
++        if (!suppressCombatPresentation()) {
+             iceraySample = loadPlaySample(
+                 DATA_COMPGEN(0x00688480, iceRaySampleName,
+                              "IceRayEx.wav"));
+             target->m_showPowEffect = 1;
+         }
+         powEffect(traits->m_effect, 1);
+-        if (!isQuickCombat()) {
++        if (!suppressCombatPresentation()) {
+             damageMessage(traits->m_name, 1, damage, target, deaths);
+             waitEndSample(iceraySample, -1);
+         }
+@@ -1078,7 +1078,7 @@
+                 }
+             }
+         }
+-        if (!isQuickCombat()) {
++        if (!suppressCombatPresentation()) {
+             if (!multipleVictims && anyEffects) {
+                 sprintf(g_text, g_generalText->GetText(GENERAL_TEXT_DEATH_RIPPLE_DAMAGE_FORMAT), damage);
+             } else {
+@@ -1121,7 +1121,7 @@
+         }
+         if (anyEffects)
+             showMassSpell(m_effected, traits->m_effect, 1);
+-        if (!isQuickCombat()) {
++        if (!suppressCombatPresentation()) {
+             if (!multipleVictims && anyEffects) {
+                 sprintf(g_text, g_generalText->GetText(GENERAL_TEXT_DESTROY_UNDEAD_DAMAGE_FORMAT), traits->m_name,
+                         damage);
+@@ -1193,7 +1193,7 @@
+         target->setSpellInfluence(spellId, monsterPower, mastery,
+                                   castingHero);
+         showSpellMessage(isMonsterSpell, spellId, target);
+-        if (!isQuickCombat()) {
++        if (!suppressCombatPresentation()) {
+             target->m_monInfo.attributes |= creatureGreyColoring;
+             resetLimitCreature();
+             markCreatureEffect(target->group, target->index);
+@@ -1212,7 +1212,7 @@
+             target->setSpellInfluence(spellId, monsterPower, mastery,
+                                       castingHero);
+             showSpellMessage(isMonsterSpell, spellId, target);
+-            if (!isQuickCombat()) {
++            if (!suppressCombatPresentation()) {
+                 target->m_monInfo.attributes |= creatureRedColoring;
+                 resetLimitCreature();
+                 markCreatureEffect(target->group, target->index);
+@@ -1237,7 +1237,7 @@
+                                   monsterPower, m_currentSide,
+                                   isMonsterSpell);
+             showSpellMessage(isMonsterSpell, spellId, 0);
+-            if (!isQuickCombat()) {
++            if (!suppressCombatPresentation()) {
+                 resetLimitCreature();
+                 {
+                     for (int side = 0; side < 2; ++side) {
+@@ -1431,7 +1431,7 @@
+     // combat message guard. Retail fixes the defense arithmetic and the
+     // one-entry projectile tables.
+     case SPELL_DISRUPTING_RAY: {
+-        if (!isQuickCombat()) {
++        if (!suppressCombatPresentation()) {
+             shootAnimatedMissile(castX, castY, target->midX(),
+                                  target->midY(), 1,
+                                  g_disruptingRayAngles,
+@@ -1449,7 +1449,7 @@
+         spellEffect(traits->m_effect, target, 100, 0);
+         target->setSpellInfluence(spellId, monsterPower, mastery,
+                                   castingHero);
+-        if (!isQuickCombat()) {
++        if (!suppressCombatPresentation()) {
+             sprintf(g_text, g_generalText->GetText(GENERAL_TEXT_COMBAT_DISRUPTING_RAY_FORMAT),
+                     previousSkill - target->m_monInfo.defenseSkill);
+             m_combatWindow->combatMessage(g_text, 1, 0);
+@@ -1568,7 +1568,7 @@
+         if (target->m_monInfo.defenseSkill < 0)
+             target->m_monInfo.defenseSkill = 0;
+         spellEffect(traits->m_effect, target, 100, 0);
+-        if (!isQuickCombat()) {
++        if (!suppressCombatPresentation()) {
+             sprintf(g_text, g_generalText->GetText(GENERAL_TEXT_COMBAT_DISRUPTING_RAY_FORMAT),
+                     previousSkill - target->m_monInfo.defenseSkill);
+             m_combatWindow->combatMessage(
+@@ -1609,7 +1609,7 @@
+     // lookup as source boundaries. Retail folds GetNumFrames but preserves
+     // the same completion loop, state reset, final DrawFrame, and selector
+     // update in this order.
+-    if (!isMonsterSpell || isMonsterSpell == SPELL_CASTER_ARTIFACT) {
++    if (!suppressCombatPresentation() && (!isMonsterSpell || isMonsterSpell == SPELL_CASTER_ARTIFACT)) {
+         int nframes = cmbtHero[m_currentSide]->GetNumFrames(4);
+         for (int frame = g_combatHeroSprites[akHeroClassTraits[castingHero->m_heroClass].m_townType][
+                 akHeroTraits[castingHero->m_id].m_sex].m_castFrame;
+@@ -1646,7 +1646,7 @@
+ 
+         if (numFamiliars > 0) {
+             otherHero->m_mana += manaRecovered;
+-            if (!isQuickCombat()) {
++            if (!suppressCombatPresentation()) {
+                 std::string msg;
+                 if (numFamiliars == 1) {
+                     msg = formatString(g_generalText->GetText(GENERAL_TEXT_MANA_ABSORBED_ONE_FORMAT),
+@@ -2907,7 +2907,7 @@
+         } }
+     } }
+ 
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         loadSpellEffect(spellTraits.m_effect);
+         int maxFrames;
+         if (m_powSprite)
+@@ -3013,7 +3013,7 @@
+     if (bSomeCreaturesVanish)
+         makeCreaturesVanish();
+     if (damageDone
+-        && !isQuickCombat()) {
++        && !suppressCombatPresentation()) {
+         long totalDamage = computeSpellDamage(
+             SPELL_ARMAGEDDON, power, level, 0, 0, 0, 0);
+         sprintf(g_text, (*g_generalText)[GENERAL_TEXT_COMBAT_ARMAGEDDON_DAMAGE_FORMAT], totalDamage);
+@@ -3382,7 +3382,7 @@
+                            int segmentLength, int drawsPerSegment,
+                            int distortAlways, int delay, int flashLighten)
+ {
+-    if (isQuickCombat())
++    if (suppressCombatPresentation())
+         return;
+ 
+     if (handleResets)
+@@ -3694,7 +3694,7 @@
+     { for (int i = 0; i < g_chainLightningTargets[level]; i++) {
+         if (validHex(index)) {
+             army* target = m_cells[index].getArmy();
+-            if (!isQuickCombat()) {
++            if (!suppressCombatPresentation()) {
+                 if (i == 0) {
+                     spellEffect(37, target, 0, 0);
+                     curX = target->midX();
+@@ -3864,7 +3864,7 @@
+                                   int spellEffect, bool showWince)
+ {
+     int frames;
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         loadSpellEffect(spellEffect);
+         if (m_powSprite)
+             frames = m_powSprite->GetNumFrames(cs_walk);
+@@ -4118,7 +4118,7 @@
+         lowerDoor();
+     }
+     int count = akSpellTraits[spell].m_mastery_bonus[level] * spellPower;
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         m_combatWindow->combatMessage(
+             formatString((*g_generalText)[GENERAL_TEXT_SUMMON_CREATURES_FORMAT],
+                           m_heroes[m_currentSide]->m_name, count,
+@@ -4173,7 +4173,7 @@
+ void combatManager::demonicResurrection(const army* caster, army* target)
+ {
+     SAMPLE2 sound;
+-    if (!isQuickCombat())
++    if (!suppressCombatPresentation())
+         sound = loadPlaySample(
+             DATA_COMPGEN(0x00660af4, resurrectSampleName, "Resurect.wav"));
+ 
+@@ -4186,7 +4186,7 @@
+                            target->m_gridIndex, 0, 1);
+     demons->m_originalIndex = origPosition;
+     resetLimitCreature();
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         updateGrid(0, 1);
+         drawFrame(1, 0, 0, 0, 1, 0);
+         if (raised != 1)
+@@ -4258,7 +4258,7 @@
+     if (targetArmy->m_facing != 1 - targetArmy->group)
+         targetArmy->turn(0);
+ 
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         // DC's only named local is hex: each use recomputes the raised count.
+         if (targetArmy->m_numTroops - oldCount != 1)
+             sprintf(g_text, g_generalText->GetText(GENERAL_TEXT_UNDEAD_RISE_MANY_FORMAT),
+@@ -4329,7 +4329,7 @@
+ MAC_ADDRESS(0x198b78, 0x144)
+ inline void combatManager::showSpellCastFailure(army* targetArmy, int spellId)
+ {
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         SAMPLE2 sample = loadPlaySample(DATA_COMPGEN(
+             0x00688440, magicResistanceSampleName, "MagicRes.wav"));
+         sprintf(g_text, g_generalText->GetText(GENERAL_TEXT_MAGIC_RESISTANCE_FORMAT),
+@@ -4392,7 +4392,7 @@
+                                      targetArmy->m_creatureType);
+         damage = modifySpellDamageForSpells(damage, spellType, targetArmy);
+         if (printResult && damage != baseDamage
+-            && !isQuickCombat()) {
++            && !suppressCombatPresentation()) {
+             std::string message;
+             long delta = damage - baseDamage;
+             if (delta < 0) {
+@@ -4480,7 +4480,7 @@
+ {
+     // DC records damage[8] at procedure scope; initialization follows the shake.
+     int counts[WALL_TARGET_COUNT];
+-    if (!isQuickCombat()) {
++    if (!suppressCombatPresentation()) {
+         g_mouseManager->hidePointer();
+         m_saveScreenPostGrid->Grab(g_windowManager->m_screenBitmap, 0, 0);
+         const int shakeDelay = static_cast<int>(
+@@ -4529,7 +4529,7 @@
+     }
+ 
+     if (drawn != 0
+-        && !isQuickCombat()) {
++        && !suppressCombatPresentation()) {
+         const int frameDelay = static_cast<int>(
+             combatManager::s_combatSpeedMod[g_config.m_combatSpeed] * 15.0f);
+         CSprite* blast = ResourceManager::GetSprite("SGEXPL.DEF");
+@@ -4748,7 +4748,7 @@
+ void combatManager::spellTargetMessage(SpellID spellId, int targetIndex,
+                                        bool firstTarget)
+ {
+-    if (isQuickCombat())
++    if (suppressCombatPresentation())
+         return;
+ 
+     hexcell* cell = &m_cells[targetIndex];
+@@ -4859,7 +4859,7 @@
+ void combatManager::showSpellMessage(int isMonsterSpell, SpellID spellId,
+                                      army* targetArmy)
+ {
+-    if (isQuickCombat())
++    if (suppressCombatPresentation())
+         return;
+ 
+     const char* targetName;
+@@ -4989,6 +4989,9 @@
+ MAC_ADDRESS(0x19a9cc, 0xa0)
+ CSprite* combatManager::loadSpellEffect(int effect)
+ {
++#ifdef HOMM3_SERVER
++    return nullptr;
++#endif
+     if (m_powSpellEffect != effect) {
+         if (m_powSprite)
+             ResourceManager::Dispose(m_powSprite);
+--- a/src/events.cpp
++++ b/src/events.cpp
+@@ -1,5 +1,6 @@
+ #ifdef HOMM3_SERVER
+ #include "server_authority.h"
++#include "server_combat.h"
+ #endif
+ #include "fast_game.h"
+ #include "text.h"
+@@ -6091,7 +6092,11 @@
+     if (g_goSolo && g_goSoloTest) {
+         replay = 1;
+     }
+-    if (Port::Fast::executing() || (!rightHuman && !leftHuman && !replay)) {
++    if (
++#ifdef HOMM3_SERVER
++        !Port::Authority::active() &&
++#endif
++        (Port::Fast::executing() || (!rightHuman && !leftHuman && !replay))) {
+         int winner;
+         NewmapCell* target = g_game->getCell(point);
+         if (aiQuickCombat(leftHero, rightHero, *rightArmyGroup, rightTown,
+@@ -6117,6 +6122,22 @@
+     int savePlayer = g_netLocalGamePos;
+     int saveShowIt = g_completeDrawEnabled;
+     g_adventureCombatActive = 1;
++
++#ifdef HOMM3_SERVER
++    if (Port::Authority::active()) {
++        // Seed is internal; no legacy network combat init/result packet enters here.
++        g_combatManager->setupCombat(point, leftHero, leftArmyGroup, rightPlayer,
++            rightTown, rightHero, rightArmyGroup, point.m_x, point.m_y, seed, alternateLayout);
++        if (!leftHuman)
++            aiArrangeArmyForCombat(leftHero, rightHero, *rightArmyGroup);
++        if (!rightHuman && rightHero && (!leftHero ||
++            rightHero->getSecondarySkill(eSecSkillBattleTactics) >
++            leftHero->getSecondarySkill(eSecSkillBattleTactics)))
++            aiArrangeArmyForCombat(rightHero, leftHero, *leftArmyGroup);
++        Port::Authority::runCombat(*g_combatManager);
++        goto authorityCombatCompleted;
++    }
++#endif
+ 
+     if (leftPlayer >= 0 && rightPlayer >= 0
+         && g_game->isHuman(rightPlayer)) {
+@@ -6209,6 +6230,9 @@
+     g_mouseManager->setPointer(0, mouseManager::ADVENTURE_SET);
+     g_mouseManager->showPointer(1);
+     g_adventureGraphicsPreserveMode = 0;
++#ifdef HOMM3_SERVER
++authorityCombatCompleted:
++#endif
+     if (leftHero) {
+         leftHero->checkLevel();
+     }
+--- a/src/combatwindow.cpp
++++ b/src/combatwindow.cpp
+@@ -415,7 +415,7 @@
+ void TCombatWindow::combatMessage(const char* newText,
+                                    bool keep, bool priority)
+ {
+-    if (g_combatManager->isQuickCombat())
++    if (g_combatManager->suppressCombatPresentation())
+         return;
+     if (!m_controlSubWindow->m_rolloverWidget)
+         return;
+--- a/src/fly.cpp
++++ b/src/fly.cpp
+@@ -175,8 +175,12 @@
+     float stepY = static_cast<float>(spanY)
+                   / static_cast<float>(ttlLoops);
+     int loop;
+-
+-    if (!g_combatManager->isQuickCombat()) {
++#ifdef HOMM3_SERVER
++    // Grid occupancy is simulation state, even when the flight animation is skipped.
++    g_combatManager->removeArmyFromGrid(*this);
++#endif
++
++    if (!g_combatManager->suppressCombatPresentation()) {
+         m_isMoving = 1;
+         playSample(PRE_WALK_SAMPLE);
+         playAnimation(20, -1, 0);
+@@ -228,7 +232,7 @@
+     g_combatManager->placeArmyInGrid(*this, destIndex);
+     m_gridIndex = destIndex;
+ 
+-    if (!g_combatManager->isQuickCombat()) {
++    if (!g_combatManager->suppressCombatPresentation()) {
+         playSample(POST_WALK_SAMPLE);
+         g_soundManager->stopSample(m_armySample[WALK_SAMPLE]->memSample.memHSample);
+         playAnimation(21, -1, 0);
+@@ -283,7 +287,7 @@
+     if (turn)
+         this->turn(1);
+ 
+-    if (!g_combatManager->isQuickCombat()) {
++    if (!g_combatManager->suppressCombatPresentation()) {
+         playSample(PRE_WALK_SAMPLE);
+         playAnimation(20, -1, 0);
+     }
+@@ -292,12 +296,12 @@
+     g_combatManager->placeArmyInGrid(*this, destIndex);
+     m_gridIndex = destIndex;
+ 
+-    if (!g_combatManager->isQuickCombat()) {
++    if (!g_combatManager->suppressCombatPresentation()) {
+         playSample(POST_WALK_SAMPLE);
+         playAnimation(21, -1, 0);
+     }
+ 
+-    if (!g_combatManager->isQuickCombat())
++    if (!g_combatManager->suppressCombatPresentation())
+         playAnimation(2, 1, 0);
+ 
+     cancelSpellType(0);

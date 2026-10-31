@@ -1,0 +1,20 @@
+--- a/src/events.cpp
++++ b/src/events.cpp
+@@ -704,7 +704,7 @@
+             } else {
+                 currentHero->m_movePoints = 0;
+             }
+-            m_advWindow->updateHeroLocator(-1, 1, 1);
++            if (m_advWindow) m_advWindow->updateHeroLocator(-1, 1, 1);
+         }
+ 
+         currentHero->m_facing = m_cursorDirection;
+@@ -1511,7 +1511,7 @@
+         } else {
+             currentHero->m_movePoints = 0;
+         }
+-        m_advWindow->updateHeroLocator(-1, 1, 1);
++        if (m_advWindow) m_advWindow->updateHeroLocator(-1, 1, 1);
+     }
+ 
+     heroBoat->m_occupyingHero = currentHero->m_id;
