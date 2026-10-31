@@ -321,6 +321,7 @@ void exportFixture(const char* path){
         for(int y=13;y<=17;++y)for(int x=2;x<=33;++x){auto& c=*g_game->getCell(type_point(x,y,0));
             c.m_type=NOTHING;c.m_extraInfo=0;c.m_objectIndex=-1;c.m_objectTypeIndex=-1;c.m_objects.clear();
             c.m_cellFlags=0;c.m_passable=1;c.m_groundSet=eTerrainGrass;c.m_roadSet=0;c.m_riverSet=0;
+            if(std::getenv("HOMM3_HARNESS_TERRAIN")){c.m_groundSet=x<5?eTerrainGrass:x<7?eTerrainDirt:eTerrainSnow;c.m_groundIndex=0;}
             *getMapExtraPtr(x,y,0)=1;
         }
         h.m_x=3;h.m_y=15;h.m_z=0;h.obscureCell();g_game->setupAdjacentMons();

@@ -401,6 +401,32 @@ void advManager::animateMove(hero* curr, int direction, int xInc, int yInc)
     g_unnamed6968e8 = 0;
 }
 
+// Shared presentation tail for original and authoritative movement.
+void advManager::updateMovementSounds(hero* curr)
+{
+    type_point point = getMapCenter();
+    int ground = getCell(point)->m_groundSet;
+    if (ground != m_lastTerrain) {
+        m_lastTerrain = ground;
+        g_soundManager->switchAmbientMusic(g_terrainMusicIds[m_lastTerrain]);
+
+#ifndef HOMM3_SERVER
+        sample* walkSample = cursorSamples[
+            getCell(curr->getLocation())->m_groundSet];
+        if (curr->isFlying(0))
+            walkSample = cursorSamples[10];
+        walkSample->memSample.memLooping = 0;
+        if (m_cursorFrameCount) {
+            g_newWalkSample = walkSample;
+        } else {
+            g_newWalkSample = 0;
+            g_soundManager->stopSample(g_walkSample);
+            g_walkSample = g_soundManager->memorySample(walkSample);
+        }
+#endif
+    }
+}
+
 // Residual (89.8315%, polish-45): calls now pair 81/81 with ONE target-only
 // reference left - retail emits a SECOND full `return handle_stop_on_trigger`
 // copy (its own epilogue and `ret 0x1c`) for the HERO arm at retail fn+0x84d
@@ -677,29 +703,9 @@ NewmapCell* advManager::moveHero(int direction, bool standEnd, type_point& trigg
         updateScreen(0, 0);
     }
 
+    updateMovementSounds(curr);
+
     type_point point = getMapCenter();
-    int ground = getCell(point)->m_groundSet;
-    if (ground != m_lastTerrain) {
-        m_lastTerrain = ground;
-        g_soundManager->switchAmbientMusic(g_terrainMusicIds[m_lastTerrain]);
-
-#ifndef HOMM3_SERVER
-        sample* walkSample = cursorSamples[
-            getCell(curr->getLocation())->m_groundSet];
-        if (curr->isFlying(0))
-            walkSample = cursorSamples[10];
-        walkSample->memSample.memLooping = 0;
-        if (m_cursorFrameCount) {
-            g_newWalkSample = walkSample;
-        } else {
-            g_newWalkSample = 0;
-            g_soundManager->stopSample(g_walkSample);
-            g_walkSample = g_soundManager->memorySample(walkSample);
-        }
-#endif
-    }
-
-    point = getMapCenter();
     setEnvironmentOrigin(point, 0);
     m_scrollX = m_scrollY = 0;
 

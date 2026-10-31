@@ -14,6 +14,9 @@ def adventure(trace):
 def adventure_regressions(reference, candidate):
     """Town destinations and waiting-seat ambient policy, independent of pixels."""
     checks=[]
+    checks.append({'name':'single step: exact audio requests and onset',
+                   'passed':bool(reference['actions']['move/p0']['audioEvents']) and
+                   reference['actions']['move/p0']['audioEvents']==candidate['actions']['move/p0']['audioEvents']})
     for name in ['town-entry','garrison','visitor','town-exit']:
         def targets(trace):
             return {h['id']:h['target'] for h in trace['actions'][name+'/p0']['state']['adventure']['heroes']}

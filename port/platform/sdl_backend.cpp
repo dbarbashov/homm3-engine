@@ -311,7 +311,7 @@ static int pcScanCode(SDL_Scancode code){
     case SDL_SCANCODE_HOME:return 71;case SDL_SCANCODE_END:return 79;case SDL_SCANCODE_PAGEUP:return 73;case SDL_SCANCODE_PAGEDOWN:return 81;
     case SDL_SCANCODE_SPACE:return 57;case SDL_SCANCODE_UP:return 72;case SDL_SCANCODE_DOWN:return 80;case SDL_SCANCODE_LEFT:return 75;case SDL_SCANCODE_RIGHT:return 77;case SDL_SCANCODE_TAB:return 15;case SDL_SCANCODE_ESCAPE:return 1;case SDL_SCANCODE_N:return 49;case SDL_SCANCODE_S:return 31;case SDL_SCANCODE_M:return 50;case SDL_SCANCODE_T:return 20;case SDL_SCANCODE_L:return 38;case SDL_SCANCODE_H:return 35;case SDL_SCANCODE_C:return 46;case SDL_SCANCODE_F1:return 59;case SDL_SCANCODE_F4:return 62;case SDL_SCANCODE_RETURN:return 28;default:return 0;}
 }
-void process1WindowsMessage(){
+static void processWindowsMessages(bool wait){
 #ifdef HOMM3_SERVER
     // A headless rules process has no presentation/input loop to throttle.
     // IPC is serviced by its command/decision boundary, not the SDL window pump.
@@ -350,6 +350,7 @@ void process1WindowsMessage(){
 #ifdef HOMM3_FULL_GAME
     if(g_soundManager)g_soundManager->serviceSounds();
 #endif
+    if(!wait)return;
 #ifdef __EMSCRIPTEN__
     // WebGL back buffers are discarded after the browser composites a frame.
     // Keep the original framebuffer visible even while the game is idle.
@@ -441,6 +442,8 @@ void process1WindowsMessage(){
 #endif
 }
 
+void process1WindowsMessage(){processWindowsMessages(true);}
+void Port::pollInput(){processWindowsMessages(false);}
 
 #ifdef HOMM3_FULL_GAME
 int getDesktopWidth(){SDL_DisplayMode mode{};return SDL_GetCurrentDisplayMode(0,&mode)==0?mode.w:800;}

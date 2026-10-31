@@ -32,6 +32,7 @@
 #include "font.h"
 #include "mousemgr.h"
 #include "soundmgr.h"
+#include "sdl_backend.h"
 void popupPlayerTurnInfo();
 #include <vector>
 #include <stdexcept>
@@ -497,6 +498,7 @@ void tick(){
                 g_advManager->turnTo(direction);
                 g_advManager->animateMove(selected,direction,dx,dy);
                 g_advManager->stopCursor(!Fast::state().waiting||movementStandEnd);
+                g_advManager->updateMovementSounds(selected);
                 g_advManager->setEnvironmentOrigin(g_advManager->getMapCenter(),0);
             }
         }
@@ -531,7 +533,13 @@ void tick(){
         g_advManager->reseed(0,0);
         if(turn==actor&&selected&&selected->m_pathTargetX>=0&&selected->getTarget()!=selected->getLocation()){g_advManager->seedTo(selected->getTarget());g_advManager->showRoute(0,0,1);}
         g_advManager->forceNewHover();g_advManager->updateRadar(1,1,0,0,0);
-        g_advManager->redrawAdvScreen(1,0);g_advManager->updateScreen(1,0);viewInstalled=true;
+        g_advManager->redrawAdvScreen(1,0);
+        // redrawAdvScreen already commits the framebuffer. When a predicted
+        // step agrees with the projection, its animation has also pumped the
+        // clock; a second update adds an artificial frame to every route end.
+        if(!(movementRequestActive&&continuing&&samePosition&&previousMobile))
+            g_advManager->updateScreen(1,0);
+        viewInstalled=true;
         if(turn!=actor)g_mouseManager->setPointer(2,mouseManager::DEFAULT_SET);
     }
     pending.clear();applying=false;
@@ -544,7 +552,7 @@ void discardPendingActions(){
     // Discard queued commands while retaining button releases for the original
     // widget that initiated this synchronous request. Dropping its release
     // leaves WIDGET_SELECTED stuck after an army transfer.
-    process1WindowsMessage();
+    Port::pollInput();
     message releases[2];int count=0;
     for(int i=g_inputManager->m_head;i!=g_inputManager->m_tail;i=(i+1)%64){
         const auto& event=g_inputManager->m_buffer[i];
@@ -570,6 +578,7 @@ bool request(int op,int id,int a,int b,int c,int d,int e){
     // Predict presentation only on clear, disclosed, unguarded terrain. The
     // command is already on the wire; authority still owns cost and legality.
     hero* predicted=nullptr;type_point predictionStart;const auto predictionCamera=g_advManager->m_radarOrigin;int predictionFacing=0;
+    const int predictionTerrain=g_advManager->m_lastTerrain;
     if(op==1&&id>=0&&id<game::HERO_COUNT&&a>=0&&a<8&&HD::adventureVisible()){
         auto& h=g_game->m_heroes[id];const auto start=h.getLocation();
         const type_point dest(start.m_x+g_normalDirTable[a].m_x,start.m_y+g_normalDirTable[a].m_y,start.m_z);
@@ -579,7 +588,7 @@ bool request(int op,int id,int a,int b,int c,int d,int e){
                 predicted=&h;predictionStart=start;predictionFacing=h.m_facing;applying=true;
                 *g_advManager->getRouteArrayPtr(dest.m_x,dest.m_y,dest.m_z)=0;
                 h.m_facing=a;g_advManager->turnTo(a);g_advManager->animateMove(&h,a,g_normalDirTable[a].m_x,g_normalDirTable[a].m_y);
-                g_advManager->stopCursor(movementStandEnd);g_advManager->setEnvironmentOrigin(g_advManager->getMapCenter(),0);applying=false;
+                g_advManager->stopCursor(movementStandEnd);g_advManager->updateMovementSounds(&h);g_advManager->setEnvironmentOrigin(g_advManager->getMapCenter(),0);applying=false;
             }
         }
     }
@@ -587,12 +596,20 @@ bool request(int op,int id,int a,int b,int c,int d,int e){
     while(!failed&&!(result=EM_ASM_INT({return window.homm3Authority.result($0);},ticket))){
         // In-flight commands own the original UI continuation; no unrelated
         // window handler can run until the authoritative state is installed.
-        tick();Port::Harness::wait(8);
+        tick();
+        // Installing the projection can complete the command. Do not sleep
+        // another frame after the result has become usable.
+        if((result=EM_ASM_INT({return window.homm3Authority.result($0);},ticket)))break;
+        Port::Harness::wait(8);
     }
     tick();Fast::state().waiting=false;choosing=outerChoiceGuard;discardPendingActions();
     if(result<0&&predicted){
         predicted->m_x=predictionStart.m_x;predicted->m_y=predictionStart.m_y;predicted->m_z=predictionStart.m_z;predicted->m_facing=predictionFacing;
         g_advManager->m_radarOrigin=predictionCamera;g_advManager->stopCursor(true);g_advManager->reseed(0,0);
+        if(g_advManager->m_lastTerrain!=predictionTerrain){
+            g_advManager->m_lastTerrain=predictionTerrain;
+            g_soundManager->switchAmbientMusic(g_terrainMusicIds[predictionTerrain]);
+        }
         if(predicted->m_pathTargetX>=0){g_advManager->seedTo(predicted->getTarget());g_advManager->showRoute(0,0,1);}
         g_advManager->setEnvironmentOrigin(g_advManager->getMapCenter(),0);g_advManager->redrawAdvScreen(1,0);g_advManager->updateScreen(1,0);
     }
