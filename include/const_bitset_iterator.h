@@ -2,6 +2,8 @@
 #define HOMM3_CONST_BITSET_ITERATOR_H
 
 #include <bitset>
+#include <iterator>
+#include <stddef.h>
 
 // Retail 0x44d063..0x44d0bf compares both owner and offset with an end
 // iterator, searches through bitset::test, copies the found offset, then
@@ -10,6 +12,12 @@
 template<size_t N>
 class TConstBitsetIterator {
 public:
+    using iterator_category = std::input_iterator_tag;
+    using value_type = bool;
+    using difference_type = std::ptrdiff_t;
+    using pointer = void;
+    using reference = bool;
+
     TConstBitsetIterator(const std::bitset<N>& bits, size_t position)
         : m_bits(&bits), m_position(position) {}
     bool operator*() const { return m_bits->test(m_position); }
