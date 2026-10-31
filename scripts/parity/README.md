@@ -430,6 +430,15 @@ journal of serial IDs and original resource names; initial restore suppresses
 historical playback and later projections deduplicate it. Use paired current
 client/worker builds and a fresh preview room when testing these changes.
 
+Native fixture startup also pins the constructor seed to `manifest.seed` before
+loading GM2 and restoring its RNG sidecar. Restoring only the serialized world
+left seed-dependent pre-load map/AI initialization outside the fixture: different
+lobby seeds could change the week announcement after fourteen handoffs. The
+native `test-native-fixture.py` regression varies three lobby seeds and requires
+identical complete worker frames, initial state and RNG decision traces through
+the second week. `HOMM3_HARNESS_TRACE_RNG=1` records native adventure RNG decisions
+for this diagnostic; it is absent from normal builds.
+
 ## Interaction lifecycle
 
 Use `fixture.py --object 87` with `scenarios/shipyard.json`, `--object 79`

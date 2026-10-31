@@ -378,6 +378,7 @@ bool loadFixture(){
     rng=EM_ASM_INT({return window.homm3Harness.fixture.rng;});
 #else
     const char* state=std::getenv("HOMM3_HARNESS_RNG");if(!state)throw std::runtime_error("Save requires RNG sidecar");rng=std::stoul(state);
+    if(std::getenv("HOMM3_HARNESS_TRACE_RNG"))traceRandom=true;
 #endif
 #ifdef __EMSCRIPTEN__
     int setup[41];

@@ -27,6 +27,14 @@ args=p.parse_args();args.out=args.out.resolve();args.fixture=args.fixture.resolv
 if args.out.exists() and any(args.out.iterdir()):raise SystemExit('Choose a new output directory to preserve prior evidence')
 args.out.mkdir(parents=True,exist_ok=True)
 summary={'harnessPassed':True,'parityPassed':True,'runs':{}}
+if not args.quick:
+    with (args.out/'native-fixture.log').open('w') as log:
+        native=subprocess.run([sys.executable,str(ROOT/'scripts/parity/test-native-fixture.py'),
+            '--worker',str(args.worker.resolve()),'--runtime',str(args.runtime.resolve()),
+            '--fixture',str(args.fixture),'--out',str(args.out/'native-fixture')],
+            cwd=ROOT,stdout=log,stderr=subprocess.STDOUT)
+    summary['nativeFixturePassed']=native.returncode==0
+    summary['harnessPassed'] &= native.returncode==0
 suites=['combat'] if args.quick else ['combat','adventure','turns']
 for suite in suites+['repeat-'+name for name in suites]:
     repeating=suite.startswith('repeat-');scenario=suite.removeprefix('repeat-')
