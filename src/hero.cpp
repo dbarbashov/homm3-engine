@@ -1,5 +1,12 @@
+#include "authority_actions_client.h"
+#include "authority_client.h"
+#ifdef HOMM3_SERVER
+#include "server_authority.h"
+#endif
+#include "fast_game.h"
 #include "text.h"
 #include "va.h"
+#include "hd_army.h"
 #include "objnames.h"
 #include "includes.h"
 #include "homm3_limit.h"
@@ -1695,7 +1702,9 @@ void hero::deallocate(bool gameLoaded, bool remoteMove)
         if (oldOwner == g_netLocalGamePos)
             g_advManager->m_curHeroMobile = 0;
     }
+#ifndef HOMM3_SERVER
     g_advManager->m_advWindow->updateHeroLocators(0, 1, 1);
+#endif
     g_game->m_heroAvailability[m_id] = -1;
 
     if (g_combatRetreated || g_combatSurrendered) {
@@ -1968,6 +1977,11 @@ void hero::checkLevel()
                     m_lastMagicSchoolLevel = m_level;
             }
 
+#ifdef HOMM3_SERVER
+            if (Port::Authority::active() && !g_inSetup && m_owner >= 0 && g_game->isHuman(m_owner)) {
+                Port::Authority::levelChoice(m_owner,m_id,stat,skills[0],skills[1]);
+            } else
+#endif
             if (!g_inSetup && m_owner >= 0 &&
                 g_game->isLocalHuman(m_owner)) {
                 launchSample("nwherolv.82m", -1, 3);
@@ -2551,6 +2565,10 @@ DC_ADDRESS(0x0cdf30, 0x20e)
 MAC_ADDRESS(0x0f7e64, 0x42c)
 static void handleArtifactClick(long code, unsigned char rightMouse)
 {
+    if (Port::AuthorityActionsClient::enabled()) {
+        Port::AuthorityActionsClient::artifactClick(g_currentHero->m_id,code-THeroScreenWindow::ARTIFACT_SLOT_0_ID,rightMouse);
+        g_heroScreenWindow->updateAllSlots();updateBackpack();g_heroScreenWindow->drawWindow(1,0xffff0001,0xffff);return;
+    }
     // DC locals: old_artifact, spell_book_window.
     // Mac f7e6c decodes the widget id here; its caller passes codeY unchanged.
     long slot = code - THeroScreenWindow::ARTIFACT_SLOT_0_ID;
@@ -3073,6 +3091,10 @@ DC_ADDRESS(0x0cea3c, 0x1a4)
 MAC_ADDRESS(0x0f947c, 0x208)
 static void handleBackpackClick(long code, unsigned char rightMouse)
 {
+    if (Port::AuthorityActionsClient::enabled()) {
+        Port::AuthorityActionsClient::artifactClick(g_currentHero->m_id,100+code-THeroScreenWindow::BACKPACK_SLOT_0_ID,rightMouse);
+        g_heroScreenWindow->updateAllSlots();updateBackpack();g_heroScreenWindow->drawWindow(1,0xffff0001,0xffff);return;
+    }
     // DC locals: old_artifact and msg.
     // Mac f94a0 decodes the widget id inside this retained helper.
     long index = code - THeroScreenWindow::BACKPACK_SLOT_0_ID;
@@ -3369,12 +3391,12 @@ int THeroScreenWindow::windowHandler(message& msg)
             }
             break;
         case BACKPACK_SCROLL_LEFT_ID:
-            g_currentHero->rotateBackpackLeft();
+            if (Port::AuthorityActionsClient::enabled()) Port::AuthorityClient::request(31,g_currentHero->m_id,-1); else g_currentHero->rotateBackpackLeft();
             updateBackpack();
             drawWindow(1, 0xffff0001, 0xffff);
             break;
         case BACKPACK_SCROLL_RIGHT_ID:
-            g_currentHero->rotateBackpackRight();
+            if (Port::AuthorityActionsClient::enabled()) Port::AuthorityClient::request(31,g_currentHero->m_id,1); else g_currentHero->rotateBackpackRight();
             updateBackpack();
             drawWindow(1, 0xffff0001, 0xffff);
             break;
@@ -3384,17 +3406,17 @@ int THeroScreenWindow::windowHandler(message& msg)
             drawWindow(1, 0xffff0001, 0xffff);
             break;
         case WIDGET_7A_ID:
-            g_currentHero->m_formation &= ~HERO_FORMATION_TIGHT;
+            if (Port::AuthorityActionsClient::enabled()) Port::AuthorityClient::request(30,g_currentHero->m_id,g_currentHero->m_formation & ~HERO_FORMATION_TIGHT); else g_currentHero->m_formation &= ~HERO_FORMATION_TIGHT;
             setupHeroView();
             drawWindow(1, 0xffff0001, 0xffff);
             break;
         case WIDGET_7C_ID:
-            g_currentHero->m_formation |= HERO_FORMATION_TIGHT;
+            if (Port::AuthorityActionsClient::enabled()) Port::AuthorityClient::request(30,g_currentHero->m_id,g_currentHero->m_formation | HERO_FORMATION_TIGHT); else g_currentHero->m_formation |= HERO_FORMATION_TIGHT;
             setupHeroView();
             drawWindow(1, 0xffff0001, 0xffff);
             break;
         case FORMATION_ID:
-            g_currentHero->m_formation ^= HERO_FORMATION_GROUPED;
+            if (Port::AuthorityActionsClient::enabled()) Port::AuthorityClient::request(30,g_currentHero->m_id,g_currentHero->m_formation ^ HERO_FORMATION_GROUPED); else g_currentHero->m_formation ^= HERO_FORMATION_GROUPED;
             setupHeroView();
             drawWindow(1, 0xffff0001, 0xffff);
             break;
@@ -3494,6 +3516,14 @@ int THeroScreenWindow::windowHandler(message& msg)
         case ARMY_SLOT_6_ID:
             {
                 long slot = msg.m_codeY - ARMY_SLOT_0_ID;
+                if (!rightMouse && !g_castleOpen && g_currentPlayer->isLocalHuman()
+                    && Port::HD::quickArmy(g_currentHero->m_army, slot, nullptr, true,
+                                          g_heroScreenArmySlot != HERO_SCREEN_NO_ARMY_SLOT)) {
+                    g_heroScreenArmySlot = HERO_SCREEN_NO_ARMY_SLOT;
+                    g_heroScreenArmyStripLive = 0;
+                    g_currentHero->heroScreenUpdate();
+                    break;
+                }
                 if (!rightMouse
                     && g_heroScreenArmySlot == HERO_SCREEN_NO_ARMY_SLOT) {
                     if (g_currentHero->m_army.m_armies[slot] != CREATURE_NONE) {
@@ -3534,11 +3564,13 @@ int THeroScreenWindow::windowHandler(message& msg)
                     } else if (g_currentHero->m_army.m_armies[slot]
                                == g_currentHero->m_army
                                       .m_armies[g_heroScreenArmySlot]) {
-                        g_currentHero->m_army.m_numTroops[slot] +=
-                            g_currentHero->m_army.m_numTroops[g_heroScreenArmySlot];
-                        g_currentHero->m_army.m_numTroops[g_heroScreenArmySlot] = 0;
-                        g_currentHero->m_army.m_armies[g_heroScreenArmySlot] =
-                            CREATURE_NONE;
+                        if (Port::AuthorityActionsClient::enabled()) {
+                            Port::AuthorityActionsClient::transfer(&g_currentHero->m_army,g_heroScreenArmySlot,&g_currentHero->m_army,slot,g_currentHero->m_army.m_numTroops[g_heroScreenArmySlot],0);
+                        } else {
+                            g_currentHero->m_army.m_numTroops[slot] += g_currentHero->m_army.m_numTroops[g_heroScreenArmySlot];
+                            g_currentHero->m_army.m_numTroops[g_heroScreenArmySlot] = 0;
+                            g_currentHero->m_army.m_armies[g_heroScreenArmySlot] = CREATURE_NONE;
+                        }
                     } else {
                         g_currentHero->m_army.swap(slot, &g_currentHero->m_army,
                                                  g_heroScreenArmySlot);
@@ -4103,7 +4135,7 @@ THeroScreenWindow::THeroScreenWindow()
         0x21b, 0x1e3, 0x36, 0x20, 0x7e, "hsbtns8.def",
         0, 0x1, 0, 0x30, 0x2));
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -4130,7 +4162,7 @@ THeroScreenWindow::~THeroScreenWindow()
     }
 
     g_heroScreenArmySlot = -1;
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -4209,6 +4241,7 @@ DC_ADDRESS(0x0d2e80, 0x230)
 MAC_ADDRESS(0x102330, 0x27c)
 int heroView(int heroID, int noDismiss, int alreadyFaded, unsigned char quickView)
 {
+    Port::Fast::ReadOnly readOnly(Port::Fast::nativeUI() && !Port::AuthorityActionsClient::enabled());
     g_heroScreenNoDismiss = noDismiss;
     g_heroScreenHeroId = heroID;
     g_heroScreenDraggedArtifact.m_artifactId = ARTIFACT_NONE;
@@ -4242,7 +4275,9 @@ int heroView(int heroID, int noDismiss, int alreadyFaded, unsigned char quickVie
     }
     delete g_heroScreenWindow;
 
+    if (Port::AuthorityActionsClient::enabled()) Port::AuthorityActionsClient::cancelArtifactDrag();
     if (g_windowManager->m_dialogReturn == g_dialogReturnDismissHero) {
+        if (Port::AuthorityActionsClient::enabled()) return Port::AuthorityClient::request(23,g_currentHero->m_id);
         g_currentHero->deallocate(1, 0);
         if (!alreadyFaded) {
             g_advManager->fizzleCenter(0);
@@ -5195,7 +5230,8 @@ void hero::giveResource(int whichRes, int howMuch)
     }
 
     if (&g_game->m_players[m_owner] == g_currentPlayer
-        && g_advManager->m_status == baseManager::STATUS_ACTIVE)
+        && g_advManager->m_status == baseManager::STATUS_ACTIVE
+        && g_advManager->m_advWindow)
         g_advManager->m_advWindow->updateResourceDisplay(1, 1);
 
     g_game->isHuman(m_owner);
@@ -5740,7 +5776,7 @@ TAdventureObjectType hero::getSpecialTerrainObjectType()
 VA(0x004e4fa0, 0xD7)
 DC_ADDRESS(0x0d4df0, 0x5a)
 MAC_ADDRESS(0x105e5c, 0x1b0)
-inline int hero::getSpecialTerrain() const
+__attribute__((used)) inline int hero::getSpecialTerrain() const
 {
     type_point location = getLocation();
     if (location == type_point(-1, -1, -1))
@@ -5934,14 +5970,14 @@ boat* hero::findSummonableBoat() const
         return result;
 
     int closestDistance = 0;
-    for (boat* candidate = g_game->m_boats.begin();
+    for (auto candidate = g_game->m_boats.begin();
          candidate != g_game->m_boats.end(); candidate++) {
         if (candidate->m_allocated && !candidate->m_occupied
             && (candidate->m_playerOwner == g_netLocalGamePos
                 || candidate->m_playerOwner == -1)) {
             int distance = abs(candidate->m_x - m_x) + abs(candidate->m_y - m_y);
             if (!result || distance <= closestDistance) {
-                result = candidate;
+                result = &*candidate;
                 closestDistance = distance;
             }
         }

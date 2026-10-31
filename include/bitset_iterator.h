@@ -4,6 +4,7 @@
 #include "va.h"
 
 #include <bitset>
+#include <iterator>
 #include <stddef.h>
 
 // The PC standard library's bitset has no iterator surface.  The game uses
@@ -12,6 +13,11 @@
 template <size_t N>
 class bitset_iterator {
 public:
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = bool;
+    using difference_type = std::ptrdiff_t;
+    using pointer = void;
+    using reference = typename std::bitset<N>::reference;
     bitset_iterator()
         : m_bits(0), m_position(0)
     {

@@ -1,3 +1,6 @@
+#ifdef HOMM3_SERVER
+#include "server_authority.h"
+#endif
 #include "va.h"
 
 #include <algorithm>
@@ -300,7 +303,7 @@ int town::load(TAbstractFile* infile, int saveVersion)
 
     if (infile->read(m_population, sizeof(m_population)) < sizeof(m_population))
         return -1;
-    infile->read(m_generatorBonus, sizeof(m_generatorBonus));
+    for(auto& bonus:m_generatorBonus){int32_t word=0;if(infile->read(&word,4)!=4)return -1;bonus=word;}
     if (infile->read(m_mageGuildSpellCounts, sizeof(m_mageGuildSpellCounts))
         < sizeof(m_mageGuildSpellCounts))
         return -1;
@@ -416,7 +419,7 @@ int town::save(TAbstractFile* outfile)
 
     if (outfile->write(m_population, sizeof(m_population)) < sizeof(m_population))
         return -1;
-    outfile->write(m_generatorBonus, sizeof(m_generatorBonus));
+    for(auto bonus:m_generatorBonus){int32_t word=bonus;if(outfile->write(&word,4)!=4)return -1;}
     if (outfile->write(m_mageGuildSpellCounts, sizeof(m_mageGuildSpellCounts))
         < sizeof(m_mageGuildSpellCounts))
         return -1;
@@ -519,11 +522,17 @@ MAC_ADDRESS(0x1b2b88, 0x700)
 // The bitset proxy is compared with zero rather than negated.
 void town::applySpecialBuildingEffect(hero* townHero)
 {
+    const auto showMessage=[](int owner){
+#ifdef HOMM3_SERVER
+        if(Port::Authority::active())return bool(g_game->isHuman(owner));
+#endif
+        return bool(g_game->isLocalHuman(owner));
+    };
     if (m_type == TOWN_DUNGEON && m_manaVortexFull
         && hasBuilding(EXTRA_0_ID, false)) {
         int maxMana = townHero->getMaxMana() * 2;
         if (townHero->m_mana < maxMana) {
-            if (g_game->isLocalHuman(m_owner))
+            if (showMessage(m_owner))
                 normalDialog((*g_generalText)[GENERAL_TEXT_MANA_VORTEX_VISIT], // Mana Vortex
                              1, -1, -1, -1, 0, -1, 0, -1, 0, -1, 0);
             townHero->m_mana = static_cast<short>(maxMana);
@@ -536,7 +545,7 @@ void town::applySpecialBuildingEffect(hero* townHero)
         townHero->m_flags |= 2;
         townHero->m_maxMovePoints += g_stablesMovementBonus;
         townHero->m_movePoints += g_stablesMovementBonus;
-        if (g_game->isLocalHuman(townHero->m_owner))
+        if (showMessage(townHero->m_owner))
             normalDialog((*g_generalText)[GENERAL_TEXT_STABLES_VISIT], // Stables
                          1, -1, -1, -1, 0, -1, 0, -1, 0, -1, 0);
     }
@@ -545,7 +554,7 @@ void town::applySpecialBuildingEffect(hero* townHero)
         && townHero->m_townSpecialGrantedMask[m_id] == 0) {
         townHero->m_townSpecialGrantedMask[m_id] = 1;
         townHero->adjustPrimarySkill(3, 1);
-        if (g_game->isLocalHuman(townHero->m_owner))
+        if (showMessage(townHero->m_owner))
             normalDialog(
                 (*g_generalText)[GENERAL_TEXT_WALL_OF_KNOWLEDGE_VISIT], // Wall of Knowledge
                 1, -1, -1, 0x22, 1, -1, 0, -1, 0, -1, 0);
@@ -555,7 +564,7 @@ void town::applySpecialBuildingEffect(hero* townHero)
         && townHero->m_townSpecialGrantedMask[m_id] == 0) {
         townHero->m_townSpecialGrantedMask[m_id] = 1;
         townHero->adjustPrimarySkill(2, 1);
-        if (g_game->isLocalHuman(townHero->m_owner))
+        if (showMessage(townHero->m_owner))
             normalDialog((*g_generalText)[GENERAL_TEXT_ORDER_OF_FIRE_VISIT], // Order of Fire
                          1, -1, -1, 0x21, 1, -1, 0, -1, 0, -1, 0);
     }
@@ -564,7 +573,7 @@ void town::applySpecialBuildingEffect(hero* townHero)
         && townHero->m_townSpecialGrantedMask[m_id] == 0) {
         int experience = static_cast<int>(
             townHero->getExperienceBonusFactor() * 1000.0f);
-        if (g_game->isLocalHuman(townHero->m_owner))
+        if (showMessage(townHero->m_owner))
             normalDialog(
                 (*g_generalText)[GENERAL_TEXT_BATTLE_SCHOLAR_ACADEMY_VISIT], // Battle Scholar Academy
                 1, -1, -1, 0x11, experience, -1, 0, -1, 0, -1, 0);
@@ -574,7 +583,7 @@ void town::applySpecialBuildingEffect(hero* townHero)
 
     if (m_type == TOWN_STRONGHOLD && hasBuilding(EXTRA_2_ID, false)
         && townHero->m_townSpecialGrantedMask[m_id] == 0) {
-        if (g_game->isLocalHuman(townHero->m_owner))
+        if (showMessage(townHero->m_owner))
             normalDialog(
                 (*g_generalText)[GENERAL_TEXT_HALL_OF_VALHALLA_VISIT], // Hall of Valhalla
                 1, -1, -1, 0x1f, 1, -1, 0, -1, 0, -1, 0);
@@ -584,7 +593,7 @@ void town::applySpecialBuildingEffect(hero* townHero)
 
     if (m_type == TOWN_FORTRESS && hasBuilding(SPECIAL_BUILDING_ID, false)
         && townHero->m_townSpecialGrantedMask[m_id] == 0) {
-        if (g_game->isLocalHuman(townHero->m_owner))
+        if (showMessage(townHero->m_owner))
             normalDialog(
                 (*g_generalText)[GENERAL_TEXT_CAGE_OF_WARLORDS_VISIT], // Cage of Warlords
                 1, -1, -1, 0x20, 1, -1, 0, -1, 0, -1, 0);
@@ -714,6 +723,9 @@ DC_ADDRESS(0x166688, 0x98)
 MAC_ADDRESS(0x1b3664, 0x104)
 void town::view(int alreadyFaded)
 {
+#ifdef HOMM3_SERVER
+    if (Port::Authority::active()) { setupViewBuildings(); Port::Authority::present("open_town",m_owner,m_id); return; }
+#endif
     int threshold = g_highMemBuffer + 0x514;
     g_townViewActive = 1;
     if (threshold > 0xb54)
@@ -756,6 +768,9 @@ void town::deallocate()
     if (player->m_currTownId == m_id)
         player->m_currTownId = -1;
     player->m_numTowns--;
+#ifdef HOMM3_SERVER
+    if(!Port::Authority::active())
+#endif
     g_advManager->m_advWindow->updateTownLocators(0, 1, 1);
     g_game->m_towns[m_id].m_owner = -1;
     m_owner = -1;

@@ -2509,7 +2509,15 @@ DC_ADDRESS(0x11ede8, 0x4)
 MAC_ADDRESS(0x2152b8, 0x24)
 inline void CGameTransferSmack::drawCurrentFrame()
 {
+#ifdef HOMM3_PORT
+    // The portable client has no Smacker background animation. Paint an opaque
+    // panel for every progress frame instead of accumulating text over the
+    // current-player flag and previous percentages.
+    g_windowManager->m_screenBitmap->FillRect(m_x, m_y, 160, 160, 0x2104);
+    g_windowManager->m_screenBitmap->FrameRect(m_x, m_y, 160, 160, 0x9c48);
+#else
     SmackManager::drawSmackerFrame();
+#endif
 }
 
 // E:\gamedcs\remote.cpp:2789

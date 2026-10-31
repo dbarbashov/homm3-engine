@@ -1,5 +1,6 @@
 #ifndef HOMM3_ADVMGR_H
 #define HOMM3_ADVMGR_H
+#include "hd_view.h"
 
 #include "va.h"
 
@@ -550,6 +551,7 @@ SIZE(TDrawParts, 0x10);
 // resolves to `?SleepAllWidgets@heroWindow@@QAEXE@Z` - the base body,
 // not an override.
 class TAdventureMapWindow : public heroWindow {
+    friend struct AuthorityTurnViewAccess;
 public:
     // Dreamcast TAdventureMapWindow::EWidgetIDs, complete. Retail uses the
     // same ids in the window's broadcast-message helpers.
@@ -729,6 +731,7 @@ SIZE(TAdventureMapWindow, 0xa0);
 // compares it against executive::currentManager and writes
 // baseManager::status (+0x34) as its suspend/resume mode.
 class advManager : public baseManager {
+    friend struct AuthorityTurnViewAccess;
 public:
     // Provisional ordinal names. OverrideBottomView proves the complete
     // 0..8 range and distinct behavior for 0, 1..6 and 8; semantic names
@@ -1358,8 +1361,8 @@ public:
     DC_ADDRESS(0x01f000, 0x84)
     type_point getMapCenter() const
     {
-        return type_point(m_radarOrigin.m_x + HERO_VIEW_TILE_X,
-                          m_radarOrigin.m_y + HERO_VIEW_TILE_Y,
+        return type_point(m_radarOrigin.m_x + Port::HD::centerX(),
+                          m_radarOrigin.m_y + Port::HD::centerY(),
                           m_radarOrigin.m_z);
     }
     void turnTo(int newDirection);

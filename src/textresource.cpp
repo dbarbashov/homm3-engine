@@ -185,7 +185,7 @@ DC_ADDRESS(0x163c30, 0xc8)
 MAC_ADDRESS(0x1b1124, 0xe4)
 TSpreadsheetResource::~TSpreadsheetResource()
 {
-    for (TStringVector** it = Spreadsheet.begin(); it != Spreadsheet.end();
+    for (auto it = Spreadsheet.begin(); it != Spreadsheet.end();
          ++it) {
         delete *it;
     }

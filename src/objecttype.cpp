@@ -24,7 +24,9 @@
 #include <string>
 #include <strstream>
 #include <vector>
+#if !defined(HOMM3_PORT)
 #include <yvals.h>
+#endif
 
 #include "objecttype.h"
 

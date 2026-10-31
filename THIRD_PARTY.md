@@ -7,18 +7,21 @@ Revision: `e12906accf96c2662b1abadbc49ddc111991bf21`
 Branch: `decomp-complete-4.0`
 
 License: CC0 1.0 for reconstructed source/tooling. The complete upstream license
-is retained in `upstream/homm3-decomp/LICENSE`; a copy is in `licenses/`.
+is retained in `licenses/`. The imported code and its adaptations are tracked
+directly in `src/` and `include/`; `upstream-origin.json` records the origin.
 Third-party vendor directories in upstream have their own licenses. No legacy
 Miles/DirectDraw/Smacker/Bink runtime from those directories is linked by this port.
 
 ## Portable C++ client
 
-`port/sources.json` lists the recovered source modules compiled directly for
-native and WebAssembly. `port/patches/0001-portability.patch` records every change
-against the pinned revision. `prepare-port.py` additionally extracts eight unchanged
-platform-independent helper bodies from `kbwin.cpp`, `wingraph.cpp`, `kb.cpp`
-and `misc.cpp`. The original main/game-type menu handlers execute directly.
-The game target (`port/game-sources.json`) includes 131 recovered translation
+`port/sources.json` and `port/game-sources.json` list the recovered source modules
+compiled directly for native and WebAssembly. The clean import is a separate Git
+commit; subsequent commits contain the portability and integration changes.
+Previously extracted helpers and cursor/video tables are now tracked files with
+the same bytes as the former prepared tree. Their origins are listed in
+`upstream-origin.json`; there is no build-time extraction or patch application.
+The original main/game-type menu handlers execute directly.
+The game target (`port/game-sources.json`) includes the recovered translation
 units, including kb startup/data helpers, scenario selection, game, adventure,
 town, battle, AI and serialization. Its original `normalDialog` executes directly.
 The text-only `normalDialog` adapter in `port/frontend/dialogs.cpp` assembles

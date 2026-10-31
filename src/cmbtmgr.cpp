@@ -1,3 +1,6 @@
+#include "combat_feedback.h"
+#include "battle_client.h"
+#include "combat_presentation.h"
 // LOCATE SWEEP 2026-08-08 (span 0x62760..0x6a45c, 72 carve rows). Each
 // bracket between two already-proven claims was order-mapped onto the
 // DC roster and every pairing checked against `ret N` (thiscall, so
@@ -654,6 +657,9 @@ DC_ADDRESS(0x05d60c, 0x662)
 MAC_ADDRESS(0x06e220, 0x5c4)
 int combatManager::open(int newPriority)
 {
+#ifdef HOMM3_HARNESS
+    Port::Harness::decision("combat-open",0,0);
+#endif
     SAMPLE2 sample;
 
     g_mouseManager->m_noChangePointer = 1;
@@ -663,7 +669,7 @@ int combatManager::open(int newPriority)
     g_soundManager->stopAllSamples(1);
     ResourceManager::del_Spr_from_Cache();  // DC cmbtmgr.cpp:599
 
-    if (!isQuickCombat()) {
+    if (!suppressCombatPresentation()) {
         char name[20];
         sprintf(name,
                 DATA_COMPGEN(0x0066fee8, battleSampleFormat,
@@ -708,18 +714,22 @@ int combatManager::open(int newPriority)
     g_chatMan.pauseTimeOuts();
     m_combatShowIt = 1;
 
-    if (isQuickCombat()) {
+    if (suppressCombatPresentation()) {
         m_combatWindow = 0;
     } else {
         m_combatWindow = new TCombatWindow(m_creaturePlacement);
         if (!m_combatWindow)
             memError();
+        // addWindow can paint immediately, before the intro sample ends.
+        // Install the retained server opening before any battlefield is shown.
+        if (Port::BattleClient::active())
+            Port::BattleClient::installOpening();
         g_windowManager->addWindow(m_combatWindow, -1, 1);
     }
 
     updateArmyLuckAndMorale();
     m_inSecondPhase = 0;
-    if (m_creaturePlacement && !isQuickCombat()) {
+    if (m_creaturePlacement && !suppressCombatPresentation()) {
         m_currentSide = m_placementBoundaryDepth <= 0;
         if (!g_game->isLocalHuman(m_playerIds[m_currentSide])) {
             m_combatWindow->widgetSetStatus(
@@ -729,7 +739,7 @@ int combatManager::open(int newPriority)
         }
     }
 
-    if (!isQuickCombat()) {
+    if (!suppressCombatPresentation()) {
         drawFrame(1, 0, 0, 0, 1, 0);
         m_combatWindow->drawWindow(1, -65535, 65535);
         g_timers[0] = GameTime::get();
@@ -764,11 +774,11 @@ int combatManager::open(int newPriority)
     strcpy(m_mgrName,
            DATA_COMPGEN(0x0066fecc, combatManagerName, "combatManager"));
 
-    if (m_creaturePlacement
+    if (!Port::BattleClient::active() && m_creaturePlacement
             && g_game->isLocalHuman(m_playerIds[m_currentSide])
             && g_game->m_players[m_playerIds[m_currentSide]]
                    .m_placementHelpEnabled
-            && !isQuickCombat()) {
+            && !suppressCombatPresentation()) {
         normalDialogTimeOut(
             g_generalText->GetText(GENERAL_TEXT_COMBAT_PLACEMENT_HELP),
             1, 10000, -1, -1, -1, 0, -1, 0, -1, -1, 0);
@@ -777,6 +787,10 @@ int combatManager::open(int newPriority)
 
     g_chatMan.resumeTimeOuts();
     m_netMsgHandlerPause = new CNetMsgHandlerPause();
+    if(Port::BattleClient::active()){Port::BattleClient::project();drawFrame(1,0,0,0,1,0);return 0;}
+#ifdef HOMM3_HARNESS
+    Port::Harness::decision("combat-ready",0,0);
+#endif
     nextArmy(false);
     return 0;
 }
@@ -786,7 +800,7 @@ DC_ADDRESS(0x05dc70, 0x150)
 MAC_ADDRESS(0x06e7e4, 0x154)
 void combatManager::close()
 {
-    if (!isQuickCombat())
+    if (!suppressCombatPresentation())
         g_windowManager->fadeScreen(1, 4, 1);
 
     g_combatActive = 0;
@@ -872,7 +886,7 @@ void combatManager::freeIcons()
         }
     }
 
-    for (TObstacle* obstacle = m_obstacles.begin();
+    for (auto obstacle = m_obstacles.begin();
             obstacle != m_obstacles.end(); ++obstacle) {
         if (obstacle->m_sprite)
             ResourceManager::Dispose(obstacle->m_sprite);
@@ -1044,6 +1058,9 @@ DC_ADDRESS(0x05e464, 0x22a)
 MAC_ADDRESS(0x06f0b8, 0x330)
 void combatManager::setupCombat(type_point point, hero* leftHero, armyGroup* leftArmyGroup, long rightPlayer, town* rightTown, hero* rightHero, armyGroup* rightArmyGroup, int x, int y, int seed, bool isSurrounded)
 {
+#ifdef HOMM3_HARNESS
+    Port::Harness::decision("combat-setup",x,y);
+#endif
     g_combatSeed = seed;
     sRand(x * 0x1aed3 + y * 0x28f79 + 0x13ea1);
     m_mapPoint = point;
@@ -1559,15 +1576,10 @@ void combatManager::checkApplyGoodMorale(int group, int index)
     if (sRandom(1, 24) > stack->getMorale(1))
         return;
     stack->m_monInfo.attributes = (stack->m_monInfo.attributes & ~creatureDone) | creatureMorale;
-    if (!isQuickCombat()) {
-        SAMPLE2 sample = loadPlaySample(
-            DATA_COMPGEN(0x0066ff6c, goodMoraleSampleName, "GoodMrle.wav"));
-        spellEffect(20, stack, 100, 0);
-        sprintf(g_text, g_generalText->GetText(GENERAL_TEXT_GOOD_MORALE_FORMAT),
-            stack->getName());
-        m_combatWindow->combatMessage(g_text, 1, 0);
-        waitEndSample(sample, -1);
-    }
+#ifdef HOMM3_SERVER
+    Port::Authority::recordCombatVisual(Port::Authority::VisualMorale,stack,1);
+#endif
+    Port::showMorale(stack,true);
     updateGrid(0, 1);
     drawFrame(1, 0, 0, 0, 1, 0);
 }
@@ -1582,15 +1594,11 @@ int combatManager::checkApplyBadMorale(int group, int index)
         if (sRandom(1, 12) <= -stack->getMorale(1)) {
             if (IsHuman[group] || sRandom(1, 4) != 1) {
                 stack->m_monInfo.attributes |= creatureDone;
-                if (!isQuickCombat()) {
-                    SAMPLE2 sample = loadPlaySample(DATA_COMPGEN(
-                        0x0066ff7c, badMoraleSampleName, "BadMrle.wav"));
-                    sprintf(g_text,
-                        g_generalText->GetText(GENERAL_TEXT_BAD_MORALE_FORMAT),
-                        stack->getName());
-                    m_combatWindow->combatMessage(g_text, 1, 0);
-                    spellEffect(30, stack, 100, 1);
-                    waitEndSample(sample, -1);
+                {
+#ifdef HOMM3_SERVER
+                    Port::Authority::recordCombatVisual(Port::Authority::VisualMorale,stack,0);
+#endif
+                    Port::showMorale(stack,false);
                 }
                 return 1;
             }
@@ -1623,7 +1631,7 @@ unsigned char combatManager::applyAzureDragonFear(army* selected)
         return 0;
 
     selected->m_monInfo.attributes |= creatureDone;
-    if (!isQuickCombat()) {
+    if (!suppressCombatPresentation()) {
         SAMPLE2 sample = loadPlaySample(DATA_COMPGEN(
             0x0066ff88, fearSampleName, "Fear.wav"));
         sprintf(g_text,
@@ -1818,7 +1826,7 @@ void combatManager::setNextArmy(int group, int index)
                 drained->m_mana = static_cast<short>(drained->m_mana - 2);
                 if (drained->m_mana < 0)
                     drained->m_mana = 0;
-                if (!isQuickCombat()) {
+                if (!suppressCombatPresentation()) {
                     SAMPLE2 sample = loadPlaySample(DATA_COMPGEN(
                         0x0066ff94, manaDrainSampleName, "ManaDrai.wav"));
                     std::string result;
@@ -2039,7 +2047,7 @@ void combatManager::keepAttack(int towerPos)
     int startX;
     int startY;
 
-    if (!isQuickCombat()) {
+    if (!suppressCombatPresentation()) {
         int destX = target->midX();
         const int destY = target->midY();
         int facing;
@@ -2101,7 +2109,7 @@ void combatManager::keepAttack(int towerPos)
     target->cancelSpellType(ARMY_CANCEL_SPELLS_AFTER_DAMAGE);
     powEffect(eSpellEffectNone, 1);
 
-    if (!isQuickCombat()) {
+    if (!suppressCombatPresentation()) {
         while (archer->m_frame
                 < archer->m_sprite->GetNumFrames(armyDir) - 1) {
             archer->m_frame++;
@@ -2113,7 +2121,7 @@ void combatManager::keepAttack(int towerPos)
     archer->m_frame = 0;
     drawFrame(1, 0, 0, 0, 1, 0);
 
-    if (!isQuickCombat())
+    if (!suppressCombatPresentation())
         waitEndSample(sample, -1);
 }
 
@@ -2221,7 +2229,7 @@ unsigned char combatManager::placeObstacle(int obstacleId)
             }
 
             TObstacle obstacle;
-            obstacle.m_sprite = ResourceManager::GetSprite(shape->m_spriteName);
+            obstacle.m_sprite = suppressCombatPresentation() ? nullptr : ResourceManager::GetSprite(shape->m_spriteName);
             obstacle.m_shape = shape;
             obstacle.m_hex = static_cast<unsigned char>(hex);
             obstacle.m_owner = -1;
@@ -2317,7 +2325,7 @@ void combatManager::setupAndLoadObstacles()
 
                 TObstacle newLandmine;
                 newLandmine.m_sprite =
-                    ResourceManager::GetSprite(s_landMineInfo[0].m_spriteName);
+                    suppressCombatPresentation() ? nullptr : ResourceManager::GetSprite(s_landMineInfo[0].m_spriteName);
                 newLandmine.m_shape = &s_landMineInfo[0];
                 newLandmine.m_hex = static_cast<unsigned char>(hex);
                 newLandmine.m_owner = 1;
@@ -2486,7 +2494,7 @@ void combatManager::removeObstacle(int index)
     hexcell& anchor = m_cells[obstacle->m_hex];
     anchor.m_attributes &= ~hexcell::obstacleOrigin;
     anchor.m_obstacleIndex = -1;
-    ResourceManager::Dispose(obstacle->m_sprite);
+    if (obstacle->m_sprite) ResourceManager::Dispose(obstacle->m_sprite);
     obstacle->m_sprite = 0;
 }
 
@@ -2506,9 +2514,9 @@ void combatManager::initializeArchers()
         akCreatureTypeTraits[info.m_creatureType].m_sprite_name;
 
     archer->m_type = info.m_creatureType;
-    locals.m_sprite = ResourceManager::GetSprite(locals.m_spriteName);
+    locals.m_sprite = suppressCombatPresentation() ? nullptr : ResourceManager::GetSprite(locals.m_spriteName);
     archer->m_sprite = locals.m_sprite;
-    locals.m_sprite = ResourceManager::GetSprite(info.m_missileName);
+    locals.m_sprite = suppressCombatPresentation() ? nullptr : ResourceManager::GetSprite(info.m_missileName);
     archer->m_missile = locals.m_sprite;
     archer->m_x = info.m_mainBuildingX;
     archer->m_y = info.m_mainBuildingY;
@@ -2520,9 +2528,9 @@ void combatManager::initializeArchers()
         return;
 
     m_archers[eArcherLowerTower].m_type = info.m_creatureType;
-    locals.m_sprite = ResourceManager::GetSprite(locals.m_spriteName);
+    locals.m_sprite = suppressCombatPresentation() ? nullptr : ResourceManager::GetSprite(locals.m_spriteName);
     m_archers[eArcherLowerTower].m_sprite = locals.m_sprite;
-    locals.m_sprite = ResourceManager::GetSprite(info.m_missileName);
+    locals.m_sprite = suppressCombatPresentation() ? nullptr : ResourceManager::GetSprite(info.m_missileName);
     m_archers[eArcherLowerTower].m_missile = locals.m_sprite;
     m_archers[eArcherLowerTower].m_x = info.m_lowerTowerX;
     m_archers[eArcherLowerTower].m_y = info.m_lowerTowerY;
@@ -2531,9 +2539,9 @@ void combatManager::initializeArchers()
     m_archers[eArcherLowerTower].m_frame = 0;
 
     m_archers[eArcherUpperTower].m_type = info.m_creatureType;
-    locals.m_sprite = ResourceManager::GetSprite(locals.m_spriteName);
+    locals.m_sprite = suppressCombatPresentation() ? nullptr : ResourceManager::GetSprite(locals.m_spriteName);
     m_archers[eArcherUpperTower].m_sprite = locals.m_sprite;
-    locals.m_sprite = ResourceManager::GetSprite(info.m_missileName);
+    locals.m_sprite = suppressCombatPresentation() ? nullptr : ResourceManager::GetSprite(info.m_missileName);
     m_archers[eArcherUpperTower].m_missile = locals.m_sprite;
     m_archers[eArcherUpperTower].m_x = info.m_upperTowerX;
     m_archers[eArcherUpperTower].m_y = info.m_upperTowerY;
@@ -2566,7 +2574,7 @@ void combatManager::makeCreaturesVanish()
     int height;
     int side;
     int index;
-    if (!isQuickCombat()) {
+    if (!suppressCombatPresentation()) {
         resetLimitCreature();
         for (side = 0; side < 2; side++) {
             for (index = 0; index < m_numArmies[side]; index++) {
@@ -2596,7 +2604,7 @@ void combatManager::makeCreaturesVanish()
         }
     }
 
-    if (!isQuickCombat()) {
+    if (!suppressCombatPresentation()) {
         g_windowManager->saveFizzleSourceX(x, y, width, height);
         drawFrame(0, 0, 1, 0, 1, 0);
         g_windowManager->fizzleForwardX(
@@ -2631,7 +2639,7 @@ DC_ADDRESS(0x060fa8, 0x8a)
 MAC_ADDRESS(0x0733d0, 0xdc)
 void combatManager::lowerDoor()
 {
-    if (isQuickCombat()) {
+    if (suppressCombatPresentation()) {
         m_drawbridgeState = DRAWBRIDGE_DOWN;
         return;
     }
@@ -2653,7 +2661,7 @@ DC_ADDRESS(0x061034, 0xac)
 MAC_ADDRESS(0x0734ac, 0xd0)
 void combatManager::raiseDoor()
 {
-    if (isQuickCombat()) {
+    if (suppressCombatPresentation()) {
         m_drawbridgeState = DRAWBRIDGE_UP;
         return;
     }
@@ -2860,7 +2868,7 @@ MAC_ADDRESS(0x073c44, 0x488)  // anchor-global
 void combatManager::shootBallisticMissile(int startX, int startY, int destX,
                                           int destY, const CSprite* missile)
 {
-    if (isQuickCombat())
+    if (suppressCombatPresentation())
         return;
 
     const int deltaX = destX - startX;
@@ -2926,7 +2934,7 @@ void combatManager::shootAnimatedMissile(int startX, int startY, int destX,
                                          const float* angles,
                                          const char* const* fileNames)
 {
-    if (isQuickCombat())
+    if (suppressCombatPresentation())
         return;
 
     const int deltaX = destX - startX;
@@ -3038,7 +3046,7 @@ MAC_ADDRESS(0x074654, 0x5c4)  // anchor-global; MAC_ABSTRACTION_FROM(tokens1:b76
 void combatManager::shootMissile(int startX, int startY, int destX, int destY,
                                  const float* angles, const CSprite* missile)
 {
-    if (isQuickCombat())
+    if (suppressCombatPresentation())
         return;
 
     const int deltaX = destX - startX;
@@ -3223,10 +3231,16 @@ DC_ADDRESS(0x062560, 0x856)
 MAC_ADDRESS(0x074eec, 0xb30)  // anchor-global
 void combatManager::powEffect(TSpellEffectID spellEffect, int resetLimitCreature)
 {
+#ifdef HOMM3_SERVER
+    int masks[2]={};for(int side=0;side<2;++side)for(int slot=0;slot<m_numArmies[side];++slot)
+        if(m_armies[side][slot].m_showPowEffect)masks[side]|=1<<slot;
+    Port::Authority::recordCombatVisual(Port::Authority::VisualImpact,getCurrentArmy(),spellEffect,resetLimitCreature,masks[0],masks[1]);
+#endif
+
     int side;
     int slot;
 
-    if (!isQuickCombat()) {
+    if (!suppressCombatPresentation()) {
         for (side = 0; side < 2; side++) {
             for (slot = 0; slot < m_numArmies[side]; slot++) {
                 army& stack = m_armies[side][slot];
@@ -3342,7 +3356,7 @@ void combatManager::powEffect(TSpellEffectID spellEffect, int resetLimitCreature
                                             < stack.m_stdIcon->GetNumFrames(
                                                 stack.m_currFrameType) - 1)))) {
                             if (stack.m_currFrameType != stack.m_nextFrameType) {
-                                if (!isQuickCombat()) {
+                                if (!suppressCombatPresentation()) {
                                     if (stack.m_showAttackFrames)
                                         stack.playSample(army::ATTACK_SAMPLE);
                                     else if (stack.m_nextFrameType == cs_wince)
@@ -3382,7 +3396,7 @@ void combatManager::powEffect(TSpellEffectID spellEffect, int resetLimitCreature
     for (side = 0; side < 2; side++) {
         for (slot = 0; slot < m_numArmies[side]; slot++) {
             army& stack = m_armies[side][slot];
-            if (stack.m_postPowSpellToCast != -1) {
+            if (!Port::BattleClient::active() && stack.m_postPowSpellToCast != -1) {
                 if (stack.m_numTroops > 0)
                     castSpell(stack.m_postPowSpellToCast, stack.m_gridIndex,
                               1, -1, eMasteryNone, 3);
@@ -3391,7 +3405,7 @@ void combatManager::powEffect(TSpellEffectID spellEffect, int resetLimitCreature
         }
     }
 
-    if (!isQuickCombat()) {
+    if (!suppressCombatPresentation()) {
         int framesChanged = 1;
         while (framesChanged) {
             framesChanged = 0;
@@ -3425,8 +3439,9 @@ void combatManager::powEffect(TSpellEffectID spellEffect, int resetLimitCreature
         for (slot = 0; slot < m_numArmies[side]; slot++) {
             army& stack = m_armies[side][slot];
             if (stack.m_allUnitsKilled) {
-                stack.processDeath(0);
-                if (stack.is(creatureSiegeWeapon))
+                if (Port::BattleClient::active()) Port::BattleClient::settleDeath(stack);
+                else stack.processDeath(0);
+                if (!Port::BattleClient::active() && stack.is(creatureSiegeWeapon))
                     m_heroes[side]->destroySiegeWeaponArtifact(
                         stack.m_creatureType);
             }
@@ -3491,7 +3506,7 @@ void combatManager::checkRebirth()
                 continue;
 
             stack->m_monInfo.attributes |= creatureDone;
-            if (!isQuickCombat())
+            if (!suppressCombatPresentation())
                 launchSample(akSpellTraits[SPELL_RESURRECTION].m_sample,
                               -1, 3);
             resurrect(stack, stack->m_monInfo.hitPoints * resurrected, 0);
@@ -3656,7 +3671,7 @@ DC_ADDRESS(0x06335c, 0x1c0)
 MAC_ADDRESS(0x076204, 0x2c0)
 void combatManager::damageMessage(const char* attacker, long attackerQty, long damage, const army* defender, long deaths)
 {
-    if (isQuickCombat())
+    if (suppressCombatPresentation())
         return;
 
     std::string message;
@@ -3892,6 +3907,9 @@ DC_ADDRESS(0x063900, 0xc4)
 MAC_ADDRESS(0x076bc8, 0xac)
 bool combatManager::isQuickCombat() const
 {
+#ifdef HOMM3_SERVER
+    return false; // Ordinary authority battles retain human/tactics rules.
+#endif
     if (g_game->m_isTutorial)
         return false;
     if (!g_remoteOn || !IsHuman[0] || !IsHuman[1])

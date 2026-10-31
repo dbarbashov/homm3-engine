@@ -177,7 +177,7 @@ TSystemOptionsWindow::TSystemOptionsWindow()
 
     // DC121 initializes the pointer iterator from begin, checks end at
     // each iteration, then DC123..126 register the widget or call MemError.
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -273,7 +273,7 @@ DC_ADDRESS(0x160634, 0x62)
 MAC_ADDRESS(0x1ac820, 0xac)
 TSystemOptionsWindow::~TSystemOptionsWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }

@@ -14,5 +14,5 @@ for target in ['native','web']:
     command=[args.cmake,'-S',str(ROOT),'-B',str(ROOT/f'build/cmake-parity-{target}'),'-DHOMM3_HARNESS=ON','-DCMAKE_BUILD_TYPE=Release']
     command+=['-DHOMM3_SERVER=ON','-DHOMM3_WORKER_SOURCE='+str(Path(os.environ.get('HOMM3_WORKER_SOURCE',ROOT.parent/'homm3-lobby/worker')).resolve())] if target=='native' else ['-DCMAKE_TOOLCHAIN_FILE='+str(toolchain)]
     subprocess.run(command,check=True,cwd=ROOT)
-# Both configurations materialize portable-source. Finish them before building.
+# Both targets compile tracked sources without rewriting a shared staging tree.
 for target in ['native','web']:subprocess.run([args.cmake,'--build',str(ROOT/f'build/cmake-parity-{target}'),'-j',str(args.jobs)],check=True,cwd=ROOT)

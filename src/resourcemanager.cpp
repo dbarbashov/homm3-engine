@@ -23,6 +23,7 @@
 #include "csprite.h"
 #include "cspriteframe.h"
 #include "font.h"
+#include "font_disk.h"
 #include "lodfile.h"
 #include "ownership.h"
 #include "palette.h"
@@ -480,7 +481,7 @@ static bool openArchiveResource(int archiveIndex)
 {
     const char* archiveName = g_resourceLodSlots[archiveIndex].m_archiveName;
     LODFile* file = &g_resourceLodSlots[archiveIndex].m_file;
-    bool opened = file->open((g_resourcePath + archiveName).c_str(), 0) == 0;
+    bool opened = file->open((g_resourcePath + archiveName).c_str(), 1) == 0;
     return opened;
 }
 
@@ -1026,10 +1027,11 @@ MAC_ADDRESS(0x153560, 0x260)
 font* ResourceManager::loadFontData(const char* name, TAbstractFile* stream,
                                     int fileSize)
 {
-    font::TFontSpec spec;
-    stream->read(&spec, sizeof(spec));
+    PortableFontDiskSpec diskSpec;
+    stream->read(&diskSpec, sizeof(diskSpec));
+    font::TFontSpec spec = decodeFontSpec(diskSpec);
 
-    int dataSize = fileSize - sizeof(spec);
+    int dataSize = fileSize - sizeof(diskSpec);
     TAutoArrayPtr<unsigned char> data(new unsigned char[dataSize]);
     stream->read(data.get(), dataSize);
 
@@ -1524,10 +1526,11 @@ CSprite* ResourceManager::GetSprite(const char* name)
     for (sequenceIndex = 0;
          sequenceIndex < Sdef.m_numSequences;
          ++sequenceIndex) {
-        memcpy(&sequences[sequenceIndex], definitionPosition, sizeof(TSpriteDataHeader));
-        sequences[sequenceIndex].m_sequenceNumber = LITTLE_ENDIAN_LONG(sequences[sequenceIndex].m_sequenceNumber);
-        sequences[sequenceIndex].m_numFrames = LITTLE_ENDIAN_LONG(sequences[sequenceIndex].m_numFrames);
-        definitionPosition += sizeof(TSpriteDataHeader);
+        TSpriteSequenceDiskHeader diskSequence;
+        memcpy(&diskSequence, definitionPosition, sizeof(diskSequence));
+        sequences[sequenceIndex].m_sequenceNumber = LITTLE_ENDIAN_LONG(diskSequence.m_sequenceNumber);
+        sequences[sequenceIndex].m_numFrames = LITTLE_ENDIAN_LONG(diskSequence.m_numFrames);
+        definitionPosition += sizeof(diskSequence);
 
         sequences[sequenceIndex].m_frameNames = new char[sequences[sequenceIndex].m_numFrames][13];
         memcpy(sequences[sequenceIndex].m_frameNames, definitionPosition,

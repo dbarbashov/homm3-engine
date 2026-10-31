@@ -121,8 +121,7 @@ WebAudio sink (silent); virtual PCM records are unavailable in that lane.
 `build/cmake-parity-*`; the live preview's worker and `web/port/game.*` stay
 untouched. The runner starts its own loopback relay and site on random ports,
 uses isolated browser contexts and cleans up its processes. Tests are inaudible.
-Do not run `prepare-port.py` or configure a build concurrently with compilation:
-all configurations share the generated portable source directory.
+Source files are tracked directly; configuration does not regenerate them.
 
 Fixtures currently enter at **before-first-turn**, generated once and then
 saved/reloaded. Arbitrary mid-battle or mid-turn user-save import is not

@@ -1,3 +1,9 @@
+#ifdef HOMM3_SERVER
+#include "server_authority.h"
+#include "server_terminal.h"
+#endif
+#include "fast_game.h"
+#include "frontend_bridge.h"
 #include "va.h"
 
 #include <stdio.h>
@@ -542,9 +548,9 @@ void creditsWait()
     if (videoNeedsUpdate())
         videoDrawRects();
     int endOffset = 580;
+    unsigned long nextCreditsFrame=GameTime::get();
+    Port::notifyScreen("credits");
     while (1) {
-        if (!videoPlaying())
-            break;
         pollSound();
         process1WindowsMessage();
         msg = g_inputManager->getEvent();
@@ -557,7 +563,8 @@ void creditsWait()
                 break;
             // fall through
         default:
-            if (videoNeedsUpdate()) {
+            if (GameTime::isPast(nextCreditsFrame)) {
+                nextCreditsFrame=GameTime::get()+33;
                 Bitmap16Bit* screen = g_windowManager->m_screenBitmap;
                 background->Draw(0, 0, background->GetWidth(),
                                  background->GetHeight(), screen->GetMap(0, 0),
@@ -925,10 +932,12 @@ DC_ADDRESS(0x0dff5c, 0x86)
 MAC_ADDRESS(0x10f884, 0xdc)
 void showCredits()
 {
+    videoOpen(33,0,0,800,600,1,false,true);
     videoDrawCurrentFrame();
     g_mainBack->Draw(0, 0, g_mainBack->GetWidth(), g_mainBack->GetHeight(),
                    g_windowManager->m_screenBitmap, 460, 0, false);
     creditsWait();
+    videoClose();
     videoDrawCurrentFrame();
     g_mainBack->Draw(0, 0, g_mainBack->GetWidth(), g_mainBack->GetHeight(),
                    g_windowManager->m_screenBitmap, 460, 0, false);
@@ -1644,6 +1653,7 @@ static unsigned char doCampaignWindow()
         case TCampaignSetWindow::CUSTOM_CAMPAIGN_ID: {
             videoPause();
             TCustomCampaignWindow customCampaignWindow;
+            Port::notifyScreen("custom-campaigns");
             customCampaignWindow.doModal(0);
             if (g_windowManager->m_dialogReturn) {
                 g_inCampaign = 1;
@@ -2992,6 +3002,9 @@ DC_ADDRESS(0x0e3780, 0x282)
 MAC_ADDRESS(0x114cdc, 0x380)
 void checkEndGame(int forceWin)
 {
+#ifdef HOMM3_SERVER
+    if(Port::Authority::active()){Port::Authority::checkTerminal(forceWin);return;}
+#endif
     int gameWon;
     int gameLost;
     int liveOpponents;
@@ -3054,7 +3067,11 @@ void checkEndGame(int forceWin)
                      -1, 0, -1, 0, -1, 0, -1, 0);
     } else {
         for (i = 0; i < g_gamePlayerCount; i++)
-            if (!g_game->m_playerDisabled[i] && g_game->isLocalHuman(i))
+            if (!g_game->m_playerDisabled[i] && (
+#ifdef HOMM3_SERVER
+                Port::Authority::active() ||
+#endif
+                Port::Fast::executing() ? g_game->isHuman(i) : g_game->isLocalHuman(i)))
                 break;
         if (i == g_gamePlayerCount) {
             g_gameOver = 1;
@@ -4572,6 +4589,12 @@ void normalDialog(const char* text, int mbType, int x, int y,
     int resType1, int resExtra1, int resType2, int resExtra2,
     int special, int timeout, int resType3, int resExtra3)
 {
+#ifdef HOMM3_SERVER
+    if (Port::Authority::active()) {
+        Port::Authority::normalChoice(text,mbType,resType1,resExtra1,resType2,resExtra2,special,resType3,resExtra3,x,y); return;
+    }
+#endif
+    if (Port::Fast::executing()) { g_windowManager->m_dialogReturn=DIALOG_RETURN_ACCEPT; return; }
     TNormalDialogInfo dialogInfo;
     dialogInfo.m_dialogText = text;
     dialogInfo.m_x = x;
@@ -4931,6 +4954,15 @@ void extendedDialog(const char* text,
                      std::vector<type_dialog_resource>& resources,
                      long x, long y, long timeout)
 {
+#ifdef HOMM3_SERVER
+    if (Port::Authority::active()) {
+        if (!g_currentPlayer->isHuman()) { g_windowManager->m_dialogReturn=DIALOG_RETURN_OK; return; }
+        Port::Authority::Choice c;c.actor=Port::Authority::activeActor();c.kind="normal";c.text=text?text:"";c.options={DIALOG_RETURN_OK};
+        c.metadata="{\"mbType\":1,\"icons\":[";
+        for(size_t i=0;i<resources.size();++i){if(i)c.metadata+=",";c.metadata+="["+std::to_string(resources[i].m_resource)+","+std::to_string(resources[i].m_qualifier)+"]";}
+        c.metadata+="]}";g_windowManager->m_dialogReturn=Port::Authority::choose(c).value;return;
+    }
+#endif
     long i = 0;
 
     do {
@@ -4980,4 +5012,126 @@ MAC_ADDRESS(0x119764, 0x38)  // decorated identity + map-extents arithmetic
 unsigned short* getMapExtraPtr(int x, int y, int z)
 {
     return &g_mapExtra[(z * g_mapHeight + y) * g_mapWidth + x];
+}
+
+// Portable startup invokes the original static data loader.
+bool portableLoadGameData(){return loadGameData()!=0;}
+void portableInitVars(){initVars();}
+
+// Original campaign choosers remain owned by kb.cpp; expose only the host boundary.
+bool portableChooseCampaign(bool load){
+    g_inSetupDialog=1;g_inCampaign=0;g_mpExtendedType=10;g_mpBaseType=10;
+    g_numHumanPlayers=1;g_waitForRemoteReceive=0;g_directConnect=0;
+    g_game->m_isTutorial=0;g_setupGameType=load?1:0;
+    if(!g_gameSelectBack)g_gameSelectBack=ResourceManager::GetBitmap16("GamSelBk.pcx");
+    int selected=load?pickLoadGame():doCampaignWindow();
+    g_inSetupDialog=0;
+    if(!selected){g_inCampaign=0;return false;}
+    g_inCampaign=1;g_gameCommand=-1;g_runStartEventsOnEntry=0;
+    return true;
+}
+
+// The campaign arm of oldmain's result dispatch, using its original bookkeeping.
+static bool portableCampaignResult(bool alreadyScored){
+    g_completeDrawEnabled=1;
+    g_mouseManager->setPointer(0,mouseManager::DEFAULT_SET);
+    sprintf(g_winText,(*g_generalText)[GENERAL_TEXT_CAMPAIGN_COMPLETE_FORMAT],g_game->getCurrentTurn());
+    SCampaign& campaign=g_game->m_campaign;
+    if(!g_defeatedAllPlayers){lostGame();g_gameOver=0;return false;}
+    if(!alreadyScored){
+        TCampaignBrief::CampaignHeaderStruct header(campaign.getCampaignFileName().c_str());
+        if(!header.load()){g_gameOver=0;return false;}
+        campaign.completeCurrentMap(&header);
+        saveGame(true);
+        campaign.playScenarioEpilogue(&header);
+        if((campaign.m_currentCampaign==g_campaignOrdinal03 || campaign.m_currentCampaign==g_campaignOrdinal18) && campaign.campaignComplete()){
+            if(campaign.m_currentCampaign==g_campaignOrdinal03)playFramedVideo(32,"IntroRim.pcx");
+            showCongrats(0);
+            if(g_showHighScore){g_showHighScore=0;g_highScoreManager->viewHiScore();}
+            g_gameOver=0;g_inCampaign=0;return false;
+        }
+    }
+    const int set=campaign.m_currentCampaign<7?0:(campaign.m_currentCampaign>=13)+1;
+    bool started=false;
+    if(campaign.campaignComplete()){
+        if(!alreadyScored){showCongrats(0);if(g_showHighScore){g_showHighScore=0;g_highScoreManager->viewHiScore();}}
+        if(campaign.m_currentCampaign!=g_campaignOrdinalLast)started=doCampaignWindow(false,set)!=0;
+    }else{
+        TCampaignBrief brief(false,false);brief.doModal();
+        started=g_windowManager->m_dialogReturn!=DIALOG_RETURN_CANCEL;
+    }
+    g_gameOver=0;g_runStartEventsOnEntry=started;g_gameCommand=-1;
+    return started;
+}
+
+// Same entry sequence as oldmain's runGame branch, exposed to the portable host.
+void portableAdventureLoop(bool newGame){
+#ifdef HOMM3_HARNESS
+  Port::Harness::loadFixture();
+#endif
+  for(;;){
+    bool scored=g_inCampaign && g_game->m_campaign.m_currentMap>=0
+        && g_game->m_campaign.m_mapScores[g_game->m_campaign.m_currentMap].m_completed;
+    if(scored){g_defeatedAllPlayers=g_gameResultCampaignMapScored;unloadProgressBar();}
+    else {
+    g_windowManager->m_colorCyclingOn=1;
+    g_gameInitialized=1;
+    computeAdvNetControl();
+    g_soundManager->stopAllSamples(1);
+    if(g_executive->addManager(g_advManager,-1))
+        shutDown((*g_generalText)[GENERAL_TEXT_ADD_MANAGER_ERROR]);
+    unloadProgressBar();
+    if(g_remoteOn){
+        waitForReadyToPlayMsg();
+        g_game->getLocalPlayer()->m_quickCombat=g_config.m_quickCombat;
+        CCombatTypeMsg msg(g_config.m_quickCombat);transmitRemoteData(&msg,0x7f,false,true);
+    }
+    if(newGame){g_game->checkForTimeEvent();g_game->checkForTownEvent();}
+    Port::Fast::begin();
+    if(!Port::Fast::enabled())g_turnDuration.start();
+    Port::notifyScreen("adventure");
+    g_executive->mainLoop();
+    g_executive->removeManager(g_advManager);
+    g_soundManager->m_playSounds=1;g_goSolo=0;g_soundManager->stopAllSamples(1);
+    }
+    if(!g_inCampaign || (!g_gameOver && !scored))break;
+    if(!portableCampaignResult(scored))break;
+    newGame=true;
+  }
+}
+
+// Original oldmain restart branch; no new scenario rules.
+void portableRestartScenario(){
+    g_mouseManager->setPointer(1,mouseManager::ADVENTURE_SET);
+    showProgressBar();incProgressBar(1);
+    playerData playerSave[NUM_PLAYERS];
+    for(int i=0;i<NUM_PLAYERS;++i)playerSave[i]=g_game->m_players[i];
+    TTownType alignment[NUM_PLAYERS];
+    memcpy(alignment,g_game->m_setup.m_alignment,sizeof(alignment));
+    if(g_inCampaign){
+        g_game->resetGame(g_game->m_setup.m_difficulty,g_game->m_campaign.m_currentMap,&g_game->m_mapHeader);
+        const std::string filename=g_game->m_campaign.getCampaignFileName();
+        TCampaignBrief::CampaignHeaderStruct header(filename.c_str());
+        const int choice=g_game->m_campaign.m_briefingChoice,map=g_game->m_campaign.m_currentMap;
+        if(!header.load())throw std::runtime_error("Cannot reload campaign");
+        g_game->m_campaign.applyBriefingChoice(choice);
+        int player=header.m_scenarios[map]->getStartOptions()->getPlayer(choice);
+        g_game->m_players[player].m_isHuman=1;g_game->m_players[player].m_isLocal=1;g_localGamePos=player;
+        incProgressBar(1);g_game->setupFirstPlayer();header.startScenario(map,choice);
+        incProgressBar(1);incProgressBar(1);return;
+    }
+    g_game->resetGame(g_game->m_setup.m_difficulty,0,0);
+    for(int j=0;j<NUM_PLAYERS;++j){
+        if(alignment[j]>=0 && (1<<alignment[j]) & g_game->m_mapHeader.m_playerSlotAttributes[j].m_legalAlignments){
+            g_game->m_setup.m_alignment[j]=alignment[j];
+            g_startingHeroOverrides[j]=HeroId(g_game->m_setup.m_startingHero[j]);
+        }
+        strcpy(g_game->m_players[j].m_name,playerSave[j].m_name);
+        g_game->m_players[j].m_isLocal=playerSave[j].m_isLocal;
+        g_game->m_players[j].m_isHuman=playerSave[j].m_isHuman;
+        g_newMapStartingBonus[j]=g_game->m_setup.m_startingBonus[j];
+    }
+    incProgressBar(1);g_game->setupFirstPlayer();
+    g_game->newMap(g_game->m_setup.m_path,g_game->m_setup.m_filename,g_startingHeroOverrides,g_game->m_gameVersion);
+    incProgressBar(1);incProgressBar(1);
 }

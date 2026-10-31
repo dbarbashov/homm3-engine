@@ -4,7 +4,7 @@
 #include "va.h"
 #include "videogamestate.h"
 
-#if defined(HOMM3_TARGET_MAC)
+#if defined(HOMM3_TARGET_MAC) || defined(HOMM3_PORT)
 // Only opaque vendor handles are needed by the shared game declarations.
 struct SmackTag;
 typedef SmackTag Smack;

@@ -13,12 +13,11 @@ a = p.parse_args()
 manifest = json.loads((ROOT / 'port/game-sources.json').read_text())
 # Constructor changes in game.h require every translation unit to agree; linking
 # reused objects from another checkout can select an old inline constructor.
-subprocess.run([sys.executable, 'scripts/prepare-port.py'], cwd=ROOT, check=True)
 subprocess.run([sys.executable, 'scripts/compile-port.py', '--target', 'native', *manifest['core']], cwd=ROOT, check=True)
 flags = shlex.split(subprocess.check_output(['sdl2-config', '--cflags', '--libs'], text=True))
 video = a.video_root.resolve()
 command = ['clang++', '-std=c++14', '-DHOMM3_PORT', '-DHOMM3_FULL_GAME',
-           '-include', 'port/compat/prefix.h', '-Iport/compat', '-Ibuild/portable-source/include',
+           '-include', 'port/compat/prefix.h', '-Iport/compat', '-Iinclude',
            '-O1', '-Wno-writable-strings', '-Wno-deprecated-declarations', *flags,
            '-Wl,-dead_strip', 'port/probes/network_headers.cpp',
            *[f'build/cpp-native/{unit}.o' for unit in manifest['core']],

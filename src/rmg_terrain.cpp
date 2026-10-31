@@ -287,7 +287,8 @@ void TRmgTerrainPainter::repaintMap(TTerrainPlacementOp::TAbstractMap* map, u32 
 #if defined(HOMM3_TARGET_MAC)
     TTilePoint size = map->getSize();
 #else
-    TTilePoint size = map->getSize(TTilePoint());
+    TTilePoint size;
+    map->getSize(size);
 #endif
     for (u32 y = 0; y < size.y(); ++y)
         for (u32 x = 0; x < size.x(); ++x) {
@@ -311,7 +312,8 @@ u32 TRmgTerrainPainter::computeEffectiveFrequency(u32 specialTileFrequency,
 #if defined(HOMM3_TARGET_MAC)
     TTilePoint size = map->getSize();
 #else
-    TTilePoint size = map->getSize(TTilePoint());
+    TTilePoint size;
+    map->getSize(size);
 #endif
     TTerrainTypeTraits* rule = g_rmgTerrainRules[terrain];
     if (point.x() > 0) {
@@ -572,7 +574,7 @@ TRmgTerrainPainter::TRmgTerrainPainter(
     // Mac 0x255c68 calls the value-returning slot.
     m_size = m_adapter->getSize();
 #else
-    m_size = m_adapter->getSize(TTilePoint());
+    m_adapter->getSize(m_size);
 #endif
     m_packedCells.resize(getWidth() * getHeight(), TRmgPackedTerrainCell());
 }
@@ -959,7 +961,7 @@ void TRmgTerrainPainter::repairTerrainPoint(const TTilePoint& point)
                     }
                 }
             }
-            for (direction = gaps[smallest].m_start;
+            for (int direction = gaps[smallest].m_start;
                  direction != (gaps[smallest].m_start + gaps[smallest].m_length)
                      % TILE_DIR_COUNT;
                  direction = (direction + 1) % TILE_DIR_COUNT) {

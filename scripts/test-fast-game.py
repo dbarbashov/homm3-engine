@@ -25,7 +25,6 @@ if not object_root.is_dir():
     p.error(f'Build the native game first; missing {object_root}')
 if not a.runtime.is_dir():
     p.error(f'Original game assets are required: {a.runtime}')
-subprocess.run([sys.executable, 'scripts/prepare-port.py'], cwd=ROOT, check=True)
 subprocess.run([sys.executable, 'scripts/compile-port.py', '--target', 'native', *changed], cwd=ROOT, check=True)
 exclude = {f'{name}.cpp.o' for name in [*changed, 'game_main', 'sdl_backend', 'fast_game', 'hd_qol']}
 objects = [str(path) for path in sorted(object_root.rglob('*.o')) if path.name not in exclude]
@@ -33,7 +32,7 @@ objects += [str(ROOT / f'build/cpp-native/{name}.o') for name in changed]
 flags = shlex.split(subprocess.check_output(['sdl2-config', '--cflags', '--libs'], text=True))
 video = a.video_root.resolve()
 command = ['clang++', '-std=c++14', '-DHOMM3_PORT', '-DHOMM3_FULL_GAME',
-           '-include', 'port/compat/prefix.h', '-Iport/compat', '-Ibuild/portable-source/include',
+           '-include', 'port/compat/prefix.h', '-Iport/compat', '-Iinclude',
            '-O1', '-Wno-writable-strings', '-Wno-deprecated-declarations', *flags,
            '-Wl,-dead_strip', 'port/probes/fast_game.cpp', 'port/platform/sdl_backend.cpp', 'port/platform/hd_qol.cpp', 'port/platform/cursor.cpp',
            *objects, '-I' + str(video / 'include'),

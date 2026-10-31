@@ -1,3 +1,16 @@
+#include "authority_local_files.h"
+#ifdef HOMM3_SERVER
+#include "server_puzzle.h"
+#else
+#include "authority_puzzle_client.h"
+#endif
+#include "authority_client.h"
+#include "authority_actions_client.h"
+#include "authority_client.h"
+#ifdef HOMM3_SERVER
+#include "server_authority.h"
+#endif
+#include "fast_game.h"
 // The DC roster identifies source interfaces; retained retail addresses
 // are corroborated with bodies, calls and vtables. Several DC helpers have
 // no standalone retail body because VC6 expands their calls. Their canonical
@@ -5,6 +18,7 @@
 // Platform/interface retirements are recorded by exact identity in dc_only.tsv.
 #include "text.h"
 #include "va.h"
+#include "hd_view.h"
 #include "objnames.h"
 #include "includes.h"
 #include "homm3_limit.h"
@@ -771,7 +785,7 @@ int advManager::open(int newPriority)
     m_bottomViewType = BOTTOM_VIEW_DEFAULT;
     overrideBottomView(BOTTOM_VIEW_DEFAULT, -1);
     g_soundManager->adjustSoundVolumes();
-    g_game->resetAllPlayerVisibility();
+    if(!Port::AuthorityClient::enabled())g_game->resetAllPlayerVisibility();
     setInitialMapOrigin();
     redrawAdvScreen(1, 0);
 
@@ -905,7 +919,7 @@ void advManager::close()
     for (i = 0; i < kNumTerrainTypes; i++) {
         ResourceManager::Dispose(m_groundTileset[i]);
         m_groundTileset[i] = 0;
-        cursorSamples[i]->dispose();
+        if (cursorSamples[i]) cursorSamples[i]->dispose();
         cursorSamples[i] = 0;
     }
 
@@ -1061,11 +1075,14 @@ NewmapCell* advManager::doAdvCommand(type_point& triggerPoint)
         int noMove;
         // Before normalization: bFoughtBattle.
         int foughtBattle;
+        const bool nativeFastRoute=Port::Fast::nativeUI();
+        std::vector<int> fastSteps;
+        if(nativeFastRoute)for(int step=0;step<g_searchArray->getPathSteps();++step)fastSteps.push_back(g_searchArray->getStep(step));
         int i = g_searchArray->getPathSteps() - 1;
         if (i >= 0) {
             while (1) {
                 {
-                    eventCell = moveHero(g_searchArray->getStep(i),
+                    eventCell = moveHero(nativeFastRoute?fastSteps[i]:g_searchArray->getStep(i),
                                          i == 0, triggerPoint, &noMove, 0,
                                          &foughtBattle, 0);
                     m_advWindow->updateHeroLocator(-1, 1, 1);
@@ -1217,6 +1234,9 @@ DC_ADDRESS(0x008644, 0x52a)
 MAC_ADDRESS(0x008c9c, 0x4a8)
 int advManager::main(message& msg)
 {
+    if(msg.m_id == MESSAGE_NONE) Port::HD::resizeAdventure();
+    if (Port::Fast::enabled()) Port::Fast::tick();
+
     if (m_status == STATUS_SUSPENDED)
         return 0;
 
@@ -1466,6 +1486,7 @@ int advManager::processKeyPress(const message& msg, bool& exitFlag, type_point& 
         break;
 
     case KEYCODE_D:
+        if (Port::Fast::nativeUI() && !Port::AuthorityActionsClient::enabled()) { Port::Fast::unavailable(); break; }
         if (waitingPlayer)
             break;
         if (!g_game->getCurrHero())
@@ -1495,6 +1516,7 @@ int advManager::processKeyPress(const message& msg, bool& exitFlag, type_point& 
         break;
 
     case KEYCODE_L:
+        if(Port::AuthorityLocalFiles::blocked(true))break;
         if (g_game->isMultiplayer())
             break;
         normalDialog((*g_generalText)[GENERAL_TEXT_LOAD_GAME_PROMPT], 2, -1, -1, -1, 0, -1, 0,
@@ -1871,17 +1893,17 @@ void advManager::processRadarSelect(const message* msg)
         (msg->m_mouseY - m_advWindow->m_radarWidget->m_y) / radarScale);
     int mapX = static_cast<int>(
         (msg->m_mouseX - m_advWindow->m_radarWidget->m_x) / radarScale);
-    m_radarOrigin.m_x = mapX - 9;
-    m_radarOrigin.m_y = mapY - 8;
+    m_radarOrigin.m_x = mapX - Port::HD::centerX();
+    m_radarOrigin.m_y = mapY - Port::HD::centerY();
 
-    if (m_radarOrigin.m_x < -9)
-        m_radarOrigin.m_x = -9;
-    if (m_radarOrigin.m_y < -8)
-        m_radarOrigin.m_y = -8;
-    if (m_radarOrigin.m_x > g_mapWidth - 10)
-        m_radarOrigin.m_x = g_mapWidth - 10;
-    if (m_radarOrigin.m_y > g_mapHeight - 9)
-        m_radarOrigin.m_y = g_mapHeight - 9;
+    if (m_radarOrigin.m_x < -Port::HD::centerX())
+        m_radarOrigin.m_x = -Port::HD::centerX();
+    if (m_radarOrigin.m_y < -Port::HD::centerY())
+        m_radarOrigin.m_y = -Port::HD::centerY();
+    if (m_radarOrigin.m_x > g_mapWidth - Port::HD::centerX()-1)
+        m_radarOrigin.m_x = g_mapWidth - Port::HD::centerX()-1;
+    if (m_radarOrigin.m_y > g_mapHeight - Port::HD::centerY()-1)
+        m_radarOrigin.m_y = g_mapHeight - Port::HD::centerY()-1;
 
     updateRadar(1, 1, 0, 0, 0);
     completeDraw(0);
@@ -1926,8 +1948,8 @@ void advManager::processRadarSelect(const message* msg)
             dragX = min(dragX, g_mapWidth - 1);
             dragY = max(dragY, 0);
             dragY = min(dragY, g_mapWidth - 1);
-            m_radarOrigin.m_x = dragX - 9;
-            m_radarOrigin.m_y = dragY - 8;
+            m_radarOrigin.m_x = dragX - Port::HD::centerX();
+            m_radarOrigin.m_y = dragY - Port::HD::centerY();
 
             updateRadar(1, 1, 0, 0, 0);
             completeDraw(0);
@@ -1976,8 +1998,8 @@ void advManager::processMapSelect(const message& msg, type_point& triggerPoint, 
         int objType;
         int objIndex;
         if (g_currentPlayer == player
-            && m_lastHoverX == HERO_VIEW_TILE_X
-            && m_lastHoverY == HERO_VIEW_TILE_Y
+            && m_lastHoverX == Port::HD::centerX()
+            && m_lastHoverY == Port::HD::centerY()
             && g_game->getCurrHeroId() != -1 && m_curHeroMobile) {
             objIndex = g_game->getCurrHeroId();
             objType = HERO;
@@ -2372,6 +2394,7 @@ DC_ADDRESS(0x00c094, 0xa6)
 MAC_ADDRESS(0x00c154, 0x94)
 void advManager::drawRolloverText(char* text)
 {
+    if (Port::Fast::nativeUI() && Port::Fast::state().ready) text=const_cast<char*>(Port::Fast::waitingText());
     union {
         char* m_pointer;
         int m_value;
@@ -3842,6 +3865,8 @@ DC_ADDRESS(0x00fd84, 0x772)
 MAC_ADDRESS(0x00f088, 0x668)  // anchor-callee
 int advManager::processSearch(int x, int y, int z)
 {
+    if (Port::AuthorityActionsClient::enabled()) return Port::AuthorityClient::request(11,g_game->getCurrHeroId());
+    if (Port::Fast::nativeUI()) { Port::Fast::unavailable(); return 0; }
     hero* currHero;
     SAMPLE2 digSample;
     int player;
@@ -3958,9 +3983,10 @@ int advManager::processSearch(int x, int y, int z)
     }
 
     currHero->m_movePoints = 0;
+#ifndef HOMM3_SERVER
     updBottomView(1, 1, 1);
-
     checkDimHero();
+#endif
 
     reseed(0, 0);
     return 1;
@@ -3976,9 +4002,12 @@ DC_ADDRESS(0x010520, 0x120)
 MAC_ADDRESS(0x00f6f0, 0xb8)  // MAC_ABSTRACTION_FROM(tokens1:e97a1d8db3b7,94.0217): GameTime::elapsed restores the signed predicate and delta Mac expands at 0xf72c/0xf758; the inline boundary grows the CW frame by 16 bytes.
 void advManager::updateScreen(int allowIntermediateMouse, int forceDraw)
 {
+#ifdef HOMM3_SERVER
+    return; // Presentation only; worker never owns a framebuffer.
+#endif
     g_windowManager->updateScreen(ADVENTURE_SCREEN_X, ADVENTURE_SCREEN_Y,
-                                  ADVENTURE_SCREEN_WIDTH,
-                                  ADVENTURE_SCREEN_HEIGHT);
+                                  Port::HD::mapRight()+8,
+                                  Port::HD::mapHeight());
 
     unsigned long curTime = GameTime::get();
     if (GameTime::elapsed(
@@ -4002,11 +4031,11 @@ void advManager::drawAdventureMapGems()
     m_gemIcons[0]->Draw(0, player, 0, 0, 46, 46,
                       g_windowManager->m_screenBitmap, 6, 6, 0, 1);
     m_gemIcons[1]->Draw(0, player, 0, 0, 46, 46,
-                      g_windowManager->m_screenBitmap, 556, 6, 0, 1);
+                      g_windowManager->m_screenBitmap, Port::HD::mapRight()-44, 6, 0, 1);
     m_gemIcons[2]->Draw(0, player, 0, 0, 46, 46,
-                      g_windowManager->m_screenBitmap, 6, 508, 0, 1);
+                      g_windowManager->m_screenBitmap, 6, Port::HD::mapHeight()-36, 0, 1);
     m_gemIcons[3]->Draw(0, player, 0, 0, 46, 46,
-                      g_windowManager->m_screenBitmap, 556, 508, 0, 1);
+                      g_windowManager->m_screenBitmap, Port::HD::mapRight()-44, Port::HD::mapHeight()-36, 0, 1);
 }
 
 VA(0x0040f3f0, 0x47D)
@@ -4014,6 +4043,9 @@ DC_ADDRESS(0x010788, 0x514)
 MAC_ADDRESS(0x00f948, 0x5e0)
 void advManager::completeDraw(int startX, int startY, int z, bool forceDraw, bool updateBottomView)
 {
+#ifdef HOMM3_SERVER
+    return; // Presentation only; worker never owns a framebuffer.
+#endif
     pollSound();
 
     if (!forceDraw && !g_completeDrawEnabled && !g_remoteOn)
@@ -4034,8 +4066,8 @@ void advManager::completeDraw(int startX, int startY, int z, bool forceDraw, boo
 
     m_cursorDrawn = 0;
 
-    int drawheight = COMPLETE_DRAW_LAST_Y;
-    int drawwidth = COMPLETE_DRAW_LAST_X;
+    int drawheight = g_drawingPuzzle ? COMPLETE_DRAW_LAST_Y : (Port::HD::mapHeight()+31)/32;
+    int drawwidth = g_drawingPuzzle ? COMPLETE_DRAW_LAST_X : (Port::HD::mapRight()+31)/32;
     int x;
     int y;
 
@@ -4137,6 +4169,9 @@ DC_ADDRESS(0x010c9c, 0x56)
 MAC_ADDRESS(0x00ff28, 0x4c)
 void advManager::completeDraw(bool forceDraw)
 {
+#ifdef HOMM3_SERVER
+    return; // Presentation only; worker never owns a framebuffer.
+#endif
     completeDraw(m_radarOrigin.m_x, m_radarOrigin.m_y, m_radarOrigin.m_z,
                  forceDraw, true);
 }
@@ -4535,11 +4570,11 @@ void advManager::drawAdvObj(int srcX, int srcY, int z, int destX, int destY)
         tileh -= -baseY;
         baseY = 0;
     }
-    if (baseX + tilew > 600) {
-        tilew = 600 - baseX;
+    if (baseX + tilew > Port::HD::mapRight()) {
+        tilew = Port::HD::mapRight() - baseX;
     }
-    if (baseY + tileh > 544) {
-        tileh = 544 - baseY;
+    if (baseY + tileh > Port::HD::mapHeight()) {
+        tileh = Port::HD::mapHeight() - baseY;
     }
     if (tilew <= 0 || tileh <= 0)
         return;
@@ -4698,21 +4733,21 @@ void advManager::drawAdvObj(int srcX, int srcY, int z, int destX, int destY)
             }
 
             if (row == OBJECT_DRAW_LAYER_HERO_BACK
-                && destY == CURSOR_DEST_Y0 && m_drawCursor && !g_drawingPuzzle) {
-                if (destX == CURSOR_DEST_X0)
+                && destY == (Port::HD::centerY()-1) && m_drawCursor && !g_drawingPuzzle) {
+                if (destX == (Port::HD::centerX()-1))
                     drawCursor(0, 0);
-                else if (destX == CURSOR_DEST_X1)
+                else if (destX == Port::HD::centerX())
                     drawCursor(1, 0);
-                else if (destX == CURSOR_DEST_X2)
+                else if (destX == (Port::HD::centerX()+1))
                     drawCursor(2, 0);
             } else if (row == OBJECT_DRAW_LAYER_HERO_FRONT
-                       && destY == CURSOR_DEST_Y1
+                       && destY == Port::HD::centerY()
                        && m_drawCursor && !g_drawingPuzzle) {
-                if (destX == CURSOR_DEST_X0)
+                if (destX == (Port::HD::centerX()-1))
                     drawCursor(0, 1);
-                else if (destX == CURSOR_DEST_X1)
+                else if (destX == Port::HD::centerX())
                     drawCursor(1, 1);
-                else if (destX == CURSOR_DEST_X2)
+                else if (destX == (Port::HD::centerX()+1))
                     drawCursor(2, 1);
             }
         }
@@ -4736,22 +4771,22 @@ void advManager::drawAdvObj(int srcX, int srcY, int z, int destX, int destY)
         }
     }
 
-    if (destY == CURSOR_DEST_Y0) {
+    if (destY == (Port::HD::centerY()-1)) {
         if (m_drawCursor && !g_drawingPuzzle) {
-            if (destX == CURSOR_DEST_X0)
+            if (destX == (Port::HD::centerX()-1))
                 drawCursor(0, 0);
-            else if (destX == CURSOR_DEST_X1)
+            else if (destX == Port::HD::centerX())
                 drawCursor(1, 0);
-            else if (destX == CURSOR_DEST_X2)
+            else if (destX == (Port::HD::centerX()+1))
                 drawCursor(2, 0);
         }
-    } else if (destY == CURSOR_DEST_Y1) {
+    } else if (destY == Port::HD::centerY()) {
         if (m_drawCursor && !g_drawingPuzzle) {
-            if (destX == CURSOR_DEST_X0)
+            if (destX == (Port::HD::centerX()-1))
                 drawCursor(0, 1);
-            else if (destX == CURSOR_DEST_X1)
+            else if (destX == Port::HD::centerX())
                 drawCursor(1, 1);
-            else if (destX == CURSOR_DEST_X2)
+            else if (destX == (Port::HD::centerX()+1))
                 drawCursor(2, 1);
         }
     }
@@ -4789,10 +4824,10 @@ void advManager::drawAdvObjShadow(int srcX, int srcY, int z, int destX, int dest
         tileh -= -baseY;
         baseY = 0;
     }
-    if (baseX + tilew > 600)
-        tilew = 600 - baseX;
-    if (baseY + tileh > 544)
-        tileh = 544 - baseY;
+    if (baseX + tilew > Port::HD::mapRight())
+        tilew = Port::HD::mapRight() - baseX;
+    if (baseY + tileh > Port::HD::mapHeight())
+        tileh = Port::HD::mapHeight() - baseY;
     if (tilew <= 0 || tileh <= 0)
         return;
 
@@ -4892,22 +4927,22 @@ void advManager::drawAdvObjShadow(int srcX, int srcY, int z, int destX, int dest
         }
     }
 
-    if (destY == CURSOR_DEST_Y0) {
+    if (destY == (Port::HD::centerY()-1)) {
         if (m_drawCursor && !g_drawingPuzzle) {
-            if (destX == CURSOR_DEST_X0)
+            if (destX == (Port::HD::centerX()-1))
                 drawCursorShadow(0, 0);
-            else if (destX == CURSOR_DEST_X1)
+            else if (destX == Port::HD::centerX())
                 drawCursorShadow(1, 0);
-            else if (destX == CURSOR_DEST_X2)
+            else if (destX == (Port::HD::centerX()+1))
                 drawCursorShadow(2, 0);
         }
-    } else if (destY == CURSOR_DEST_Y1) {
+    } else if (destY == Port::HD::centerY()) {
         if (m_drawCursor && !g_drawingPuzzle) {
-            if (destX == CURSOR_DEST_X0)
+            if (destX == (Port::HD::centerX()-1))
                 drawCursorShadow(0, 1);
-            else if (destX == CURSOR_DEST_X1)
+            else if (destX == Port::HD::centerX())
                 drawCursorShadow(1, 1);
-            else if (destX == CURSOR_DEST_X2)
+            else if (destX == (Port::HD::centerX()+1))
                 drawCursorShadow(2, 1);
         }
     }
@@ -4958,10 +4993,10 @@ void advManager::drawRiver(int srcX, int srcY, int z, int destX, int destY)
         tileh = baseY + 32;
         baseY = 0;
     }
-    if (baseX + tilew > 600)
-        tilew = 600 - baseX;
-    if (baseY + tileh > 544)
-        tileh = 544 - baseY;
+    if (baseX + tilew > Port::HD::mapRight())
+        tilew = Port::HD::mapRight() - baseX;
+    if (baseY + tileh > Port::HD::mapHeight())
+        tileh = Port::HD::mapHeight() - baseY;
     if (tilew <= 0 || tileh <= 0)
         return;
 
@@ -5001,10 +5036,10 @@ void advManager::drawRoad(int srcX, int srcY, int z, int destX, int destY)
         tileh = baseY + 32;
         baseY = 0;
     }
-    if (baseX + tilew > 600)
-        tilew = 600 - baseX;
-    if (baseY + tileh > 544)
-        tileh = 544 - baseY;
+    if (baseX + tilew > Port::HD::mapRight())
+        tilew = Port::HD::mapRight() - baseX;
+    if (baseY + tileh > Port::HD::mapHeight())
+        tileh = Port::HD::mapHeight() - baseY;
     if (srcY == g_mapHeight - 1)
         tileh -= 16;
     if (tilew <= 0 || tileh <= 0)
@@ -5052,10 +5087,10 @@ void advManager::drawArrowShadow(int srcX, int srcY, int z, int destX,
         tileh = baseY + 32;
         baseY = 0;
     }
-    if (baseX + tilew > 600)
-        tilew = 600 - baseX;
-    if (baseY + tileh > 544)
-        tileh = 544 - baseY;
+    if (baseX + tilew > Port::HD::mapRight())
+        tilew = Port::HD::mapRight() - baseX;
+    if (baseY + tileh > Port::HD::mapHeight())
+        tileh = Port::HD::mapHeight() - baseY;
     if (tilew <= 0 || tileh <= 0)
         return;
 
@@ -5097,10 +5132,10 @@ void advManager::drawArrow(int srcX, int srcY, int z, int destX, int destY)
         tileh = baseY + 32;
         baseY = 0;
     }
-    if (baseX + tilew > 600)
-        tilew = 600 - baseX;
-    if (baseY + tileh > 544)
-        tileh = 544 - baseY;
+    if (baseX + tilew > Port::HD::mapRight())
+        tilew = Port::HD::mapRight() - baseX;
+    if (baseY + tileh > Port::HD::mapHeight())
+        tileh = Port::HD::mapHeight() - baseY;
     if (tilew <= 0 || tileh <= 0)
         return;
 
@@ -5145,10 +5180,10 @@ void advManager::drawShroud(int srcX, int srcY, int z, int destX, int destY)
         tileh = baseY + 32;
         baseY = 0;
     }
-    if (baseX + tilew > 600)
-        tilew = 600 - baseX;
-    if (baseY + tileh > 544)
-        tileh = 544 - baseY;
+    if (baseX + tilew > Port::HD::mapRight())
+        tilew = Port::HD::mapRight() - baseX;
+    if (baseY + tileh > Port::HD::mapHeight())
+        tileh = Port::HD::mapHeight() - baseY;
     if (tilew <= 0 || tileh <= 0)
         return;
 
@@ -5227,10 +5262,10 @@ void advManager::drawUnderlay(int srcX, int srcY, int z, int destX, int destY)
         tileh -= -baseY;
         baseY = 0;
     }
-    if (baseX + tilew > 600)
-        tilew = 600 - baseX;
-    if (baseY + tileh > 544)
-        tileh = 544 - baseY;
+    if (baseX + tilew > Port::HD::mapRight())
+        tilew = Port::HD::mapRight() - baseX;
+    if (baseY + tileh > Port::HD::mapHeight())
+        tileh = Port::HD::mapHeight() - baseY;
     if (tilew <= 0 || tileh <= 0)
         return;
 
@@ -5316,10 +5351,10 @@ void advManager::drawGround(int srcX, int srcY, int z, int destX, int destY)
         tileh = baseY + 32;
         baseY = 0;
     }
-    if (baseX + tilew > 600)
-        tilew = 600 - baseX;
-    if (baseY + tileh > 544)
-        tileh = 544 - baseY;
+    if (baseX + tilew > Port::HD::mapRight())
+        tilew = Port::HD::mapRight() - baseX;
+    if (baseY + tileh > Port::HD::mapHeight())
+        tileh = Port::HD::mapHeight() - baseY;
     if (tilew <= 0 || tileh <= 0)
         return;
 
@@ -5357,7 +5392,8 @@ void advManager::drawGround(int srcX, int srcY, int z, int destX, int destY)
     }
 
     if (frame == -1)
-        frame = (srcX + 16) % 4 + 4 * ((srcY + 16) % 4);
+        // A tall/wide viewport can extend farther than sixteen cells beyond the map.
+        frame = ((srcX % 4 + 4) % 4) + 4 * ((srcY % 4 + 4) % 4);
 
     m_borderTileset->DrawTile(
         frame, tilex, tiley, tilew, tileh,
@@ -5418,6 +5454,9 @@ void advManager::updateRadar(type_point origin, bool updateFlag,
                              bool bPartialUpdate, bool view_mines,
                              bool view_heros, bool view_towns)
 {
+#ifdef HOMM3_SERVER
+    return; // Presentation only; worker never owns a framebuffer.
+#endif
     unsigned short color = 0;
     int radar_x = m_advWindow->m_radarWidget->m_x;
     int radar_y = m_advWindow->m_radarWidget->m_y;
@@ -5655,25 +5694,25 @@ void advManager::updateRadar(type_point origin, bool updateFlag,
                 curRadar[1] = color;
                 curRadar[2] = color;
                 curRadar[3] = color;
-                curRadar[0x320] = color;
-                curRadar[0x321] = color;
-                curRadar[0x322] = color;
-                curRadar[0x323] = color;
-                curRadar[0x640] = color;
-                curRadar[0x641] = color;
-                curRadar[0x642] = color;
-                curRadar[0x643] = color;
-                curRadar[0x960] = color;
-                curRadar[0x961] = color;
-                curRadar[0x962] = color;
-                curRadar[0x963] = color;
+                curRadar[1 * (g_windowManager->m_screenBitmap->GetPitch()/2) + 0] = color;
+                curRadar[1 * (g_windowManager->m_screenBitmap->GetPitch()/2) + 1] = color;
+                curRadar[1 * (g_windowManager->m_screenBitmap->GetPitch()/2) + 2] = color;
+                curRadar[1 * (g_windowManager->m_screenBitmap->GetPitch()/2) + 3] = color;
+                curRadar[2 * (g_windowManager->m_screenBitmap->GetPitch()/2) + 0] = color;
+                curRadar[2 * (g_windowManager->m_screenBitmap->GetPitch()/2) + 1] = color;
+                curRadar[2 * (g_windowManager->m_screenBitmap->GetPitch()/2) + 2] = color;
+                curRadar[2 * (g_windowManager->m_screenBitmap->GetPitch()/2) + 3] = color;
+                curRadar[3 * (g_windowManager->m_screenBitmap->GetPitch()/2) + 0] = color;
+                curRadar[3 * (g_windowManager->m_screenBitmap->GetPitch()/2) + 1] = color;
+                curRadar[3 * (g_windowManager->m_screenBitmap->GetPitch()/2) + 2] = color;
+                curRadar[3 * (g_windowManager->m_screenBitmap->GetPitch()/2) + 3] = color;
                 curRadar += 4;
                 break;
             case MAP_DIMENSION_MEDIUM:
                 curRadar[0] = color;
                 curRadar[1] = color;
-                curRadar[0x320] = color;
-                curRadar[0x321] = color;
+                curRadar[1 * (g_windowManager->m_screenBitmap->GetPitch()/2) + 0] = color;
+                curRadar[1 * (g_windowManager->m_screenBitmap->GetPitch()/2) + 1] = color;
                 curRadar += 2;
                 break;
             case MAP_DIMENSION_LARGE:
@@ -5683,7 +5722,7 @@ void advManager::updateRadar(type_point origin, bool updateFlag,
                         curRadar += 1;
                     } else {
                         curRadar[0] = color;
-                        curRadar[0x320] = color;
+                        curRadar[1 * (g_windowManager->m_screenBitmap->GetPitch()/2) + 0] = color;
                         curRadar += 1;
                     }
                 } else {
@@ -5694,8 +5733,8 @@ void advManager::updateRadar(type_point origin, bool updateFlag,
                     } else {
                         curRadar[0] = color;
                         curRadar[1] = color;
-                        curRadar[0x320] = color;
-                        curRadar[0x321] = color;
+                        curRadar[1 * (g_windowManager->m_screenBitmap->GetPitch()/2) + 0] = color;
+                        curRadar[1 * (g_windowManager->m_screenBitmap->GetPitch()/2) + 1] = color;
                         curRadar += 2;
                     }
                 }
@@ -5793,10 +5832,18 @@ void advManager::updateRadar(type_point origin, bool updateFlag,
     if (spr_h < 0)
         spr_h = 0;
 
-    if (!bSkipMarkerDraw)
-        icons->DrawInterface(frame, spr_x, spr_y, spr_w, spr_h,
-                             g_windowManager->m_screenBitmap, scr_x, scr_y,
-                             false);
+    if (!bSkipMarkerDraw) {
+        if (Port::HD::width()==800 && Port::HD::height()==600)
+            icons->DrawInterface(frame, spr_x, spr_y, spr_w, spr_h,
+                                 g_windowManager->m_screenBitmap, scr_x, scr_y, false);
+        else {
+            const int x1 = max(radar_x, radar_x + int(origin.m_x*fMultiplier));
+            const int y1 = max(radar_y, radar_y + int(origin.m_y*fMultiplier));
+            const int x2 = min(radar_x+radar_w, radar_x+int((origin.m_x+(Port::HD::mapRight()-8)/32.0f)*fMultiplier));
+            const int y2 = min(radar_y+radar_h, radar_y+int((origin.m_y+Port::HD::mapHeight()/32.0f)*fMultiplier));
+            if(x2>x1 && y2>y1)g_windowManager->m_screenBitmap->FrameRect(x1,y1,x2-x1,y2-y1,0xf800);
+        }
+    }
 
     if (updateFlag)
         g_windowManager->updateScreen(radar_x, radar_y, radar_w, radar_h);
@@ -5808,6 +5855,9 @@ MAC_ADDRESS(0x0145a0, 0x48)
 void advManager::updateRadar(bool updateFlag, bool partialUpdate,
                              bool viewMines, bool viewHeroes, bool viewTowns)
 {
+#ifdef HOMM3_SERVER
+    return; // Presentation only; worker never owns a framebuffer.
+#endif
     updateRadar(m_radarOrigin, updateFlag, partialUpdate, viewMines,
                 viewHeroes, viewTowns);
 }
@@ -6868,6 +6918,10 @@ DC_ADDRESS(0x018d38, 0x210)
 MAC_ADDRESS(0x0166b0, 0x1b4)
 void advManager::updBottomView(unsigned char forceUpdate, unsigned char drawWindow, unsigned char update)
 {
+#ifdef HOMM3_SERVER
+    if (Port::Authority::active()) return;
+#endif
+    if (Port::AuthorityClient::turnView(forceUpdate,drawWindow,update))return;
     if (m_bottomViewOverride == BOTTOM_VIEW_8)
         return;
 
@@ -6955,6 +7009,9 @@ DC_ADDRESS(0x019098, 0x62)
 MAC_ADDRESS(0x016990, 0x8c)  // anchor-global
 void advManager::bvResMsg(const char* msg, int resType, int resQty)
 {
+#ifdef HOMM3_SERVER
+    if(Port::Authority::active()){Port::Authority::present("resource",g_netLocalGamePos,resType,resQty,msg);return;}
+#endif
     m_bottomViewResourceType = resType;
     m_bottomViewResourceQuantity = resQty;
     m_bottomViewMessage = msg;
@@ -7092,10 +7149,10 @@ void advManager::heroQuickView(int heroId, int x, int y,
 
     TQuickHeroWindow window(theHero, level);
     window.m_x = limit(window.m_width / 2, x,
-                     WINDOW_SCREEN_WIDTH - 1 - window.m_width / 2)
+                     Port::HD::width() - 1 - window.m_width / 2)
                - window.m_width / 2;
     window.m_y = limit(window.m_height / 2, y,
-                     WINDOW_SCREEN_HEIGHT - 1 - window.m_height / 2)
+                     Port::HD::height() - 1 - window.m_height / 2)
                - window.m_height / 2;
     if (!displayDropShadow)
         window.m_type &= ~WINDOW_FLAG_SHADOWED;
@@ -7207,10 +7264,10 @@ void advManager::townQuickView(int townId, int x, int y,
 
     TQuickTownWindow infoWin(thisTown, viewLevel);
     infoWin.m_x = limit(infoWin.m_width / 2, x,
-                     WINDOW_SCREEN_WIDTH - 1 - infoWin.m_width / 2)
+                     Port::HD::width() - 1 - infoWin.m_width / 2)
                - infoWin.m_width / 2;
     infoWin.m_y = limit(infoWin.m_height / 2, y,
-                     WINDOW_SCREEN_HEIGHT - 1 - infoWin.m_height / 2)
+                     Port::HD::height() - 1 - infoWin.m_height / 2)
                - infoWin.m_height / 2;
     if (!displayDropShadow)
         infoWin.m_type &= ~WINDOW_FLAG_SHADOWED;
@@ -7321,10 +7378,10 @@ void advManager::monsterQuickView(const NewmapCell* cell, int cellx, int celly)
 
     }
     window->m_x = limit(window->m_width / 2, cellx * 32,
-                      WINDOW_SCREEN_WIDTH - 1 - window->m_width / 2)
+                      Port::HD::width() - 1 - window->m_width / 2)
                 - window->m_width / 2;
     window->m_y = limit(window->m_height / 2, celly * 32,
-                      WINDOW_SCREEN_HEIGHT - 1 - window->m_height / 2)
+                      Port::HD::height() - 1 - window->m_height / 2)
                 - window->m_height / 2;
     window->quickWindowWait();
     if (window)
@@ -7336,13 +7393,15 @@ DC_ADDRESS(0x01a230, 0x180)
 MAC_ADDRESS(0x017b38, 0x18c)
 void advManager::redrawAdvScreen(unsigned char update, unsigned char forceSaveBorder)
 {
+#ifdef HOMM3_SERVER
+    if (Port::Authority::active()) return;
+#endif
     const int playerId = g_game->getLocalPlayerGamePos();
     Bitmap816* const bmp = ResourceManager::GetBitmap816("AdvMap.pcx");
 
     if (bmp) {
         setPlayerPaletteColors(bmp->GetPalette().m_colors.m_data, playerId);
-        bmp->Draw(0, 0, bmp->GetWidth(), bmp->GetHeight(),
-                  g_windowManager->m_screenBitmap, 0, 0, 0);
+        Port::HD::drawAdventureFrame(bmp);
         bmp->dispose();
         m_heroLogoShowing = 0;
     }
@@ -7359,7 +7418,7 @@ void advManager::redrawAdvScreen(unsigned char update, unsigned char forceSaveBo
     updateRadar(0, 1, 0, 0, 0);
 
     if (update)
-        g_windowManager->updateScreen(0, 0, 800, 600);
+        g_windowManager->updateScreen(0, 0, Port::HD::width(), Port::HD::height());
 }
 
 // Original DC public names prove bool context flags: DeactivateCurrTown/Hero
@@ -7472,10 +7531,15 @@ void advManager::setTownContext(int townId, bool waitingPlayer, bool update)
     player->m_currTownId = townId;
 
     town* currTown = g_game->getTown(player->m_currTownId);
-    m_radarOrigin.m_x = currTown->m_mapX - 9;
-    m_radarOrigin.m_y = currTown->m_mapY - 8;
+    m_radarOrigin.m_x = currTown->m_mapX - Port::HD::centerX();
+    m_radarOrigin.m_y = currTown->m_mapY - Port::HD::centerY();
     m_radarOrigin.m_z = currTown->m_mapZ;
 
+#ifdef HOMM3_SERVER
+    // Selecting the remaining town after losing the last hero is rule state.
+    // Everything below only updates the local adventure presentation.
+    if (Port::Authority::active()) return;
+#endif
     m_advWindow->setElevationToggleImage(m_radarOrigin.m_z);
 
     int townSlot = 0;
@@ -7577,8 +7641,8 @@ void advManager::setHeroContext(int heroId, int inMove, bool waitingPlayer, bool
             g_completeDrawEnabled = 1;
         if (!waitingPlayer && drawChanges)
             m_drawCursor = 1;
-        m_radarOrigin.m_x = curr->m_x - 9;
-        m_radarOrigin.m_y = curr->m_y - 8;
+        m_radarOrigin.m_x = curr->m_x - Port::HD::centerX();
+        m_radarOrigin.m_y = curr->m_y - Port::HD::centerY();
         m_radarOrigin.m_z = curr->m_z;
         if (m_advWindow->setElevationToggleImage(m_radarOrigin.m_z))
             g_advManager->redrawAdvScreen(0, 0);
@@ -7619,8 +7683,8 @@ void advManager::setHeroContext(int heroId, int inMove, bool waitingPlayer, bool
     if (drawChanges && g_completeDrawEnabled) {
         updateRadar(0, 1, 0, 0, 0);
         completeDraw(0);
-        g_windowManager->updateScreen(0, 0, HOVER_SCREEN_WIDTH,
-                                      HOVER_SCREEN_HEIGHT);
+        g_windowManager->updateScreen(0, 0, Port::HD::width(),
+                                      Port::HD::height());
     }
 
     type_point viewCentre = getMapCenter();
@@ -7643,6 +7707,7 @@ DC_ADDRESS(0x01ae38, 0x32a)
 MAC_ADDRESS(0x0187b4, 0x288)
 bool saveGame(bool campaignWinMode)
 {
+    if(Port::AuthorityLocalFiles::blocked(true))return false;
     bool result = false;
     int humanCount = 0;
     if (!campaignWinMode) {
@@ -7716,6 +7781,9 @@ DC_ADDRESS(0x01b164, 0x3ba)
 MAC_ADDRESS(0x018a3c, 0x290)
 void advManager::setEnvironmentOrigin(type_point point, int reset)
 {
+#ifdef HOMM3_SERVER
+    return; // Ambient sound positioning has no simulation state.
+#endif
     const int maxRange = 4;
     if (!g_soundManager->m_playSounds)
         return;
@@ -8205,6 +8273,9 @@ DC_ADDRESS(0x01c5ec, 0x5e)
 MAC_ADDRESS(0x019a20, 0x78)
 void advManager::checkDimNextHeroBut()
 {
+#ifdef HOMM3_SERVER
+    if (Port::Authority::active()) return;
+#endif
     if (g_currentPlayer->isLocalHuman() && g_currentPlayer->hasMobileHero())
         m_advWindow->widgetClearStatus(11, widget::WIDGET_UPDATE | widget::WIDGET_DIMMED);
     else
@@ -8313,14 +8384,14 @@ void advManager::screenScroll(int dir, int changeMouse)
         g_mouseManager->setPointer(dir + ADV_SCROLL_POINTER,
                                    mouseManager::ADVENTURE_SET);
 
-    if (x < -9)
-        x = -9;
-    if (x > g_mapWidth - 10)
-        x = g_mapWidth - 10;
-    if (y < -8)
-        y = -8;
-    if (y > g_mapHeight - 9)
-        y = g_mapHeight - 9;
+    if (x < -Port::HD::centerX())
+        x = -Port::HD::centerX();
+    if (x > g_mapWidth - Port::HD::centerX()-1)
+        x = g_mapWidth - Port::HD::centerX()-1;
+    if (y < -Port::HD::centerY())
+        y = -Port::HD::centerY();
+    if (y > g_mapHeight - Port::HD::centerY()-1)
+        y = g_mapHeight - Port::HD::centerY()-1;
 
     if (x != m_radarOrigin.m_x || y != m_radarOrigin.m_y) {
         demobilizeCurrHero(0, 0);
@@ -8347,25 +8418,25 @@ void advManager::checkScreenScroll()
     int y;
     g_mouseManager->mouseCoords(x, y);
 
-    if (x >= 0 && x < WINDOW_SCREEN_WIDTH && y >= 0
-        && y < WINDOW_SCREEN_HEIGHT) {
+    if (x >= 0 && x < Port::HD::width() && y >= 0
+        && y < Port::HD::height()) {
         if (x < 16) {
             if (y < 16)
                 dir = ADV_SCROLL_NORTHWEST - ADV_SCROLL_POINTER;
-            else if (y > WINDOW_SCREEN_HEIGHT - 16)
+            else if (y > Port::HD::height() - 16)
                 dir = ADV_SCROLL_SOUTHWEST - ADV_SCROLL_POINTER;
             else
                 dir = ADV_SCROLL_WEST - ADV_SCROLL_POINTER;
-        } else if (x > WINDOW_SCREEN_WIDTH - 16) {
+        } else if (x > Port::HD::width() - 16) {
             if (y < 16)
                 dir = ADV_SCROLL_NORTHEAST - ADV_SCROLL_POINTER;
-            else if (y > WINDOW_SCREEN_HEIGHT - 16)
+            else if (y > Port::HD::height() - 16)
                 dir = ADV_SCROLL_SOUTHEAST - ADV_SCROLL_POINTER;
             else
                 dir = ADV_SCROLL_EAST - ADV_SCROLL_POINTER;
         } else if (y < 16) {
             dir = ADV_SCROLL_NORTH - ADV_SCROLL_POINTER;
-        } else if (y > WINDOW_SCREEN_HEIGHT - 16) {
+        } else if (y > Port::HD::height() - 16) {
             dir = ADV_SCROLL_SOUTH - ADV_SCROLL_POINTER;
         }
     }
@@ -8398,11 +8469,11 @@ int advManager::mouseInScrollZone()
     int rx;
     int ry;
     g_mouseManager->mouseCoords(rx, ry);
-    if (rx < 0 || rx >= advManager::HOVER_SCREEN_WIDTH || ry < 0
-        || ry >= advManager::HOVER_SCREEN_HEIGHT)
+    if (rx < 0 || rx >= Port::HD::width() || ry < 0
+        || ry >= Port::HD::height())
         return 0;
-    if (rx >= advManager::HOVER_SCROLL_MARGIN && rx <= advManager::HOVER_SCROLL_RIGHT
-        && ry >= advManager::HOVER_SCROLL_MARGIN && ry <= advManager::HOVER_SCROLL_BOTTOM)
+    if (rx >= advManager::HOVER_SCROLL_MARGIN && rx <= (Port::HD::width()-16)
+        && ry >= advManager::HOVER_SCROLL_MARGIN && ry <= (Port::HD::height()-16))
         return 0;
     return 1;
 }
@@ -8418,8 +8489,8 @@ void advManager::setInitialMapOrigin()
 
     if (g_currentPlayer->isLocalHuman() && g_game->getCurrTownId() != -1) {
         town* startTown = g_game->getCurrTown();
-        m_radarOrigin.m_x = startTown->m_mapX - 9;
-        m_radarOrigin.m_y = startTown->m_mapY - 8;
+        m_radarOrigin.m_x = startTown->m_mapX - Port::HD::centerX();
+        m_radarOrigin.m_y = startTown->m_mapY - Port::HD::centerY();
         m_radarOrigin.m_z = startTown->m_mapZ;
     } else if (g_currentPlayer->isLocalHuman()) {
         mobilizeCurrHero(0, 0, 0);
@@ -8430,14 +8501,14 @@ void advManager::setInitialMapOrigin()
         if (player->m_numHeroes > 0) {
             // The hero pool is indexed directly, without getHero's -1 guard.
             hero* startHero = &g_game->m_heroes[player->m_heroes[0]];
-            m_radarOrigin.m_x = startHero->m_x - 9;
-            m_radarOrigin.m_y = startHero->m_y - 8;
+            m_radarOrigin.m_x = startHero->m_x - Port::HD::centerX();
+            m_radarOrigin.m_y = startHero->m_y - Port::HD::centerY();
             m_radarOrigin.m_z = startHero->m_z;
         } else if (player->m_numTowns > 0) {
             // The town pool is indexed without a guard too.
             town* startTown = &g_game->m_towns[player->m_townIds[0]];
-            m_radarOrigin.m_x = startTown->m_mapX - 9;
-            m_radarOrigin.m_y = startTown->m_mapY - 8;
+            m_radarOrigin.m_x = startTown->m_mapX - Port::HD::centerX();
+            m_radarOrigin.m_y = startTown->m_mapY - Port::HD::centerY();
             m_radarOrigin.m_z = startTown->m_mapZ;
         } else {
             m_radarOrigin.m_x = 0;
@@ -8830,6 +8901,11 @@ DC_ADDRESS(0x01e068, 0x2f8)
 MAC_ADDRESS(0x01b408, 0x2b0)  // anchor-callee
 void advManager::viewPuzzle()
 {
+#ifdef HOMM3_SERVER
+    if(Port::Authority::active()){Port::Authority::puzzleEncounter(Port::Authority::activeActor());return;}
+#else
+    if(Port::AuthorityClient::enabled()){Port::AuthorityPuzzleClient::request();return;}
+#endif
     g_mouseManager->setPointer(0, mouseManager::ADVENTURE_SET);
     demobilizeCurrHero(0, 1);
     int pos = g_game->getLocalPlayerGamePos();
@@ -8838,7 +8914,7 @@ void advManager::viewPuzzle()
     SAMPLE2 sample2 = loadPlaySample("Obelisk.wav");
     puzzle.updatePuzzle(1);
     drawAdventureMapGems();
-    g_windowManager->updateScreen(0, 0, 800, 600);
+    g_windowManager->updateScreen(0, 0, Port::HD::width(), Port::HD::height());
 
     if (g_game->m_numObelisks > 0) {
         g_windowManager->saveFizzleSourceX(8, 8, 592, 544);
@@ -8949,6 +9025,9 @@ bool advManager::doSystemOptions()
             result = -1;
         break;
     case SYSOPT_COMMAND_102:
+        if(Port::AuthorityLocalFiles::blocked(true))break;
+        result = g_windowManager->m_dialogReturn;
+        break;
     case SYSOPT_COMMAND_105:
     case SYSOPT_COMMAND_108:
         result = g_windowManager->m_dialogReturn;
@@ -8964,7 +9043,7 @@ bool advManager::doSystemOptions()
     if (g_config.m_walkSpeed[1] != walkSpeed) {
         int i;
         for (i = 0; i < 10; i++)
-            cursorSamples[i]->dispose();
+            if (cursorSamples[i]) cursorSamples[i]->dispose();
         getCursorSampleSet(g_config.m_walkSpeed[1]);
     }
 

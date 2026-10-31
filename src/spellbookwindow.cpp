@@ -321,7 +321,7 @@ TSpellbookWindow::TSpellbookWindow(const hero& h, const armyGroup* g, TSpellbook
     m_spellNameWidgets = static_cast<textWidget**>(static_cast<void*>(
         &m_widgets[spellNameWidgetsIndex]));
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -371,7 +371,7 @@ MAC_ADDRESS(0x18c4d0, 0xb4)
 TSpellbookWindow::~TSpellbookWindow()
 {
     g_spellbookWindow = 0;
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }

@@ -1,3 +1,10 @@
+#include "authority_market_client.h"
+#ifdef HOMM3_SERVER
+#include "server_authority.h"
+#include "server_market.h"
+#endif
+#include "authority_actions_client.h"
+#include "authority_client.h"
 #include "va.h"
 
 #include <stdio.h>
@@ -240,7 +247,7 @@ TTradeResourceWindow::TTradeResourceWindow(int x2, int y2)
     okButton->setHotkey(1);
     m_widgets.push_back(okButton);
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -264,7 +271,7 @@ DC_ADDRESS(0x182dc0, 0x62)
 MAC_ADDRESS(0x1e6968, 0xb0)
 TTradeResourceWindow::~TTradeResourceWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -463,7 +470,7 @@ TGiveResourceWindow::TGiveResourceWindow(int x2, int y2)
     okButton->setHotkey(1);
     m_widgets.push_back(okButton);
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -487,7 +494,7 @@ DC_ADDRESS(0x183ecc, 0x62)
 MAC_ADDRESS(0x1e9ca0, 0xb0)
 TGiveResourceWindow::~TGiveResourceWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -682,7 +689,7 @@ TBuyArtifactWindow::TBuyArtifactWindow(int x2, int y2)
     okButton->setHotkey(1);
     m_widgets.push_back(okButton);
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -697,7 +704,7 @@ DC_ADDRESS(0x1851a4, 0x62)
 MAC_ADDRESS(0x1ecef4, 0xb0)
 TBuyArtifactWindow::~TBuyArtifactWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -975,7 +982,7 @@ TSellArtifactWindow::TSellArtifactWindow(int x2, int y2)
     okButton->setHotkey(1);
     m_widgets.push_back(okButton);
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -990,7 +997,7 @@ DC_ADDRESS(0x186c34, 0x62)
 MAC_ADDRESS(0x1f16ec, 0xb0)
 TSellArtifactWindow::~TSellArtifactWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -1203,7 +1210,7 @@ TSellCreatureWindow::TSellCreatureWindow(int x2, int y2)
     okButton->setHotkey(1);
     m_widgets.push_back(okButton);
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -1227,7 +1234,7 @@ DC_ADDRESS(0x18838c, 0x64)
 MAC_ADDRESS(0x1f4a24, 0xb0)
 TSellCreatureWindow::~TSellCreatureWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -1478,6 +1485,17 @@ DC_ADDRESS(0x188708, 0x4cc)
 MAC_ADDRESS(0x1f4f84, 0x5d8)  // anchor-callee (from 6 entry points) + linkorder
 void doMarket()
 {
+#ifdef HOMM3_SERVER
+    if(Port::Authority::active()) {
+        Port::Authority::marketEncounter(g_marketSource==1?g_game->getCurrHero():g_marketHero,
+            g_marketSource,g_marketCount,g_marketWindow,g_marketArtifacts,
+            g_marketSource==0?int(g_townManager->m_townToView->m_id):-1);return;
+    }
+#endif
+    if(Port::AuthorityClient::enabled()&&!Port::AuthorityClient::marketChoiceActive()) {
+        if(g_marketSource==0)Port::AuthorityClient::request(33,g_townManager->m_townToView->m_id,g_marketWindow);
+        return;
+    }
     message msg;
 
     g_marketWindowX = 0x64;
@@ -3064,6 +3082,18 @@ int TTradeResourceWindow::windowHandler(message& msg)
         case MARKET_LEFT_PANEL_ID:
             if (g_rightAmount == 0)
                 return 1;
+            if (Port::AuthorityClient::marketChoiceActive()) {
+                Port::AuthorityClient::chooseMarket(1,g_rightAmount,g_selectedArtifact*7+g_leftResource);
+                g_leftDenominated=1;g_leftResource=-1;g_selectedArtifact=-1;break;
+            }
+            if (Port::AuthorityActionsClient::enabled()) {
+                int townId=g_currentPlayer->m_currTownId;
+                if(townId<0||townId>=int(g_game->m_towns.size())) {
+                    townId=-1;for(const auto& t:g_game->m_towns)if(t.m_owner==g_localGamePos&&t.hasBuilding(MARKETPLACE_ID,true)){townId=t.m_id;break;}
+                }
+                if(townId>=0)Port::AuthorityClient::request(19,townId,g_selectedArtifact,g_leftResource,g_rightAmount);
+                g_leftDenominated=1;g_leftResource=-1;g_selectedArtifact=-1;break;
+            }
             if (g_ratioInverted) {
                 g_currentPlayer->m_resources[g_leftResource] +=
                     g_giveQuantity * g_rightAmount;
@@ -3244,6 +3274,14 @@ int TGiveResourceWindow::windowHandler(message& msg)
             case MARKET_LEFT_PANEL_ID: {
                 if (g_rightAmount == 0)
                     break;
+                if (Port::AuthorityClient::marketChoiceActive()) {
+                    Port::AuthorityClient::chooseMarket(2,g_rightAmount,m_slotPlayerColor[g_leftResource]*7+g_selectedArtifact);
+                    updateFlag=1;g_leftDenominated=1;g_leftResource=-1;g_selectedArtifact=-1;break;
+                }
+                if (Port::AuthorityActionsClient::enabled()) {
+                    Port::AuthorityClient::request(20,m_slotPlayerColor[g_leftResource],g_selectedArtifact,g_rightAmount);
+                    updateFlag=1;g_leftDenominated=1;g_leftResource=-1;g_selectedArtifact=-1;break;
+                }
                 g_currentPlayer->m_resources[g_selectedArtifact] -= g_rightAmount;
                 int color = m_slotPlayerColor[g_leftResource];
                 g_game->m_players[color].m_resources[g_selectedArtifact] += g_rightAmount;
@@ -3361,6 +3399,10 @@ int TBuyArtifactWindow::windowHandler(message& msg)
             case MARKET_LEFT_PANEL_ID:
                 if (g_rightAmount == 0)
                     return MESSAGE_DISPATCH_CONSUME;
+                if(Port::AuthorityClient::marketChoiceActive()) {
+                    Port::AuthorityClient::chooseMarket(3,0,g_leftResource*7+g_selectedArtifact);
+                    g_leftDenominated=1;g_leftResource=-1;g_selectedArtifact=-1;break;
+                }
                 if (g_ratioInverted) {
                     g_currentPlayer->m_resources[g_leftResource] +=
                         g_giveQuantity * g_rightAmount;
@@ -3613,6 +3655,12 @@ int TSellArtifactWindow::windowHandler(message& msg)
             case MARKET_LEFT_PANEL_ID:
                 if (g_rightAmount == 0)
                     break;
+                if(Port::AuthorityClient::marketChoiceActive()) {
+                    int slot=g_selectedArtifact;
+                    if(slot>=18)slot=18+((g_backpackStart&0xff)+slot-18)%g_marketHero->getNumberInBackpack(1);
+                    Port::AuthorityClient::chooseMarket(4,0,slot*7+g_leftResource);
+                    g_leftDenominated=1;g_leftResource=-1;g_selectedArtifact=-1;updateFlag=1;break;
+                }
                 if (g_ratioInverted) {
                     g_currentPlayer->m_resources[g_leftResource] +=
                         g_giveQuantity * g_rightAmount;
@@ -3765,6 +3813,10 @@ int TSellCreatureWindow::windowHandler(message& msg)
             case MARKET_LEFT_PANEL_ID:
                 if (g_rightAmount == 0)
                     return MESSAGE_DISPATCH_CONSUME;
+                if(Port::AuthorityClient::marketChoiceActive()) {
+                    Port::AuthorityClient::chooseMarket(5,g_rightAmount,g_selectedArtifact*7+g_leftResource);
+                    g_leftDenominated=1;g_leftResource=-1;g_selectedArtifact=-1;break;
+                }
                 if (g_ratioInverted) {
                     g_currentPlayer->m_resources[g_leftResource] +=
                         g_giveQuantity * g_rightAmount;
@@ -3908,3 +3960,13 @@ void TSellCreatureWindow::setRolloverText(int codeY)
     drawWindow(0, 0x92, 0x93);
     g_windowManager->updateScreen(m_x + 8, m_y + 0x238, 0x249, 0x12);
 }
+
+namespace Port { namespace AuthorityMarketClient {
+void refresh(const int* inventory){if(g_marketArtifacts)for(int i=0;i<7;++i)g_marketArtifacts[i]=TArtifact(inventory[i]);}
+void show(int heroId,int townId,int source,int efficiency,int window,const int* inventory){
+    TArtifact offers[7];for(int i=0;i<7;++i)offers[i]=TArtifact(inventory[i]);
+    g_marketArtifacts=offers;g_marketHero=heroId>=0&&heroId<game::HERO_COUNT?&g_game->m_heroes[heroId]:nullptr;
+    if(townId>=0&&townId<int(g_game->m_towns.size()))g_townManager->m_townToView=&g_game->m_towns[townId];
+    g_marketSource=source;g_marketCount=efficiency;g_marketWindow=window;doMarket();g_marketArtifacts=g_game->m_marketArtifacts;
+}
+} }

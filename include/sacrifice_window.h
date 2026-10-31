@@ -153,6 +153,7 @@ SIZE(type_creature_offering, 0x20);
 // still-unadmitted tail opaque, but keep its complete, canonical extent here:
 // callback widgets need the real derived type, not a synthetic window view.
 class type_sacrifice_window : public CAdvPopup {
+    friend struct AuthoritySacrificeAccess;
 public:
     type_sacrifice_window(hero* newHero, int curPlayer);
 

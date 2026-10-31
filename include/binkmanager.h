@@ -3,10 +3,16 @@
 
 #include "va.h"
 
-#if defined(HOMM3_TARGET_MAC)
+#if defined(HOMM3_TARGET_MAC) || defined(HOMM3_PORT)
 struct BINK;
 typedef BINK* HBINK;
+#if defined(HOMM3_PORT)
+struct BINKSUMMARY {
+    uint32_t Width,Height,TotalTime,FileFrameRate,FileFrameRateDiv,FrameRate,FrameRateDiv,TotalOpenTime,TotalFrames,TotalPlayedFrames,SkippedFrames,SoundSkips,TotalBlitTime,TotalReadTime,TotalDecompTime,TotalBackReadTime,TotalReadSpeed,SlowestFrameTime,Slowest2FrameTime,SlowestFrameNum,Slowest2FrameNum,AverageDataRate,AverageFrameSize,HighestMemAmount,TotalIOMemory,HighestIOUsed,Highest1SecRate,Highest1SecFrame;
+};
+#else
 struct BINKSUMMARY;
+#endif
 #else
 #include <bink.h>
 #endif

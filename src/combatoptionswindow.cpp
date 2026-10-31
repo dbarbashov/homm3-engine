@@ -155,7 +155,7 @@ TCombatOptionsWindow::TCombatOptionsWindow()
         61, 154, 168, 24, g_generalText->GetText(GENERAL_TEXT_SPELL_BOOK_ANIMATION), "medfont.fnt",
         font::PRIMARY, -1, 4, 0, 8));
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -215,7 +215,7 @@ MAC_ADDRESS(0x07d418, 0xb4)
 TCombatOptionsWindow::~TCombatOptionsWindow()
 {
     g_combatOptionsWindow = 0;
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }

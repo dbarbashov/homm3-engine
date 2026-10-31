@@ -1,4 +1,12 @@
+#include "authority_client.h"
+#ifdef HOMM3_SERVER
+#include "server_authority.h"
+#endif
+#include "fast_game.h"
+#include "town.h"
 #include "va.h"
+#include "hd_view.h"
+#include "smooth_camera.h"
 #include "objnames.h"
 
 #include "cursor.h"
@@ -87,8 +95,8 @@ void advManager::drawCursor(int cellX, int cellY)
     if (g_specialHideCursor)
         return;
 
-    int refX = (cellX + 8) * 32;
-    int refY = cellY * 32 + 232;
+    int refX = (cellX + Port::HD::centerX()-1) * 32;
+    int refY = cellY * 32 + (Port::HD::centerY()-1)*32 + 8;
 
     hero* curr = g_game->getCurrHero();
     if (curr) {
@@ -139,8 +147,8 @@ void advManager::drawCursorShadow(int cellX, int cellY)
     if (g_specialHideCursor)
         return;
 
-    int refX = (cellX + 8) * 32;
-    int refY = cellY * 32 + 232;
+    int refX = (cellX + Port::HD::centerX()-1) * 32;
+    int refY = cellY * 32 + (Port::HD::centerY()-1)*32 + 8;
 
     hero* curr = g_game->getCurrHero();
     if (curr) {
@@ -168,26 +176,26 @@ void advManager::drawCursorAlpha()
 {
     if (g_completeDrawEnabled) {
         if (!g_specialHideCursor) {
-            int refX = 256;
-            int refY = 232;
+            int refX = (Port::HD::centerX()-1)*32;
+            int refY = (Port::HD::centerY()-1)*32+8;
             int clipx = 0;
             int clipy = 0;
             int rightClip = 0;
             int bottomClip = 0;
 
-            if (m_radarOrigin.m_x + 8 < 0) {
-                clipx = abs((m_radarOrigin.m_x + 8) * 32) + m_scrollX;
+            if (m_radarOrigin.m_x + Port::HD::centerX()-1 < 0) {
+                clipx = abs((m_radarOrigin.m_x + Port::HD::centerX()-1) * 32) + m_scrollX;
                 refX += clipx;
             }
-            if (m_radarOrigin.m_x + 11 >= g_mapWidth)
-                rightClip = abs((g_mapWidth - m_radarOrigin.m_x - 11) * 32);
+            if (m_radarOrigin.m_x + Port::HD::centerX()+2 >= g_mapWidth)
+                rightClip = abs((g_mapWidth - m_radarOrigin.m_x - Port::HD::centerX()-2) * 32);
 
-            if (m_radarOrigin.m_y + 7 < 0) {
-                clipy = abs((m_radarOrigin.m_y + 7) * 32) + m_scrollY;
+            if (m_radarOrigin.m_y + Port::HD::centerY()-1 < 0) {
+                clipy = abs((m_radarOrigin.m_y + Port::HD::centerY()-1) * 32) + m_scrollY;
                 refY += clipy;
             }
-            if (m_radarOrigin.m_y + 9 >= g_mapHeight)
-                bottomClip = abs((g_mapHeight - m_radarOrigin.m_y - 9) * 32);
+            if (m_radarOrigin.m_y + Port::HD::centerY()+1 >= g_mapHeight)
+                bottomClip = abs((g_mapHeight - m_radarOrigin.m_y - Port::HD::centerY()-1) * 32);
 
             hero* curr = g_game->getCurrHero();
 
@@ -218,7 +226,7 @@ void advManager::drawCursorAlpha()
                     curr->getHflip());
             }
 
-            if (m_heroMoving) {
+            if (m_heroMoving && !Port::Camera::intermediateFrame()) {
                 m_cursorFrameCount = (m_cursorFrameCount + 1) % 8;
                 if (!m_cursorFrameCount && g_newWalkSample) {
                     g_soundManager->stopSample(g_walkSample);
@@ -226,7 +234,7 @@ void advManager::drawCursorAlpha()
                         g_soundManager->memorySample(g_newWalkSample);
                     g_newWalkSample = 0;
                 }
-            } else {
+            } else if (!m_heroMoving) {
                 m_cursorFrameCount = 0;
             }
         }
@@ -300,8 +308,8 @@ NewmapCell* advManager::handleStopOnTrigger(hero* curr, NewmapCell* destCell, bo
     stopCursor(1);
 
     if (g_completeDrawEnabled) {
-        m_radarOrigin.m_x = curr->m_x - 9;
-        m_radarOrigin.m_y = curr->m_y - 8;
+        m_radarOrigin.m_x = curr->m_x - Port::HD::centerX();
+        m_radarOrigin.m_y = curr->m_y - Port::HD::centerY();
         m_radarOrigin.m_z = curr->m_z;
     }
 
@@ -339,14 +347,14 @@ void advManager::animateMove(hero* curr, int direction, int xInc, int yInc)
         int speedIndex;
         speedIndex = g_config.m_walkSpeed[g_currentPlayer->isLocalHuman()];
 
-        m_radarOrigin.m_x = curr->m_x - 9;
-        m_radarOrigin.m_y = curr->m_y - 8;
+        m_radarOrigin.m_x = curr->m_x - Port::HD::centerX();
+        m_radarOrigin.m_y = curr->m_y - Port::HD::centerY();
         m_radarOrigin.m_z = curr->m_z;
         m_forceCompleteDraw = 1;
 
         if (speedIndex == CURSOR_INSTANT_WALK_SPEED) {
             completeDraw(0);
-            g_windowManager->updateScreen(0, 8, 608, 544);
+            g_windowManager->updateScreen(0, 8, Port::HD::mapRight()+8, Port::HD::mapHeight());
         } else {
             int walkSpeed;
             int iterations;
@@ -361,9 +369,14 @@ void advManager::animateMove(hero* curr, int direction, int xInc, int yInc)
             m_scrollX = startVals[xInc + 1];
             m_scrollY = startVals[yInc + 1];
 
+            const bool smoothCamera = Port::Camera::enabled();
+            const unsigned long animationStart = GameTime::get();
             for (int i = 0; i < iterations; ++i) {
-                unsigned long nextFrameTime;
-                nextFrameTime = GameTime::get() + scrollDelayValue;
+                // Keep one timeline: extra redraws must not extend every step.
+                const unsigned long nextFrameTime = smoothCamera
+                    ? animationStart + (i + 1) * scrollDelayValue
+                    : GameTime::get() + scrollDelayValue;
+                const int fromX = m_scrollX, fromY = m_scrollY;
 
                 if (walkSpeed == CURSOR_IRREGULAR_STEP_PIXELS && i == 1) {
                     m_scrollX -= xInc * CURSOR_IRREGULAR_MIDDLE_STEP_PIXELS;
@@ -373,9 +386,13 @@ void advManager::animateMove(hero* curr, int direction, int xInc, int yInc)
                     m_scrollY -= yInc * walkSpeed;
                 }
 
-                completeDraw(0);
-                g_windowManager->updateScreen(0, 8, 608, 544);
-                GameTime::delayTil(nextFrameTime);
+                if (smoothCamera) {
+                    Port::Camera::animateStep(*this, fromX, fromY, nextFrameTime);
+                } else {
+                    completeDraw(0);
+                    g_windowManager->updateScreen(0, 8, Port::HD::mapRight()+8, Port::HD::mapHeight());
+                    GameTime::delayTil(nextFrameTime);
+                }
             }
         }
     }
@@ -411,6 +428,29 @@ DC_ADDRESS(0x07aa54, 0x1166)
 MAC_ADDRESS(0x08f5a0, 0x1578)  // ret 0x1c + caller arg order/call set
 NewmapCell* advManager::moveHero(int direction, bool standEnd, type_point& triggerPoint, int* noMove, bool computerMove, int* foughtBattle, bool isRemoteMove)
 {
+    if (Port::Fast::nativeUI()) {
+        const int id=g_currentPlayer->m_currHeroId;
+        // Keep the original quiet exhaustion boundary; never submit a doomed
+        // step or erase the selected destination at the next-day route edge.
+        if(Port::AuthorityClient::enabled() && id>=0){
+            auto& h=g_game->m_heroes[id];
+            if(h.m_movePoints<=0 || h.m_movePoints<getTerrainCost(&h,h.getLocation(),direction,h.m_movePoints)){
+                *noMove=1;*foughtBattle=0;triggerPoint.m_x=-1;stopCursor(true);return nullptr;
+            }
+        }
+        const bool ok=Port::AuthorityClient::enabled()?Port::AuthorityClient::requestMove(id,direction,standEnd):Port::Fast::request(1,id,direction);
+        *noMove=!ok || id<0 || g_game->m_heroes[id].m_owner!=g_netLocalGamePos;
+        if(ok && !Port::AuthorityClient::enabled() && id>=0 && g_game->m_heroes[id].m_owner==g_netLocalGamePos){
+            auto& h=g_game->m_heroes[id];
+            const int townId=g_game->getTownId(h.m_x,h.m_y,h.m_z);
+            if(townId>=0 && g_game->onSameTeam(g_game->m_towns[townId].m_owner,g_netLocalGamePos))
+                g_game->m_towns[townId].view(0);
+        }
+        *foughtBattle=0;
+        triggerPoint.m_x=-1;
+        return nullptr;
+    }
+
     unsigned char becameBoat = 0;
     hero* curr;
     unsigned char enteredBoat;
@@ -643,6 +683,7 @@ NewmapCell* advManager::moveHero(int direction, bool standEnd, type_point& trigg
         m_lastTerrain = ground;
         g_soundManager->switchAmbientMusic(g_terrainMusicIds[m_lastTerrain]);
 
+#ifndef HOMM3_SERVER
         sample* walkSample = cursorSamples[
             getCell(curr->getLocation())->m_groundSet];
         if (curr->isFlying(0))
@@ -655,6 +696,7 @@ NewmapCell* advManager::moveHero(int direction, bool standEnd, type_point& trigg
             g_soundManager->stopSample(g_walkSample);
             g_walkSample = g_soundManager->memorySample(walkSample);
         }
+#endif
     }
 
     point = getMapCenter();
@@ -752,6 +794,11 @@ void advManager::checkAdjacentMon(int* foughtBattle)
         NewmapCell* monsterCell = getCell(monster);
         getCell(curr->getLocation());
         doEventWanderingMonster(monsterCell, curr, monster,
+#ifdef HOMM3_SERVER
+                                Port::Authority::active()
+                                    ? g_currentPlayer->isHuman()
+                                    :
+#endif
                                 g_currentPlayer->isLocalHuman()
                                     && !g_goSolo);
         *foughtBattle = 1;

@@ -2,6 +2,10 @@
 #define HOMM3_MULTIPLAYERWINDOW_H
 
 #include "va.h"
+#if defined(HOMM3_PORT)
+#include <sys/socket.h>
+#include <netinet/in.h>
+#endif
 
 #include <string.h>
 #include "platform.h"

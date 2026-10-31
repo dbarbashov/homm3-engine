@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "lodfile.h"
+#include "lod_cache.h"
 
 VA(0x004fa590, 0x77)
 DC_ADDRESS(0x0e908c, 0x34)
@@ -12,6 +13,7 @@ void LODFile::clear()
 {
     if (opened) {
         subindex.clear();
+        Port::forgetLod(fileptr);
         fclose(fileptr);
         delete[] dataBuffer;
         opened = 0;
@@ -250,11 +252,13 @@ int LODFile::read(void* dest, int numBytes)
             dataBuffer = new unsigned char[entry.size];
             dataBufferSize = entry.size;
             dataPos = 0;
-            unsigned char* packed = new unsigned char[entry.csize];
-            fread(packed, 1, entry.csize, fileptr);
-            unsigned long destLen = dataBufferSize;
-            uncompress(dataBuffer, &destLen, packed, entry.csize);
-            delete[] packed;
+            if (!Port::readCompressedLod(fileptr, entry.offset, dataBuffer,
+                                         entry.size, entry.csize)) {
+                delete[] dataBuffer;
+                dataBuffer = 0;
+                dataBufferSize = 0;
+                return -1;
+            }
         }
         memcpy(dest, dataBuffer + dataPos, numBytes);
         dataPos += numBytes;

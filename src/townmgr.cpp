@@ -1,6 +1,17 @@
+#include "authority_guild_client.h"
+#include "authority_actions_client.h"
+#ifdef HOMM3_SERVER
+#include "server_authority.h"
+#include "server_encounters.h"
+#endif
+#include "authority_town_client.h"
+#include "authority_client.h"
+#include "fast_game.h"
 #include "prefs.h"
 #include "text.h"
 #include "va.h"
+#include "hd_army.h"
+#include "hd_recruit.h"
 #include "includes.h"
 
 #include <stdio.h>
@@ -1108,23 +1119,29 @@ DC_ADDRESS(0x16a644, 0xe8)
 MAC_ADDRESS(0x1b97d8, 0x174)
 void townManager::setupExtraStuff()
 {
+    m_townToView->setupViewBuildings();
+}
+
+// Same original setup without constructing a UI manager on the server.
+void town::setupViewBuildings()
+{
     if (g_buildAllBuildings) {
         for (int i = 0; i < MAX_BUILDING_TYPE; i++) {
-            if (!(m_townToView->hasBuilding(i, true))
-                && (g_townEligibleBuildMask[m_townToView->m_type] & g_bitNumber[i]))
-                m_townToView->buildBuilding(i, 0, 1);
+            if (!(hasBuilding(i, true))
+                && (g_townEligibleBuildMask[m_type] & g_bitNumber[i]))
+                buildBuilding(i, 0, 1);
         }
     } else {
-        switch (m_townToView->m_type) {
+        switch (m_type) {
         case TOWN_CASTLE:
         case TOWN_FORTRESS:
-            m_townToView->createBuilding(EXTRA_2_ID);
+            createBuilding(EXTRA_2_ID);
             break;
         case TOWN_STRONGHOLD:
-            m_townToView->createBuilding(EXTRA_3_ID);
+            createBuilding(EXTRA_3_ID);
             break;
         case TOWN_CONFLUX:
-            m_townToView->createBuilding(EXTRA_1_ID);
+            createBuilding(EXTRA_1_ID);
             break;
         }
     }
@@ -1359,7 +1376,7 @@ TTownScreenWindow::TTownScreenWindow()
         m_widgets.push_back(label);
     }
 
-    widget** it = m_widgets.begin();
+    auto it = m_widgets.begin();
     while (it != m_widgets.end()) {
         if (*it)
             addWidget(*it, -1);
@@ -1376,7 +1393,7 @@ DC_ADDRESS(0x16adf0, 0x76)
 MAC_ADDRESS(0x1bd3c8, 0xcc)
 TTownScreenWindow::~TTownScreenWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -1691,12 +1708,18 @@ int townManager::open(int newPriority)
     strcpy(m_mgrName, "townManager");
     g_inputManager->flush();
 
+    if (Port::AuthorityClient::enabled()) {
+        // The window is ready before the server issues original bonus/level
+        // dialogs. Never grant town rewards in the projected client world.
+        if(g_currentPlayer->isLocalHuman())Port::AuthorityClient::request(41,m_townToView->m_id);
+    } else {
     if (m_townToView->m_garrisonHeroId != -1)
         m_townToView->applySpecialBuildingEffect(
             g_game->getHero(m_townToView->m_garrisonHeroId));
     if (m_townToView->m_visitingHeroId != -1)
         m_townToView->applySpecialBuildingEffect(
             g_game->getHero(m_townToView->m_visitingHeroId));
+    }
 
     if (g_remoteOn) {
         CTownNetMsgHandler* handler =
@@ -2702,7 +2725,7 @@ TThievesGuildWindow::TThievesGuildWindow(int numGuilds)
     mageButton->setHotkey(1);
     m_widgets.push_back(mageButton);
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -2721,7 +2744,7 @@ MAC_ADDRESS(0x1c2a50, 0xd0)
 TThievesGuildWindow::~TThievesGuildWindow()
 {
     delete m_resourceDisplay;
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -2746,7 +2769,9 @@ void TThievesGuildWindow::setRolloverText(int codeY)
     switch (codeY) {
     case HERO_P0: case HERO_P1: case HERO_P2: case HERO_P3:
     case HERO_P4: case HERO_P5: case HERO_P6: case HERO_P7:
-        strcpy(g_text, g_game->getHero(g_heroWidgetMap[codeY - HERO_P0])->m_name);
+        strcpy(g_text, Port::AuthorityGuildClient::active()
+            ? Port::AuthorityGuildClient::heroName(codeY - HERO_P0)
+            : g_game->getHero(g_heroWidgetMap[codeY - HERO_P0])->m_name);
         break;
     case CREATURE_P0: case CREATURE_P1: case CREATURE_P2: case CREATURE_P3:
     case CREATURE_P4: case CREATURE_P5: case CREATURE_P6: case CREATURE_P7:
@@ -3079,7 +3104,7 @@ THallWindow::THallWindow(int which)
     exitButton->setHotkey(1);
     m_widgets.push_back(exitButton);
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -3094,7 +3119,7 @@ DC_ADDRESS(0x1700c0, 0x68)
 MAC_ADDRESS(0x1c656c, 0xb0)
 THallWindow::~THallWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -3214,7 +3239,7 @@ TMageGuildWindow::TMageGuildWindow()
     exitButton->setHotkey(1);
     m_widgets.push_back(exitButton);
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -3229,7 +3254,7 @@ DC_ADDRESS(0x170fb8, 0x68)
 MAC_ADDRESS(0x1c8e20, 0xb0)
 TMageGuildWindow::~TMageGuildWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -3433,9 +3458,13 @@ void townManager::handleMageGuildClick()
                      -1, 0, -1, 0, -1, 0);
         if (g_windowManager->m_dialogReturn == DIALOG_RETURN_DECLINE)
             return;
-        type_artifact spellbook(ARTIFACT_SPELLBOOK);
-        currentHero->giveArtifact(spellbook, 1, 1);
-        g_currentPlayer->m_resources[GOLD] -= 500;
+        if (Port::AuthorityActionsClient::enabled()) {
+            if(!Port::AuthorityClient::request(26,m_townToView->m_id,currentHero->m_id))return;
+        } else {
+            type_artifact spellbook(ARTIFACT_SPELLBOOK);
+            currentHero->giveArtifact(spellbook, 1, 1);
+            g_currentPlayer->m_resources[GOLD] -= 500;
+        }
     }
 
     dialogWindow = new TMageGuildWindow();
@@ -3578,7 +3607,7 @@ type_garrison_base_window::type_garrison_base_window(hero* inHero,
     okButton->setHotkey(1);
     m_widgets.push_back(okButton);
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -3630,7 +3659,7 @@ DC_ADDRESS(0x172a84, 0x6a)
 MAC_ADDRESS(0x1cc570, 0xb0)
 type_garrison_base_window::~type_garrison_base_window()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -3943,6 +3972,13 @@ DC_ADDRESS(0x17320c, 0x2c)
 MAC_ADDRESS(0x1cd03c, 0x70)
 void doEventGarrison(hero* inHero, garrison* thisGarrison)
 {
+#ifdef HOMM3_SERVER
+    if(Port::Authority::active()) {
+        Port::Authority::armyEncounter(*inHero,thisGarrison->m_garrisonArmy,
+            thisGarrison->m_playerOwner==inHero->m_owner&&thisGarrison->m_removableTroops,
+            g_game->onSameTeam(thisGarrison->m_playerOwner,inHero->m_owner),"garrison",0,thisGarrison->m_playerOwner);return;
+    }
+#endif
     int owner = thisGarrison->m_playerOwner;
     if (!thisGarrison->m_removableTroops)
         owner = -1;
@@ -3959,6 +3995,9 @@ void doMonsterJoinDialog(hero* inHero, TCreatureType type, int amount)
     monsters.initialize();
     monsters.add(type, amount, -1);
 
+#ifdef HOMM3_SERVER
+    if(Port::Authority::active()){Port::Authority::armyEncounter(*inHero,monsters,true,true);return;}
+#endif
     type_monster_join_window joinWindow(inHero, &monsters, 0);
     g_mouseManager->setPointer(0, mouseManager::ADVENTURE_SET);
     g_mouseManager->showPointer(true);
@@ -3970,6 +4009,9 @@ DC_ADDRESS(0x1732a8, 0x3e)
 MAC_ADDRESS(0x1cd214, 0x84)
 void doMonsterJoinDialog(hero* inHero, armyGroup* monsters, int flags)
 {
+#ifdef HOMM3_SERVER
+    if(Port::Authority::active()){Port::Authority::armyEncounter(*inHero,*monsters,true,true,"join",flags,inHero->m_owner);return;}
+#endif
     type_monster_join_window joinWindow(inHero, monsters, flags);
     g_mouseManager->setPointer(0, mouseManager::ADVENTURE_SET);
     g_mouseManager->showPointer(true);
@@ -4019,7 +4061,7 @@ TBlacksmithWindow::TBlacksmithWindow(int heroID, int inTownType)
     m_widgets.push_back(new button(224, 312, 64, 30, CANCEL_BUTTON_ID,
                                  "iCancel.def", 0, 1, 1, 1, 2));
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -4065,7 +4107,7 @@ DC_ADDRESS(0x173a1c, 0x6a)
 MAC_ADDRESS(0x1cdeec, 0xb0)
 TBlacksmithWindow::~TBlacksmithWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -4189,6 +4231,15 @@ void doBlacksmith(int heroId, int townType)
     g_blacksmithWindow->doModal(0);
     delete g_blacksmithWindow;
 
+    if (Port::AuthorityClient::enabled()) {
+        if(g_windowManager->m_dialogReturn==TBlacksmithWindow::BUY_BUTTON_ID
+            && Port::AuthorityClient::request(34,g_townManager->m_townToView->m_id,heroId,townType)) {
+            sprintf(g_text, g_townCommand[31],
+                    akCreatureTypeTraits[g_blacksmithMachines[townType]].m_name);
+            normalDialog(g_text, 1, -1, -1, -1, 0, -1, 0, -1, 0, -1, 0);
+        }
+        return;
+    }
     if (g_currentPlayer->isLocalHuman()
         && g_windowManager->m_dialogReturn
                == TBlacksmithWindow::BUY_BUTTON_ID) {
@@ -4250,7 +4301,7 @@ TShipWindow::TShipWindow(int type)
     m_widgets.push_back(new button(224, 312, 64, 30, CANCEL_BUTTON_ID,
                                  "iCancel.def", 0, 1, 1, 1, 2));
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -4288,7 +4339,7 @@ DC_ADDRESS(0x1745e8, 0x6a)
 MAC_ADDRESS(0x1cf228, 0xb0)
 TShipWindow::~TShipWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -4433,6 +4484,8 @@ DC_ADDRESS(0x174bfc, 0x120)
 MAC_ADDRESS(0x1cf7c4, 0x12c)
 void townManager::doPortalOfSummoning()
 {
+    if(Port::AuthorityClient::enabled()&&m_townToView->m_summoningType==CREATURE_NONE)
+        if(!Port::AuthorityClient::request(38,m_townToView->m_id,0))return;
     if (m_townToView->m_summoningType == CREATURE_NONE)
         m_townToView->setSummoningGenerator();
 
@@ -4540,6 +4593,7 @@ void townManager::doUniversity()
     if (!townHero) {
         showBuildingInfo(EXTRA_0_ID, 0);
     } else {
+        if(Port::AuthorityClient::enabled()){Port::AuthorityClient::request(35,m_townToView->m_id,townHero->m_id);return;}
         type_university townUniversity;
         townUniversity.initializeMagicSkills();
         type_university_window universityWin(townHero, &townUniversity, 1);
@@ -4576,6 +4630,9 @@ void townManager::doSkeletonTransformer()
         transformGroup = &m_townToView->getArmy();
     }
 
+    if(Port::AuthorityClient::enabled()) {
+        Port::AuthorityTownClient::transformer(transformGroup);resetStrips();redrawTownScreen();return;
+    }
     {
         type_skeleton_window skeletonWin(transformGroup);
         skeletonWin.doModal(0);
@@ -4617,6 +4674,10 @@ void townManager::handleHallClick()
             normalDialog(g_generalText->GetText(GENERAL_TEXT_GRAIL_HOME_PROMPT), 2, -1, -1, -1, 0, -1, 0,
                          -1, 0, -1, 0);
             if (g_windowManager->m_dialogReturn == DIALOG_RETURN_ACCEPT) {
+                if (Port::Fast::nativeUI()) {
+                    if (Port::Fast::request(2,m_townToView->m_id,HOLY_GRAIL_ID)) buildObj(HOLY_GRAIL_ID);
+                    return;
+                }
                 townHero->removeArtifact(ARTIFACT_HOLY_GRAIL);
                 buildObj(HOLY_GRAIL_ID);
                 if (g_game->m_mapHeader.m_victoryCondition.checkForGrailBuildingWin())
@@ -4771,6 +4832,14 @@ int townManager::main(message& msg)
             if (code >= 0 && code <= DWELLING_6_UPG_ID)
                 code = static_cast<TTownScreenWindow*>(m_townWindow)
                            ->m_zBuffer[msg.m_mouseY * 800 + msg.m_mouseX] - 1;
+            if (Port::Fast::nativeUI() && !Port::AuthorityActionsClient::enabled() && !rclick && code>=0 && code<=DWELLING_6_UPG_ID
+                && !(code>=DWELLING_0_ID) && !(code>=CASTLE_FORT_ID && code<=CASTLE_CASTLE_ID)
+                && !(code>=HALL_VILLAGE_ID && code<=HALL_CAPITOL_ID) && code!=TAVERN_ID
+                && code!=HORDE_ID && code!=HORDE_UPG_ID && code!=HORDE_2_ID && code!=HORDE_2_UPG_ID
+                && !(Port::AuthorityClient::enabled() && (code==BLACKSMITH_ID || (code==EXTRA_0_ID&&m_townToView->m_type==TOWN_CONFLUX) || (code==EXTRA_1_ID&&(m_townToView->m_type==TOWN_INFERNO||m_townToView->m_type==TOWN_NECROPOLIS||m_townToView->m_type==TOWN_DUNGEON||m_townToView->m_type==TOWN_STRONGHOLD))))
+                && !(Port::AuthorityActionsClient::enabled() && (code==MARKETPLACE_ID || code==DOCK_ID || code==SPECIAL_BUILDING_ID || (code==EXTRA_0_ID && m_townToView->m_type==TOWN_STRONGHOLD) || (code>=MAGE_GUILD_ID && code<=MAGE_GUILD5_ID)))) {
+                Port::Fast::unavailable();return 0;
+            }
             switch (code) {
             case DWELLING_0_ID:
             case DWELLING_1_ID:
@@ -4904,7 +4973,11 @@ int townManager::main(message& msg)
                     g_windowManager->broadcastMessage(
                         MESSAGE_WIDGET, widget::WIDGET_SET_STATUS,
                         TTownScreenWindow::EXIT_BUTTON_ID, 0x4008);
-                    if (g_game->getBoatsBuilt() < 0x40) {
+                    if (Port::AuthorityActionsClient::enabled()) {
+                        doShipyard(m_townToView->m_type);
+                        if(g_windowManager->m_dialogReturn==TShipWindow::BUY_BUTTON_ID)Port::AuthorityClient::request(21,m_townToView->m_id);
+                        redrawTownScreen();
+                    } else if (g_game->getBoatsBuilt() < 0x40) {
                         doShipyard(m_townToView->m_type);
                         m_resourceDisplay->update(1, 1);
                         if (g_windowManager->m_dialogReturn
@@ -5109,6 +5182,7 @@ building_popup:
                 if (rclick)
                     static_cast<TTownScreenWindow*>(m_townWindow)->bonusRightClick(
                         code - TTownScreenWindow::BONUS_0_ID);
+                else { Port::HD::recruitLevel(m_townToView, code-TTownScreenWindow::BONUS_0_ID); redrawTownScreen(); }
                 break;
             case TTownScreenWindow::TOWN_UP_ARROW_ID:
             case TTownScreenWindow::TOWN_DOWN_ARROW_ID:
@@ -5179,6 +5253,10 @@ building_popup:
                 }
                 break;
             case TTownScreenWindow::CASTLE_ICON_ID:
+                if (!rclick) {
+                    Port::HD::recruitAll(m_townToView, GetKeyState(VK_MENU)<0, GetKeyState(VK_CONTROL)<0);
+                    redrawTownScreen();
+                }
                 if (rclick) {
                     if (m_townToView->hasBuilding(CASTLE_FORT_ID, false)) {
                         strcpy(text, getBuildingInfo(m_townToView,
@@ -5217,6 +5295,7 @@ building_popup:
                 if (rclick)
                     static_cast<TTownScreenWindow*>(m_townWindow)->bonusRightClick(
                         code - TTownScreenWindow::BONUS_0_TEXT_ID);
+                else { Port::HD::recruitLevel(m_townToView, code-TTownScreenWindow::BONUS_0_TEXT_ID); redrawTownScreen(); }
                 break;
             case TTownScreenWindow::TOWN_GARRISON_0_SELECTOR_ID:
             case TTownScreenWindow::TOWN_GARRISON_1_SELECTOR_ID:
@@ -5350,11 +5429,39 @@ building_popup:
         break;
     }
     case MESSAGE_KEY_UP:
+        if (!g_currentPlayer->isLocalHuman() || m_townToView->m_owner != g_netLocalGamePos) break;
         switch (msg.m_codeX) {
+        case 0x13: // R: recruit all, same action as the fort icon.
+            Port::HD::recruitAll(m_townToView, GetKeyState(VK_MENU)<0, GetKeyState(VK_CONTROL)<0);
+            redrawTownScreen(); break;
+        case 0x30: // B: marketplace.
+            if (Port::Fast::nativeUI() && !Port::AuthorityActionsClient::enabled()) { Port::Fast::unavailable(); break; }
+            if (m_townToView->hasBuilding(MARKETPLACE_ID,true)) { doMarketplace(); redrawTownScreen(); }
+            break;
+        case 0x22: { // G: thieves' guild.
+            if (Port::AuthorityClient::enabled()) { Port::AuthorityGuildClient::requestTown(m_townToView->m_id); break; }
+            TThievesGuildWindow guild(-1); guild.doModal(0); redrawTownScreen(); break;
+        }
+        case KEYCODE_F10:
+            if (Port::Fast::nativeUI() && !Port::AuthorityActionsClient::enabled()) { Port::Fast::unavailable(); break; }
+            if (m_garrisonStrip && m_heroStrip && m_garrisonStrip->m_group && m_heroStrip->m_group
+                && m_garrisonStrip->m_owner == g_netLocalGamePos && m_heroStrip->m_owner == g_netLocalGamePos
+                && (!m_garrisonStrip->m_thisHero || m_heroStrip->m_group->hasCreatures())
+                && (!m_heroStrip->m_thisHero || m_garrisonStrip->m_group->hasCreatures())) {
+                if(Port::AuthorityActionsClient::enabled()) {
+                    if(Port::AuthorityClient::armyExchangeActive()){Port::AuthorityClient::chooseArmySwap();resetStrips();break;}
+                    const int from=Port::AuthorityActionsClient::armyId(m_garrisonStrip->m_group),to=Port::AuthorityActionsClient::armyId(m_heroStrip->m_group);
+                    Port::AuthorityClient::request(32,from,to);resetStrips();
+                } else {std::swap(*m_garrisonStrip->m_group,*m_heroStrip->m_group); resetStrips();}
+            }
+            break;
         case KEYCODE_SPACE:
-            if (m_townToView->m_visitingHeroId != -1
-                && m_townToView->m_garrisonHeroId != -1)
-                doCommand(9, 0, 0);
+            if (m_townToView->m_visitingHeroId != -1 && m_townToView->m_garrisonHeroId != -1)
+                doCommand(TOWN_COMMAND_SWAP_HEROES, 0, 0);
+            else if (m_townToView->m_visitingHeroId != -1)
+                doCommand(TOWN_COMMAND_MOVE_HERO_TO_GARRISON, 0, 0);
+            else if (m_townToView->m_garrisonHeroId != -1)
+                doCommand(TOWN_COMMAND_MOVE_HERO_FROM_GARRISON, 0, 0);
             break;
         case KEYCODE_KP_2:
             if (g_currentTownIndex
@@ -5396,6 +5503,40 @@ MAC_ADDRESS(0x1d1aa4, 0x5d8)
 void townManager::doCommand(int inCommand, unsigned char isGarrison,
                             type_garrison_base_window* garrisonWindow)
 {
+    if (Port::AuthorityActionsClient::enabled()) {
+        bool handled=true;
+        switch(inCommand) {
+        case TOWN_COMMAND_MERGE_ARMY:
+            if(m_srcStrip&&m_destStrip)Port::AuthorityActionsClient::transfer(m_srcStrip->m_group,m_srcIndex,m_destStrip->m_group,m_destIndex,m_srcStrip->m_group->m_numTroops[m_srcIndex],0);break;
+        case TOWN_COMMAND_MOVE_HERO_TO_GARRISON: Port::AuthorityClient::request(17,m_townToView->m_id,0);break;
+        case TOWN_COMMAND_MOVE_HERO_FROM_GARRISON: Port::AuthorityClient::request(17,m_townToView->m_id,1);break;
+        case TOWN_COMMAND_SWAP_HEROES: Port::AuthorityClient::request(17,m_townToView->m_id,2);break;
+        default:handled=false;break;
+        }
+        if(handled){
+            // Garrison/visitor changes replace both the hero and army pointers,
+            // exactly as the original move/swap handlers do after mutation.
+            if(inCommand==TOWN_COMMAND_MOVE_HERO_TO_GARRISON || inCommand==TOWN_COMMAND_MOVE_HERO_FROM_GARRISON || inCommand==TOWN_COMMAND_SWAP_HEROES){
+                delete m_heroStrip;m_heroStrip=nullptr;
+                delete m_garrisonStrip;m_garrisonStrip=nullptr;
+                newStrips();resetStrips();redrawTownScreen();
+            }else resetStrips();
+            m_lastHover=-1;return;
+        }
+    }
+    if (Port::Fast::nativeUI() && !Port::AuthorityActionsClient::enabled() && inCommand!=TOWN_COMMAND_VIEW_HERO) { Port::Fast::unavailable(); return; }
+    strip* quickStrip = (inCommand == TOWN_COMMAND_SELECT_SLOT) ? m_currStrip : m_destStrip;
+    int quickSlot = (inCommand == TOWN_COMMAND_SELECT_SLOT) ? m_currIndex : m_destIndex;
+    if (inCommand >= TOWN_COMMAND_SELECT_SLOT && inCommand <= TOWN_COMMAND_SPLIT_ARMY
+        && inCommand != TOWN_COMMAND_VIEW_HERO && quickStrip && quickStrip->m_group
+        && quickStrip->m_owner == g_netLocalGamePos && g_currentPlayer->isLocalHuman()) {
+        strip* other = quickStrip == m_garrisonStrip ? m_heroStrip : m_garrisonStrip;
+        if (Port::HD::quickArmy(*quickStrip->m_group, quickSlot,
+            other && other->m_owner == g_netLocalGamePos ? other->m_group : nullptr,
+            quickStrip->m_thisHero != nullptr, m_srcIndex >= 0)) {
+            resetStrips(); m_lastHover = -1; return;
+        }
+    }
     switch (inCommand) {
     case TOWN_COMMAND_SELECT_SLOT:
         if (!m_currStrip)
@@ -5701,7 +5842,7 @@ TBuyBuildWindow::TBuyBuildWindow(int x2, int y2, int id)
     m_widgets.push_back(new button(290, 446, 64, 30, CANCEL_BUTTON_ID,
                                  "iCancel.def", 0, 1, 1, 1, 2));
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -5722,7 +5863,7 @@ DC_ADDRESS(0x179024, 0x6a)
 MAC_ADDRESS(0x1d3174, 0xb0)
 TBuyBuildWindow::~TBuyBuildWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -5981,9 +6122,14 @@ int townManager::buyBuild(int buildingId, int infoOnly, int quickView)
         }
         window->doModal(0);
         if (g_windowManager->m_dialogReturn == TBuyBuildWindow::BUY_BUTTON_ID) {
-            m_objToBuild = buildingId;
-            for (i = 0; i < numResources; i++)
-                g_currentPlayer->m_resources[resources[i]] -= amounts[i];
+            if (Port::Fast::nativeUI()) {
+                if (Port::Fast::request(2,m_townToView->m_id,buildingId)) m_objToBuild=buildingId;
+                else g_windowManager->m_dialogReturn=TBuyBuildWindow::CANCEL_BUTTON_ID;
+            } else {
+                m_objToBuild = buildingId;
+                for (i = 0; i < numResources; i++)
+                    g_currentPlayer->m_resources[resources[i]] -= amounts[i];
+            }
         }
     }
 
@@ -6119,12 +6265,14 @@ DC_ADDRESS(0x179b28, 0x34a)
 MAC_ADDRESS(0x1d3ddc, 0x5e8)  // linkorder(dc row after CycleOutline) + arity(ret 4) + BuildBuilding/CycleOutline edges
 void townManager::buildObj(int buildingId)
 {
-    if (m_townToView->hasBuilding(buildingId, true))
+    if (m_townToView->hasBuilding(buildingId, true) && !Port::Fast::nativeUI())
         return;
 
     drawTown(1, 1, 0);
 
-    type_building_id newBuilding = m_townToView->buildBuilding(buildingId, 1, 1);
+    type_building_id newBuilding = Port::Fast::nativeUI()
+        ? static_cast<type_building_id>(buildingId)
+        : m_townToView->buildBuilding(buildingId, 1, 1);
 
     for (int j = 0; j < m_townObjectCount; j++) {
         if (m_townToView->hasBuilding(m_townObjects[j]->m_objId, false)) {
@@ -6341,7 +6489,7 @@ TTavernWindow::TTavernWindow(int x2, int y2)
     m_widgets.push_back(new button(310, 428, 64, 30, CANCEL_BUTTON_ID,
                                  "iCancel.def", 0, 1, 1, 1, 2));
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -6356,7 +6504,7 @@ DC_ADDRESS(0x17a734, 0x6a)
 MAC_ADDRESS(0x1d5550, 0xb0)
 TTavernWindow::~TTavernWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -6474,6 +6622,12 @@ int TTavernWindow::windowHandler(message& msg)
         case widget::WIDGET_DESELECT:
             switch (msg.m_codeY) {
             case THIEVES_GUILD_BUTTON_ID:
+                if (Port::AuthorityClient::enabled()) {
+                    videoPause();
+                    Port::AuthorityGuildClient::requestTavern();
+                    videoResume();
+                    break;
+                }
                 g_thievesGuildWindow = new TThievesGuildWindow(-1);
                 if (!g_thievesGuildWindow)
                     memError();
@@ -6714,7 +6868,9 @@ void townManager::doTownTavern()
     if (!doTavern())
         return;
 
-    m_townToView->hire(g_tavernHero, g_game->getLocalPlayerGamePos());
+    if (Port::Fast::nativeUI()) {
+        if (!Port::Fast::request(3,m_townToView->m_id,g_tavernHero->m_id)) return;
+    } else m_townToView->hire(g_tavernHero, g_game->getLocalPlayerGamePos());
     redrawTownScreen();
     g_windowManager->saveFizzleSourceX(0xf1, 0x1e3, 0x1ee, 0x40);
 
@@ -6735,7 +6891,7 @@ void townManager::doTownTavern()
     m_heroStrip->drawIcons(0, CREATURE_NONE);
     g_windowManager->fizzleForwardX(0xf1, 0x1e3, 0x1ee, 0x40, -1);
     waitEndSample(sample, -1);
-    m_townToView->applySpecialBuildingEffect(
+    if (!Port::Fast::nativeUI()) m_townToView->applySpecialBuildingEffect(
         g_game->getHero(m_townToView->m_visitingHeroId));
 }
 
@@ -6777,6 +6933,10 @@ void townManager::doTownGate()
         int selectedTown = g_windowManager->m_dialogReturn;
         town* fromTown = m_townToView;
         town* toTown = g_game->getTown(selectedTown);
+        if(Port::AuthorityClient::enabled()) {
+            if(Port::AuthorityClient::request(37,fromTown->m_id,selectedTown)){m_townToView=toTown;changeTown(1);}
+            else redrawTownScreen();return;
+        }
         m_townToView = toTown;
         moveHero(fromTown, toTown);
 
@@ -7295,7 +7455,7 @@ TCastleWindow::TCastleWindow()
     exitButton->setHotkey(1);
     m_widgets.push_back(exitButton);
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -7310,7 +7470,7 @@ DC_ADDRESS(0x17f0f4, 0x6a)
 MAC_ADDRESS(0x1e0b48, 0xb0)
 TCastleWindow::~TCastleWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -7843,6 +8003,7 @@ void TThievesGuildWindow::setupThievesGuild(int thievesGuilds)
     // DC line 9243 constructs the original `msg` before the player/stat passes.
     message msg;
 
+    if (Port::AuthorityGuildClient::active()) thievesGuilds = Port::AuthorityGuildClient::tier();
     int gamePos = g_game->getLocalPlayerGamePos();
     if (thievesGuilds == -1)
         thievesGuilds = g_game->getNumThievesGuilds(gamePos);
@@ -7862,7 +8023,7 @@ void TThievesGuildWindow::setupThievesGuild(int thievesGuilds)
     int k;
     int slot;
     for (k = 0; k < NUM_PLAYERS; k++) {
-        if (g_game->m_playerDisabled[k])
+        if (Port::AuthorityGuildClient::disabled(k))
             numDisabled++;
     }
 
@@ -7879,19 +8040,19 @@ void TThievesGuildWindow::setupThievesGuild(int thievesGuilds)
     long value[8];
     signed char index[8];
     for (int category = 0; category < numCategories; category++) {
-        getCategoryStats(category, value, index);
-        sortStats(value, index);
+        if (Port::AuthorityGuildClient::active()) Port::AuthorityGuildClient::rankStats(category, value, index);
+        else { getCategoryStats(category, value, index); sortStats(value, index); }
 
         int start = 0;
         int last = 0;
         for (int rankColumn = 0; rankColumn < NUM_PLAYERS; rankColumn++) {
             if (start
-                == g_game->m_numPlayers - numDisabled)
+                == Port::AuthorityGuildClient::playerCount() - numDisabled)
                 break;
             int group = 1;
-            while (last + 1 < g_game->m_numPlayers
+            while (last + 1 < Port::AuthorityGuildClient::playerCount()
                    && value[last + 1] == value[last]
-                   && !g_game->m_playerDisabled[index[last + 1]]) {
+                   && !Port::AuthorityGuildClient::disabled(index[last + 1])) {
                 group++;
                 last++;
             }
@@ -7917,20 +8078,22 @@ void TThievesGuildWindow::setupThievesGuild(int thievesGuilds)
     int playerIndex = 0;
     for (int column = 0; column < NUM_PLAYERS; column++) {
         int who = playerIndex;
-        while (who < NUM_PLAYERS && g_game->m_playerDisabled[who])
+        while (who < NUM_PLAYERS && Port::AuthorityGuildClient::disabled(who))
             who++;
         if (who == TTownScreenWindow::GUILD_PLAYER_COLUMNS)
             break;
         playerIndex = who;
 
         m_owners[column] = who;
-        strcpy(g_text, g_playerFlagSprites[who]);
-        msg.m_extraText = g_text;
-        broadcastMessage(MESSAGE_WIDGET, widget::WIDGET_SET_ICON_NAME,
-                         column + 0x384, msg.m_extra);
+        // These cards are bitmap borders, not icon widgets. Use the typed
+        // image setter (also avoids truncating a pointer through message.extra).
+        static_cast<bitmapBorder*>(getWidget(column + 0x384))->setImage(
+            g_playerFlagSprites[who]);
 
         bestHero = 0;
         if (thievesGuilds >= 1) {
+            if (Port::AuthorityGuildClient::active()) bestHero = Port::AuthorityGuildClient::bestHero(who);
+            else {
             bestStrength = 0;
             for (k = 0; k < g_game->m_players[who].m_numHeroes; k++) {
                 int id = g_game->m_players[who].m_heroes[k];
@@ -7941,11 +8104,12 @@ void TThievesGuildWindow::setupThievesGuild(int thievesGuilds)
                     bestHero = h;
                 }
             }
+            }
             if (bestHero) {
                 g_heroWidgetMap[column] = bestHero->m_id;
                 // DC 9413/9414 re-fetch the hero by the recorded id before
                 // reading its portrait; retail expands that getHero here.
-                hero* portraitHero = g_game->getHero(g_heroWidgetMap[column]);
+                hero* portraitHero = Port::AuthorityGuildClient::active() ? bestHero : g_game->getHero(g_heroWidgetMap[column]);
                 m_widgets.push_back(new bitmapBorder(
                     66 * column + 0x104, 0x168, 0x30, 0x20,
                     column + HERO_P0,
@@ -7996,7 +8160,7 @@ void TThievesGuildWindow::setupThievesGuild(int thievesGuilds)
                 }
                 if (thievesGuilds >= 3) {
                     strcpy(g_text,
-                           g_personality[g_game->m_players[who].m_personality]);
+                           g_personality[Port::AuthorityGuildClient::personality(who)]);
                     m_widgets.push_back(new textWidget(
                         66 * column + 0xfb, 0x1c4, 0x42, 0x14, g_text,
                         DATA_COMPGEN(0x0065f2f8, combatChatSmallFont,
@@ -8006,6 +8170,10 @@ void TThievesGuildWindow::setupThievesGuild(int thievesGuilds)
                     if (thievesGuilds >= 4) {
                         bestCreature = -1;
                         bestValue = 0;
+                        if (Port::AuthorityGuildClient::active()) {
+                            bestCreature = Port::AuthorityGuildClient::creature(who);
+                            Port::AuthorityGuildClient::creatureDisplay(who, g_creatureArmies[column], g_creatureWidgetMap1[column]);
+                        } else {
                         for (k = 0; k < g_game->m_players[who].m_numTowns; k++) {
                             int id = g_game->m_players[who].m_townIds[k];
                             town* t = g_game->getTown(id);
@@ -8039,6 +8207,7 @@ void TThievesGuildWindow::setupThievesGuild(int thievesGuilds)
                                     g_creatureWidgetMap1[column] = slot;
                                 }
                             }
+                        }
                         }
                         if (bestCreature != -1) {
                             m_widgets.push_back(new iconWidget(

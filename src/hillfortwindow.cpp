@@ -1,3 +1,4 @@
+#include "authority_client.h"
 #include "text.h"
 #include "va.h"
 
@@ -174,7 +175,7 @@ THillFortWindow::THillFortWindow()
     upgradeAll->setHotkey(0x1e);
     m_widgets.push_back(upgradeAll);
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -192,7 +193,7 @@ MAC_ADDRESS(0x10925c, 0xb4)
 THillFortWindow::~THillFortWindow()
 {
     g_hillFortWindow = 0;
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -572,6 +573,19 @@ int hillFortWindowHandler(message& msg)
             g_hillFortWindow->handleClick(msg);
             break;
         case widget::WIDGET_DESELECT:
+            if (Port::AuthorityClient::hillFortChoiceActive()) {
+                int selected = -2;
+                if (msg.m_codeY == DIALOG_RETURN_OK) selected = -1;
+                else if (msg.m_codeY >= THillFortWindow::UPGRADE_BUTTON_1_ID
+                         && msg.m_codeY <= THillFortWindow::UPGRADE_BUTTON_7_ID)
+                    selected = msg.m_codeY - THillFortWindow::UPGRADE_BUTTON_1_ID;
+                else if (msg.m_codeY == THillFortWindow::UPGRADE_ALL_BUTTON_ID) selected = 7;
+                if (selected != -2) {
+                    Port::AuthorityClient::chooseHillFort(selected);
+                    closeWindow = true;
+                    break;
+                }
+            }
             if (msg.m_codeY == DIALOG_RETURN_OK) {
                 closeWindow = 1;
             } else {

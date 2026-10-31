@@ -7,6 +7,7 @@
 //   contribution is fully accounted for and its non-COMDAT globals would have to
 //   sit in this run -> DC-port-only class; recorded unlocated, not forced.
 #include "va.h"
+#include "frontend_bridge.h"
 #include "text.h"
 
 // DC S_LPROC32: TU-local. Declared before the header so the friend binds to it.
@@ -61,6 +62,7 @@ TMainMenu::TMainMenu()
     : heroWindow(0, 0, 800, 600, 0)
 {
     g_mainMenu = this;
+    g_lastImHoverId = -1;
     m_showCdMessage = g_noCdRom && !g_cdMessageShown;
 
     m_widgets.reserve(NWIDGETS);
@@ -85,7 +87,7 @@ TMainMenu::TMainMenu()
         g_mainMenuButtonRects[4].m_width, g_mainMenuButtonRects[4].m_height,
         QUIT_ID, "mmenuqt.def", 0, 1, 0, 1, 2));
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -110,7 +112,7 @@ MAC_ADDRESS(0x11cbc4, 0xb4)
 TMainMenu::~TMainMenu()
 {
     g_mainMenu = 0;
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -121,8 +123,8 @@ DC_ADDRESS(0x0ea5ec, 0x2c)
 MAC_ADDRESS(0x11cc78, 0x58)
 void TMainMenu::doModal()
 {
-    g_soundManager->startMP3("MainMenu", 0, 1);
-    g_windowManager->doDialog(this, mainMenuHandler, 0);
+    // Audio backend is still disabled in the portable front-end target.
+    Port::runDialog(this, mainMenuHandler, 0, "main");
 }
 
 // E:\gamedcs\mainmenu.cpp:135

@@ -471,7 +471,7 @@ widget* heroWindow::findWidgetPtr(int mx, int my) const
 {
     mx -= m_x;
     my -= m_y;
-    for (widget* const* it = m_widgets.end(); it != m_widgets.begin(); --it) {
+    for (auto it = m_widgets.end(); it != m_widgets.begin(); --it) {
         widget* found = it[-1];
         if (mx >= found->m_x && my >= found->m_y
             && mx < found->m_x + found->m_width
@@ -539,7 +539,7 @@ DC_ADDRESS(0x197c8c, 0x48)
 MAC_ADDRESS(0x20bc50, 0x7c)
 void heroWindow::deleteWidgets()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -551,7 +551,7 @@ DC_ADDRESS(0x197cd4, 0x72)
 MAC_ADDRESS(0x20bccc, 0x74)
 void heroWindow::addWidgetsToMessageStream()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -577,7 +577,7 @@ VA(0x005ff5f0, 0x4F)
 MAC_ADDRESS(0x20bdb4, 0xbc)
 void heroWindow::onSleepChange(unsigned char on)
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it)
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it)
         (*it)->sleep(on);
 }
 

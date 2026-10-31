@@ -1,4 +1,5 @@
 #include "prefs.h"
+#include "frontend_bridge.h"
 #include "va.h"
 
 #include <algorithm>
@@ -520,6 +521,10 @@ DC_ADDRESS(0x12fdb8, 0x1c)
 MAC_ADDRESS(0x16e31c, 0x3c)
 void startMouseThread()
 {
+#if defined(HOMM3_PORT)
+    // SDL polls and presents the cursor in the main cooperative event loop.
+    g_mouseManager->checkUpdate();
+#else
     unsigned threadId;
 
     if (!g_mouseThread) {
@@ -535,6 +540,8 @@ void startMouseThread()
             }
         }
     }
+
+#endif
 }
 
 // E:\gamedcs\singleselectionwindow.cpp:344
@@ -544,6 +551,10 @@ DC_ADDRESS(0x12fdd4, 0x1c)
 MAC_ADDRESS(0x16e358, 0x30)
 void stopMouseThread()
 {
+#if defined(HOMM3_PORT)
+    // SDL polls and presents the cursor in the main cooperative event loop.
+    g_mouseManager->checkUpdate();
+#else
     if (g_mouseThread) {
         SetEvent(g_endMouseThreadEvent);
         WaitForSingleObject(g_mouseThread, INFINITE);
@@ -553,6 +564,8 @@ void stopMouseThread()
         g_endMouseThreadEvent = 0;
         g_mouseManager->setPointer(0, mouseManager::ADVENTURE_SET);
     }
+
+#endif
 }
 
 // DC preserves this source helper; Complete inlines it into the selection
@@ -2406,7 +2419,7 @@ TSingleSelectionWindow::TSingleSelectionWindow(int gameMode)
         }
     }
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -4641,8 +4654,7 @@ void TSingleSelectionWindow::doModal(bool fade)
     if ((m_loadMode == 0 && m_saveMode == 0)
             || (m_loadMode != 0 && isMultiPlayer()))
         m_durationSlider->setState(11);
-    g_windowManager->doDialogDraw(this,
-        heroWindow::heroWindowHandler, ::update, 0);
+    Port::runDialogDraw(this, heroWindow::heroWindowHandler, ::update, 0, "scenarios");
 }
 
 // DC SetHumanSlot: refresh the game vars, clear every seat and the
@@ -5133,7 +5145,7 @@ void TSingleSelectionWindow::setFilter(int size)
         }
     }
     if (m_selectionHeaders.size() != 0) {
-        m_currentHeader = m_selectionHeaders.begin();
+        m_currentHeader = m_selectionHeaders.data();
         updateGameVars();
     }
     message msg;
@@ -6703,8 +6715,12 @@ DC_ADDRESS(0x140670, 0x7c)
 MAC_ADDRESS(0x18128c, 0x50)
 static inline void updateTurnDuration()
 {
+    // Index 10 is "unlimited", not an entry in the ten finite durations.
+    // Never depend on the bytes following the recovered retail table.
+    const int index = g_game->m_setup.m_turnDuration;
+    const int count = sizeof(g_turnDurationMinutes) / sizeof(g_turnDurationMinutes[0]);
     g_turnDuration.setDuration(
-        g_turnDurationMinutes[g_game->m_setup.m_turnDuration] * 60000);
+        index >= 0 && index < count ? g_turnDurationMinutes[index] * 60000UL : 0);
 }
 
 // DC HandleNetMsg calls this ordinary bool helper; its pPlayer local is

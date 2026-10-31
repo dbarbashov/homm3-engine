@@ -99,7 +99,7 @@ type_combat_sub_window::type_combat_sub_window(
     b->setHotkey(0x39);
     m_widgets.push_back(b);
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
     }
@@ -181,7 +181,7 @@ TCombatControlSubWindow::TCombatControlSubWindow(heroWindow* parent)
     m_logScrollDownButton->setDisabledFrame(3);
     newWidgets.push_back(m_logScrollDownButton);
 
-    for (widget** it = newWidgets.begin(); it != newWidgets.end(); ++it) {
+    for (auto it = newWidgets.begin(); it != newWidgets.end(); ++it) {
         m_widgets.push_back(*it);
         if (*it)
             addWidget(*it, -1);
@@ -270,7 +270,7 @@ TCombatPlacementSubWindow::TCombatPlacementSubWindow(heroWindow* parent)
         g_combatWindowHelp[10].m_rclick, 1);
     buttons.push_back(b);
 
-    for (widget** it = buttons.begin(); it != buttons.end(); ++it) {
+    for (auto it = buttons.begin(); it != buttons.end(); ++it) {
         widget* w = *it;
         if (w) {
             m_widgets.push_back(w);

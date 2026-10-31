@@ -1,3 +1,4 @@
+struct AuthorityBattleAccess;
 #ifndef HOMM3_CMBTMGR_H
 #define HOMM3_CMBTMGR_H
 
@@ -12,6 +13,8 @@
 #include "hexcell.h"
 #include "struct.h"
 #include "winmgr.h"
+
+namespace Port { namespace Authority { struct CombatEngine; } }
 
 class Bitmap16Bit;
 class CNetMsgHandlerPause;
@@ -324,6 +327,7 @@ enum CombatHeroFrameType {
 };
 
 class combatManager : public baseManager {
+    friend struct AuthorityBattleAccess;
 public:
     // Original public CombatSpeedMod[3] (DC ?CombatSpeedMod@combatManager@@2QBMB).
     // Complete stores the three animation-speed factors at 0x63cf7c.
@@ -1093,6 +1097,15 @@ public:
     int experienceValueOfStack(int whichGroup);
     void makeCreaturesVanish();
     bool isQuickCombat() const;
+    // Presentation suppression is independent of the battle rules (notably tactics).
+    bool suppressCombatPresentation() const {
+#ifdef HOMM3_SERVER
+        return true;
+#else
+        return isQuickCombat();
+#endif
+    }
+    friend struct Port::Authority::CombatEngine;
     // ?show_eagle_eye@combatManager@@AAAXHH@Z (two ints),
     // ?DoVictory@combatManager@@QAAXH@Z (one int) and
     // ?show_looted_artifacts@combatManager@@AAAXAAV?$vector@Utype_artifact@@...@Z,

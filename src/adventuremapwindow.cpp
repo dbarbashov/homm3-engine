@@ -1,4 +1,6 @@
+#include "authority_client.h"
 #include "va.h"
+#include "hd_view.h"
 
 #include <stdio.h>
 
@@ -449,6 +451,7 @@ TAdventureMapWindow::TAdventureMapWindow()
 
     m_bottomView = 0;
     m_resourceDisplay = new TResourceDisplay(this, 0);
+    Port::HD::layoutAdventure(this, Port::HD::width()-800, Port::HD::height()-600);
 }
 
 // Defined at its retail address below; SendChat is its only caller and
@@ -681,6 +684,7 @@ DC_ADDRESS(0x000bf0, 0x2a)
 MAC_ADDRESS(0x0021f4, 0x4c)
 void TAdventureMapWindow::animateBottomView(unsigned char inBackground)
 {
+    if(Port::AuthorityClient::animateTurnView(inBackground))return;
     if ((!inBackground || m_animateInBackground) && m_bottomView)
         m_bottomView->animate();
 }
@@ -1169,8 +1173,22 @@ void TAdventureMapWindow::updateHeroLocator(int which, bool drawWinSect,
             m_heroLocators[which]->setVisible(1);
             m_heroLocators[which]->draw();
         }
-        if (update)
-            g_windowManager->updateScreen(0x261, 32 * which + 0xd4, 0x30, 0x20);
+        if (update) {
+            // Widgets move with the HD layout. Commit the entire portrait and
+            // both bars, including mana to the right of the original rectangle.
+            widget* items[] = {m_heroPortraits[which],
+                getWidget(HERO_MOVEMENT_0_ID + which),
+                getWidget(HERO_MANA_0_ID + which)};
+            int left = m_width, top = m_height, right = 0, bottom = 0;
+            for (widget* item : items) {
+                left = std::min<int>(left, item->m_x);
+                top = std::min<int>(top, item->m_y);
+                right = std::max(right, item->m_x + item->m_width);
+                bottom = std::max(bottom, item->m_y + item->m_height);
+            }
+            g_windowManager->updateScreen(m_x + left, m_y + top,
+                                          right - left, bottom - top);
+        }
     }
 }
 
@@ -1201,8 +1219,11 @@ void TAdventureMapWindow::updateTownLocator(int which, bool drawWinSect,
                              TOWN_0_ID + which, 1);
             drawWindow(0, TOWN_0_ID + which, TOWN_0_ID + which);
         }
-        if (update)
-            g_windowManager->updateScreen(0x2eb, 32 * which + 0xd4, 0x30, 0x20);
+        if (update) {
+            widget* icon = getWidget(TOWN_0_ID + which);
+            g_windowManager->updateScreen(m_x + icon->m_x, m_y + icon->m_y,
+                                          icon->m_width, icon->m_height);
+        }
     }
 }
 

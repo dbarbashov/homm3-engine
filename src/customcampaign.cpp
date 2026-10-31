@@ -2,6 +2,8 @@
 // omitted. The older-revision carcass is not claimed from roster order
 // alone.
 #include "text.h"
+#include "host_path.h"
+#include <stdexcept>
 #include "va.h"
 #include "homm3_minmax.h"
 #include "bitset_iterator.h"
@@ -1305,6 +1307,7 @@ std::string readLengthPrefixedString(TAbstractFile* infile)
         infile->read(&length, sizeof(length));
         count = LITTLE_ENDIAN_LONG(length);
     }
+    if(count>1024*1024)throw std::runtime_error("Campaign text exceeds size limit");
     unsigned int remaining = count;
     std::string text;
     text.resize(count);
@@ -1315,7 +1318,7 @@ std::string readLengthPrefixedString(TAbstractFile* infile)
             count = remaining;
         else
             count = sizeof(chunk);
-        infile->read(chunk, count);
+        if(infile->read(chunk, count)!=int(count))throw std::runtime_error("Truncated campaign text");
         std::copy(chunk, chunk + count, dest);
         dest += count;
         remaining -= count;
@@ -1787,7 +1790,7 @@ void TCampaignBrief::ScenarioStruct::placeCrossoverHeroes()
             placeholder = &placeholders[placeholderIndex];
             if (placeholder->m_heroId == -1
                 && static_cast<signed char>(placeholder->m_owner) == player) {
-                initializeCrossoverHero(placeholder, heroes.begin());
+                initializeCrossoverHero(placeholder, heroes.data());
                 heroes.erase(heroes.begin());
                 if (heroes.size() == 0)
                     break;
@@ -2292,11 +2295,8 @@ bool TCampaignBrief::CampaignHeaderStruct::load()
     clearScenarios();
 
     std::filebuf* fileBuf = new std::filebuf;
-    char currentDirectory[200];
-    getcwd(currentDirectory, sizeof(currentDirectory));
-    chdir(DATA_COMPGEN(0x006772d0, oldMainMapsDir, "maps"));
-    fileBuf->open(m_fileName.c_str(), std::ios::in | std::ios::binary);
-    chdir(DATA_COMPGEN(0x006755a0, parentDirectory, ".."));
+    const std::string path=Port::hostPath((std::string("maps/")+m_fileName).c_str());
+    fileBuf->open(path.c_str(), std::ios::in | std::ios::binary);
     if (!fileBuf->is_open()) {
         delete fileBuf;
         LODFile* resource =
@@ -2334,11 +2334,13 @@ bool TCampaignBrief::CampaignHeaderStruct::load()
         // vector/player-array states here are that ctor's members).
         int version = readLittleEndianValue<int>(file);
         m_campaignVersion = version;
-        if (m_campaignVersion < 4) {
+        if (m_campaignVersion < 4 || m_campaignVersion > 6) {
             m_fileError = CAMPAIGN_FILE_VERSION_UNSUPPORTED;
+            freeData();
             return false;
         }
         m_regionMap = readValue<unsigned char>(file);
+        if(m_regionMap>=21)throw std::runtime_error("Invalid campaign region map");
         m_campaignName = readLengthPrefixedString(file);
         if (m_campaignName.length() == 0)
             m_campaignName = g_generalText->GetText(GENERAL_TEXT_UNNAMED);
@@ -2511,6 +2513,7 @@ void TCampaignBrief::MapTextStruct::play()
     }
 
     long videoEnd;
+    // Looping backdrop must not block completion of narration and subtitles.
     if (!SmackManager::g_playingSmack.m_smack2) {
         videoDone = 1;
         videoEnd = GameTime::get();
@@ -2580,7 +2583,7 @@ void TCampaignBrief::MapTextStruct::play()
                 && speech) {
                 g_soundManager->memorySample(speech);
                 speechStarted = 1;
-            } else if (mp3Started) {
+            } else if (speechStarted) {
                 if (speech && !speechDone) {
                     speechDone = g_soundManager->getSampleInfo(
                                       speech->memSample.memHSample,
@@ -2598,7 +2601,7 @@ void TCampaignBrief::MapTextStruct::play()
 
             if (g_config.m_videoSubtitles)
                 redraw = 1;
-            if (!videoDone && !SmackManager::g_playingSmack.m_smack) {
+            if (!videoDone && !videoPlaying()) {
                 videoDone = 1;
                 videoEnd = GameTime::get();
             }

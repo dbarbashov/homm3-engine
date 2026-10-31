@@ -1,3 +1,5 @@
+#include "authority_actions_client.h"
+#include "authority_client.h"
 #include "text.h"
 #include "va.h"
 #include "includes.h"
@@ -155,7 +157,7 @@ TSplitWindow::TSplitWindow(int x2, int y2, TCreatureType thisArmy)
         214, 263, 64, 30, 0x7801,
         "iCancel.def", 0, 1, 1, 1, 2));
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -172,7 +174,7 @@ DC_ADDRESS(0x04e11c, 0x62)
 MAC_ADDRESS(0x057158, 0xac)
 TSplitWindow::~TSplitWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -233,6 +235,11 @@ void armyGroup::splitArmy(int srcIndex, armyGroup* ag, int destIndex, unsigned c
             g_splitWindow->m_destinationTroops,
             maximumTransfer);
 
+        if (Port::AuthorityActionsClient::enabled()) {
+            int count=g_splitWindow->m_destinationTroops;
+            delete g_splitWindow;g_splitWindow=nullptr;
+            Port::AuthorityActionsClient::split(this,srcIndex,ag,destIndex,count);return;
+        }
         ag->m_armies[destIndex] = m_armies[srcIndex];
         ag->m_numTroops[destIndex] = g_splitWindow->m_destinationTroops;
         if (!ag->m_numTroops[destIndex])
@@ -781,6 +788,7 @@ DC_ADDRESS(0x04edcc, 0x3a)
 MAC_ADDRESS(0x058710, 0x3c)
 void armyGroup::swap(int srcIndex, armyGroup* destGroup, int destIndex)
 {
+    if (Port::AuthorityActionsClient::enabled()) { Port::AuthorityActionsClient::transfer(this,srcIndex,destGroup,destIndex,0,1); return; }
     int army = m_armies[srcIndex];
     m_armies[srcIndex] = destGroup->m_armies[destIndex];
     destGroup->m_armies[destIndex] = army;

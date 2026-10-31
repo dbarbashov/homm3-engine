@@ -75,7 +75,17 @@ int mouseMessageHandler(void* hwnd, unsigned winMsg, unsigned wordParam, long lo
     if (g_inputManager->m_bufferBusy != 0)
         return 1;
     g_inputManager->m_bufferBusy = 1;
-    e = &g_inputManager->m_buffer[g_inputManager->m_tail];
+    const int quals = g_inputManager->getCurrQuals();
+    const int previous = (g_inputManager->m_tail + 63) % 64;
+    // SDL/browser motion can arrive faster than the synchronous game loop.
+    // Keep the latest position within an uninterrupted run of motion events;
+    // button/key events and modifier changes remain ordering boundaries.
+    const bool replaceMotion = winMsg == WM_MOUSEMOVE
+        && g_inputManager->m_head != g_inputManager->m_tail
+        && g_inputManager->m_buffer[previous].m_id == MESSAGE_MOUSE_MOVE
+        && g_inputManager->m_buffer[previous].m_qualifier == quals;
+    e = &g_inputManager->m_buffer[replaceMotion ? previous
+                                              : g_inputManager->m_tail];
     e->m_id = e->m_codeX = e->m_codeY = e->m_mouseX = e->m_mouseY = e->m_qualifier = 0;
     bool hasPosition = true;
     switch (winMsg) {
@@ -117,13 +127,14 @@ int mouseMessageHandler(void* hwnd, unsigned winMsg, unsigned wordParam, long lo
         e->m_mouseY = y;
     }
     if (e->m_id != 0) {
-        int quals = g_inputManager->getCurrQuals();
         e->m_qualifier = quals;
-        g_inputManager->m_tail++;
-        g_inputManager->m_tail %= 64;
-        if (g_inputManager->m_head == g_inputManager->m_tail) {
-            g_inputManager->m_head++;
-            g_inputManager->m_head %= 64;
+        if (!replaceMotion) {
+            g_inputManager->m_tail++;
+            g_inputManager->m_tail %= 64;
+            if (g_inputManager->m_head == g_inputManager->m_tail) {
+                g_inputManager->m_head++;
+                g_inputManager->m_head %= 64;
+            }
         }
     }
     g_inputManager->m_bufferBusy = 0;

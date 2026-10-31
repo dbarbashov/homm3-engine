@@ -946,7 +946,7 @@ int NewfullMap::saveMapLayer(TAbstractFile* outfile, int size, int layer)
     int intBuffer;
     short shortBuffer;
     int count;
-    unsigned long ulongBuffer;
+    uint32_t ulongBuffer;
     char charBuffer;
 
     for (y = 0; y < size; ++y) {
@@ -1186,7 +1186,7 @@ int NewfullMap::loadMapLayer(TAbstractFile* infile, int size, int layer,
                 return -1;
             thisCell->m_objectTypeIndex = indexValue;
 
-            unsigned long extra;
+            uint32_t extra;
             if (readValue(infile, extra) < sizeof(extra))
                 return -1;
             thisCell->m_extraInfo = extra;
@@ -4305,7 +4305,7 @@ void NewfullMap::stampObject(NewmapCell* thisCell,
                     NewmapCell* cell = g_game->m_worldMap.cell(
                         x, y, newObject->m_z);
                     std::vector<NewmapCell::TObjectCell>& onMapList = cell->m_objects;
-                    const NewmapCell::TObjectCell* scan = onMapList.begin();
+                    auto scan = onMapList.begin();
                     while (scan->m_objectIndex != nextCellObjInfo.m_objectIndex)
                         ++scan;
                     int objOnMapHeight = scan->m_layer;

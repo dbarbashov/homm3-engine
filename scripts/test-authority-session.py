@@ -27,7 +27,7 @@ assert objects, 'Build the worker first'
 media = ROOT / 'build/ffmpeg-native/install'
 probe = output / 'session-probe'
 command = ['clang++', '-std=c++14', '-DHOMM3_PORT', '-DHOMM3_FULL_GAME', '-DHOMM3_SERVER',
-           '-include', 'port/compat/prefix.h', '-Iport/compat', '-Ibuild/portable-source/include',
+           '-include', 'port/compat/prefix.h', '-Iport/compat', '-Iinclude',
            '-O2', '-Wno-writable-strings', '-Wno-deprecated-declarations',
            *shlex.split(subprocess.check_output(['sdl2-config', '--cflags', '--libs'], text=True)),
            '-Wl,-dead_strip' if platform.system() == 'Darwin' else '-Wl,--gc-sections',

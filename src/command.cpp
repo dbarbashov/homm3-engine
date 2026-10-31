@@ -1,3 +1,8 @@
+#ifdef HOMM3_SERVER
+#include "server_combat.h"
+#include "server_authority.h"
+#endif
+#include "battle_client.h"
 // Both DC command routines below retain army::GetName as the source boundary,
 // while the original CreatureType.h body supplies its nested GetArmyName
 // expansion.  Omitting that header-inline body loses 16 retail CFG blocks.
@@ -217,7 +222,7 @@ DC_ADDRESS(0x06b268, 0xb0)
 MAC_ADDRESS(0x0822b4, 0xd0)
 void combatManager::doAnimations()
 {
-    if (isQuickCombat())
+    if (suppressCombatPresentation())
         return;
 
     if (GameTime::isPast(g_timers[0])) {
@@ -248,7 +253,7 @@ void combatManager::finishCreaturePlacement()
     m_actingSide = 1;
     m_actingSlot = 0;
     m_turnNumber = 0;
-    if (!isQuickCombat())
+    if (!suppressCombatPresentation())
         m_combatWindow->endPlacementPhase();
     resetRound();
 }
@@ -259,6 +264,7 @@ DC_ADDRESS(0x06b318, 0x352)
 MAC_ADDRESS(0x0823fc, 0x39c)  // anchor-vtable combatManager slot02 + dispatcher: calls automate_catapult/first_aid + ProcessCombatMsg/CheckWin/ResetRound
 int combatManager::main(message& msg)
 {
+    if(Port::BattleClient::active())return Port::BattleClient::main(msg);
     int result = 1;
     doAnimations();
 
@@ -1182,7 +1188,7 @@ void combatManager::resetRound()
     if (bSomeCreaturesVanish)
         makeCreaturesVanish();
 
-    for (TObstacle* obstacle = m_obstacles.begin();
+    for (auto obstacle = m_obstacles.begin();
             obstacle != m_obstacles.end(); ++obstacle) {
         if (obstacle->m_duration > 0) {
             obstacle->m_duration--;
@@ -1195,7 +1201,7 @@ void combatManager::resetRound()
     }
 
     if (!m_creaturePlacement
-            && !isQuickCombat()) {
+            && !suppressCombatPresentation()) {
         m_combatWindow->combatMessage(
             (*g_generalText)[GENERAL_TEXT_COMBAT_ROUND], 1, 0);
     }
@@ -1674,7 +1680,7 @@ MAC_ADDRESS(0x085280, 0x14c)
 void combatManager::showLootedArtifacts(
     std::vector<type_artifact>& lootedArtifacts, int dialogTimeout)
 {
-    type_artifact* artifact = lootedArtifacts.begin();
+    auto artifact = lootedArtifacts.begin();
     std::string msg;
     std::vector<type_dialog_resource> rewards;
     type_dialog_resource reward;
@@ -1796,7 +1802,11 @@ void combatManager::doVictory(int winningGroup)
             calculateGainedExperience(winningGroup, &experience);
             // The LOCAL human's experience is awarded later, beside the
             // results window; a remote or AI winner gets it here.
-            if (!IsLocalHuman[winningGroup])
+            if (!IsLocalHuman[winningGroup]
+#ifdef HOMM3_SERVER
+                && !(Port::Authority::active() && IsHuman[winningGroup])
+#endif
+                )
                 m_heroes[winningGroup]->giveExperience(experience, 1, 1);
             raiseSkeletons(winningGroup);
             learnSpellFromEagleEye(winningGroup);
@@ -1813,8 +1823,19 @@ void combatManager::doVictory(int winningGroup)
             m_heroes[1]->applyBattleLossTemps();
     }
 
+#ifdef HOMM3_SERVER
+    // Deliver final casualties/rewards while both armies still exist, before
+    // giveExperience can synchronously request the next level-up choice.
+    Port::Authority::publishCombatResult(*this, experience, lootedArtifacts);
+    if (winningGroup >= 0 && m_heroes[winningGroup]
+        && (IsLocalHuman[winningGroup]
+            || (Port::Authority::active() && IsHuman[winningGroup])))
+        m_heroes[winningGroup]->giveExperience(experience, 1, 1);
     freeArmies();
-    if (!isQuickCombat())
+    return;
+#endif
+    freeArmies();
+    if (!suppressCombatPresentation())
         m_combatWindow->combatMessage("", 0, 0);
     g_mouseManager->m_noChangePointer = 0;
     g_mouseManager->setPointer(6, mouseManager::COMBAT_SET);
@@ -1822,7 +1843,7 @@ void combatManager::doVictory(int winningGroup)
     // DC command.cpp:2710 follows ShowPointer with this header helper;
     // Complete shares the pointer restoration before its result branches.
     g_mouseManager->enable();
-    if (!isQuickCombat()) {
+    if (!suppressCombatPresentation()) {
         g_windowManager->m_screenBitmap->Darken(0, 0, 800, 600);
         g_windowManager->updateScreen();
     }
@@ -1911,7 +1932,7 @@ DC_ADDRESS(0x06ea10, 0x108)
 MAC_ADDRESS(0x085d6c, 0xcc)
 void combatManager::checkChangeSelector()
 {
-    if (isQuickCombat())
+    if (suppressCombatPresentation())
         return;
 
     army* currentArmy = getCurrentArmy();
@@ -1953,7 +1974,7 @@ DC_ADDRESS(0x06ebbc, 0x15c)
 MAC_ADDRESS(0x085f28, 0x258)
 void combatManager::checkChangeHighlighter(int currentIndex)
 {
-    if (isQuickCombat())
+    if (suppressCombatPresentation())
         return;
     if (m_battleOver)
         return;
@@ -2140,7 +2161,7 @@ void combatManager::getControl()
         g_inputManager->flush();
 
     if (m_status == STATUS_ACTIVE
-            && !isQuickCombat())
+            && !suppressCombatPresentation())
         g_mouseManager->setPointer(6, mouseManager::COMBAT_SET);
 
     checkChangeSelector();
@@ -2263,7 +2284,7 @@ DC_ADDRESS(0x06f5f4, 0x70)
 MAC_ADDRESS(0x086cf8, 0xb4)
 void combatManager::resetMouse()
 {
-    if (isQuickCombat())
+    if (suppressCombatPresentation())
         return;
 
     if (m_thisNetHasControl && m_playerIds[m_currentSide] >= 0
@@ -2348,7 +2369,7 @@ void combatManager::processFirstAid(army* currentArmy)
         targetArmy->m_topCreatureDamage -= result;
         currentArmy->m_monInfo.attributes |= creatureDone;
 
-        if (!isQuickCombat()) {
+        if (!suppressCombatPresentation()) {
             SAMPLE2 sample = loadPlaySample(
                 DATA_COMPGEN(0x00660a94, regenerSampleName,
                              "Regener.wav"));
@@ -2376,7 +2397,7 @@ DC_ADDRESS(0x06f984, 0x82a)
 MAC_ADDRESS(0x0871d0, 0xb3c)  // anchor-callee exhaustive + single-fn gap
 int combatManager::processNextAction(message& msg, bool automaticTurn)
 {
-    if (!isQuickCombat()) {
+    if (!suppressCombatPresentation()) {
         m_combatWindow->clearCombatMessages();
         m_combatWindow->m_heroSubWindows[0]->unShow();
         m_combatWindow->m_heroSubWindows[1]->unShow();
@@ -2387,7 +2408,7 @@ int combatManager::processNextAction(message& msg, bool automaticTurn)
     }
 
     g_processingCombatAction = 1;
-    if (!isQuickCombat()) {
+    if (!suppressCombatPresentation()) {
         if (m_nextAction)
             g_mouseManager->setPointer(6, mouseManager::COMBAT_SET);
         updateMouseGrid(-1, 1);
@@ -2537,7 +2558,7 @@ int combatManager::processNextAction(message& msg, bool automaticTurn)
                     message = formatString((*g_generalText)[GENERAL_TEXT_COMBAT_DEFEND_MANY_FORMAT],
                                             currentArmy->getName(),
                                             currentArmy->m_defendBonus);
-                m_combatWindow->combatMessage(message.c_str(), 1, 0);
+                if (m_combatWindow) m_combatWindow->combatMessage(message.c_str(), 1, 0);
             }
             currentArmy->m_monInfo.defenseSkill += currentArmy->m_defendBonus;
         }
@@ -2556,7 +2577,7 @@ int combatManager::processNextAction(message& msg, bool automaticTurn)
             else
                 message = formatString((*g_generalText)[GENERAL_TEXT_COMBAT_WAIT_MANY_FORMAT],
                                         currentArmy->getName());
-            m_combatWindow->combatMessage(message.c_str(), 1, 0);
+            if (m_combatWindow) m_combatWindow->combatMessage(message.c_str(), 1, 0);
         }
         memset(m_obstacleAttackVisited, 0, COMBAT_GRID_CELLS);
         currentArmy->checkObstacleAttacks(0);
@@ -2740,7 +2761,7 @@ army* combatManager::addArmy(int side, int monType, int monQty,
         m_numArmies[side]++;
 
     if (fizzleItIn
-            && !isQuickCombat()) {
+            && !suppressCombatPresentation()) {
         resetLimitCreature();
         markCreatureEffect(side, slot);
         computeMaxExtent();

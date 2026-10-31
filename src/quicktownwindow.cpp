@@ -137,7 +137,7 @@ TQuickTownWindow::TQuickTownWindow(const town* thisTown, TQuickTownWindow::TView
         0, 0, 0, 0x10));
 
     initializeArmyDisplay(thisTown->getArmy(), viewLevel);
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
     }
@@ -157,7 +157,7 @@ TQuickTownWindow::TQuickTownWindow(const garrison* thisGarrison,
         font::WHITE, NAME_ID, 0, 0, 8));
 
     initializeArmyDisplay(thisGarrison->m_garrisonArmy, viewLevel);
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
     }
@@ -170,7 +170,7 @@ DC_ADDRESS(0x1184c4, 0xa0)
 MAC_ADDRESS(0x14cae0, 0xac)
 TQuickTownWindow::~TQuickTownWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }

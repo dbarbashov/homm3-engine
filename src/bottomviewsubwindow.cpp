@@ -1,4 +1,5 @@
 #include "va.h"
+#include "hd_view.h"
 
 #include <crt_stdio.h>
 #include <strstream>
@@ -76,7 +77,7 @@ DC_ADDRESS(0x0550b8, 0x5c)
 MAC_ADDRESS(0x05f188, 0x68)
 type_bottom_view_window::type_bottom_view_window(heroWindow* parentWindow)
 {
-    initialize(614, 400, 176, 166, parentWindow);
+    initialize(Port::HD::width()-186, Port::HD::height()-200, 176, 166, parentWindow);
 }
 
 // The new-turn banner, and the first of the seven big derived
@@ -148,7 +149,7 @@ TBottomViewNewTurn::TBottomViewNewTurn(heroWindow* parent)
         font::WHITE, id++, 1, 0, 8);
     m_widgets.push_back(m_backdrop);
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
     }
@@ -247,7 +248,7 @@ TBottomViewResourceMessage::TBottomViewResourceMessage(
         ResourceManager::Dispose(sprite);
     }
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
     }
@@ -307,7 +308,7 @@ TBottomViewMessage::TBottomViewMessage(heroWindow* parent,
         10, 10, 148, 146, message->c_str(), "smalfont.fnt", font::WHITE,
         BOTTOM_VIEW_TEXT_ID, 1, 0, 8));
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
     }
@@ -476,7 +477,7 @@ TBottomViewHero::TBottomViewHero(heroWindow* parent)
         }
     }
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
     }
@@ -740,7 +741,7 @@ TBottomViewTown::TBottomViewTown(heroWindow* parent)
         }
     }
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
     }
@@ -826,7 +827,7 @@ TBottomViewKingdom::TBottomViewKingdom(heroWindow* parent)
         }
     }
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
     }

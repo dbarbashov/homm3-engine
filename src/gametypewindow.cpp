@@ -1,4 +1,5 @@
 #include "va.h"
+#include "frontend_bridge.h"
 #include "text.h"
 
 #include "gametypewindow.h"
@@ -51,7 +52,9 @@ TGameTypeWindow::TGameTypeWindow(bool loadGameMode)
     : heroWindow(0, 0, 800, 600, 0)
 {
     g_gameTypeWindow = this;
-    g_game->m_isTutorial = 0;
+    g_lastImHoverId = -1;
+    // The portable front end creates game state when a scenario is started.
+    if (g_game) g_game->m_isTutorial = 0;
 
     m_widgets.reserve(NWIDGETS);
     m_widgets.push_back(new bitmapBorder16(
@@ -86,9 +89,9 @@ TGameTypeWindow::TGameTypeWindow(bool loadGameMode)
         back.m_x, back.m_y, back.m_width, back.m_height, QUIT_ID,
         "gtback.def", 0, 1, 0, 1, 2));
 
-    widget** first = m_widgets.begin();
+    auto first = m_widgets.begin();
     if (first != m_widgets.end()) {
-        for (widget** it = first; it != m_widgets.end(); ++it) {
+        for (auto it = first; it != m_widgets.end(); ++it) {
             if (*it)
                 addWidget(*it, -1);
             else
@@ -104,7 +107,7 @@ DC_ADDRESS(0x0c9490, 0x68)
 MAC_ADDRESS(0x0f1534, 0xb4)
 TGameTypeWindow::~TGameTypeWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -116,9 +119,7 @@ DC_ADDRESS(0x0c94f8, 0x2c)
 MAC_ADDRESS(0x0f15e8, 0x58)
 void TGameTypeWindow::doModal()
 {
-    g_soundManager->startMP3(
-        DATA_COMPGEN(0x00660e08, gameTypeMainMenuMusic, "MainMenu"), 0, 1);
-    g_windowManager->doDialog(this, gameTypeWindowHandler, 0);
+    Port::runDialog(this, gameTypeWindowHandler, 0, "game-type");
 }
 
 VA(0x004d5940, 0x220)

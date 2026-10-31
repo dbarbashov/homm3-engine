@@ -4,11 +4,15 @@
 #include "va.h"
 
 #include "platform.h"
+#if defined(HOMM3_PORT)
+#include "media_types.h"
+#else
 #if !defined(HOMM3_TARGET_MAC)
 #include <bink.h>
 #endif
 #include <dsound.h>
 #include <Mss.h>
+#endif
 
 #include "basemgr.h"
 #include "crt_process.h"

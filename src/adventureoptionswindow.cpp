@@ -80,9 +80,9 @@ TAdventureOptionsWindow::TAdventureOptionsWindow()
         ADVENTURE_OPTION_ROLLOVER_ID, 5, 0, 8);
     m_widgets.push_back(m_rolloverWidget);
 
-    widget** first = m_widgets.begin();
+    auto first = m_widgets.begin();
     if (first != m_widgets.end()) {
-        widget** it = m_widgets.begin();
+        auto it = m_widgets.begin();
         do {
             if (*it)
                 addWidget(*it, -1);
@@ -111,7 +111,7 @@ DC_ADDRESS(0x00514c, 0x62)
 MAC_ADDRESS(0x00587c, 0xac)
 TAdventureOptionsWindow::~TAdventureOptionsWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }

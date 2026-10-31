@@ -2570,8 +2570,10 @@ long type_AI_creature_purchaser::doBestPurchase(
                 m_funds, type, m_creatures[bestSource].m_number);
             for (short resource = 0; resource < NUM_RESOURCES; ++resource)
                 m_funds[resource] -= resourceCost[resource] * bestNumber;
-            m_creatures[bestSource].m_number -= bestNumber;
         }
+        // Free dwelling recruits still consume the available population. Keeping
+        // this inside the paid branch makes AI valuation/purchase loop forever.
+        m_creatures[bestSource].m_number -= bestNumber;
     }
     return bestValue;
 }
@@ -3015,7 +3017,7 @@ static void markStrategicMap(
         rect.right = min(static_cast<long>(point.m_point.m_x) + 6, g_mapWidth);
         rect.bottom = min(static_cast<long>(point.m_point.m_y) + 6, g_mapHeight);
         currentSearchArray.setRectangle(rect);
-        g_advManager->m_advWindow->animateBottomView(0);
+        if (g_advManager->m_advWindow) g_advManager->m_advWindow->animateBottomView(0);
         currentSearchArray.seedPosition(
             currentHero, point.m_point, type_point(-1, -1, -1), 500,
             cell->m_groundSet == eTerrainWater, const_AI_treasure_search,
@@ -3253,7 +3255,7 @@ int aiChooseDestination(hero* currentHero, long maxDistance,
         } else if (candidateRaw < 0) {
             isNearby = 0;
         }
-        g_advManager->m_advWindow->animateBottomView(0);
+        if (g_advManager->m_advWindow) g_advManager->m_advWindow->animateBottomView(0);
 
         if (point.m_value == 0 && value <= rawValue)
             continue;
@@ -3404,7 +3406,7 @@ long findAllDestinations(hero* currentHero, searchArray* currentSearchArray,
         }
         if (!currentHero->isInPatrolRadius(cell->m_point))
             continue;
-        g_advManager->m_advWindow->animateBottomView(0);
+        if (g_advManager->m_advWindow) g_advManager->m_advWindow->animateBottomView(0);
         checkDoMain(0, 0);
 
         point.m_isCritical = 0;
@@ -3521,7 +3523,7 @@ long markDestinations(hero* currentHero, long maxDistance,
     NewmapCell* targetCell;
     heroDanger = currentSearchArray->getDangerValue(
         currentHero->getLocation());
-    g_advManager->m_advWindow->animateBottomView(0);
+    if (g_advManager->m_advWindow) g_advManager->m_advWindow->animateBottomView(0);
     currentSearchArray->seedPosition(currentHero, currentHero->getLocation(),
                                type_point(-1, -1, -1),
                                maxDistance,
@@ -3559,7 +3561,7 @@ long markDestinations(hero* currentHero, long maxDistance,
         }
 
         targetCell = g_advManager->getCell(point);
-        g_advManager->m_advWindow->animateBottomView(0);
+        if (g_advManager->m_advWindow) g_advManager->m_advWindow->animateBottomView(0);
         friendlySearch.seedPosition(
             friendly, point, type_point(-1, -1, -1),
             friendly->m_maxMovePoints,

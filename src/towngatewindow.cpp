@@ -128,7 +128,7 @@ DC_ADDRESS(0x169824, 0x6a)
 MAC_ADDRESS(0x1b8544, 0xc8)
 TTownGateWindow::~TTownGateWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }

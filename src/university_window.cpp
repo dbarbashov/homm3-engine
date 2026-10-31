@@ -1,3 +1,4 @@
+#include "authority_client.h"
 #include "text.h"
 #include "va.h"
 
@@ -493,6 +494,10 @@ int type_university_window::purchaseClick(message& msg)
         && !(msg.m_qualifier & MESSAGE_MODIFIER_RIGHT)) {
         type_university_window* window =
             static_cast<type_university_window*>(msg.m_window);
+        if(Port::AuthorityClient::universityChoiceActive()){
+            Port::AuthorityClient::chooseUniversity(window->m_selectedSkill.m_skill);
+            return window->exitDialog(msg);
+        }
         playerData* player = window->m_currentHero->getPlayer();
         player->m_resources[6] -= 2000;
         window->m_currentHero->giveSS(window->m_selectedSkill.m_skill, 1);

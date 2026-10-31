@@ -7,7 +7,7 @@ VA(0x005eeda0, 0x4C)
 DC_ADDRESS(0x18e3b0, 0x4)
 TFileVersionInfo::TFileVersionInfo(const char* filename)
 {
-    unsigned long ignoredHandle;
+    DWORD ignoredHandle;
     unsigned long size = GetFileVersionInfoSizeA(
         const_cast<char*>(filename), &ignoredHandle);
     if (size > 0) {

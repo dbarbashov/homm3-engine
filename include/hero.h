@@ -1,3 +1,5 @@
+struct AuthorityBattleAccess;
+struct AuthorityProjectionAccess;
 #ifndef HOMM3_HERO_H
 #define HOMM3_HERO_H
 
@@ -76,6 +78,7 @@ enum EHeroBackpackLimit {
 // 0x18-byte extent and every serialized offset. Retail packs type_point at
 // +0x07, one byte earlier than the naturally aligned Dreamcast build.
 struct type_obscuring_object {
+    friend struct AuthorityProjectionAccess;
 public:
     // Before normalization (Dreamcast): mapX.
     short m_x;  // +0x00 (DC mapX)
@@ -165,7 +168,7 @@ protected:
     void obscureCell(TAdventureObjectType newType, long id);
 
 private:
-    unsigned long m_extraInfo;  // +0x14
+    uint32_t m_extraInfo;  // +0x14: Win32 save-file word
 };
 SIZE(type_obscuring_object, 0x18);
 
@@ -310,6 +313,8 @@ extern int g_stablesMovementBonus;
 // second claim on the same RVA is a fatal duplicate at delink time.
 
 class hero : public type_obscuring_object {
+    friend struct AuthorityBattleAccess;
+    friend struct AuthorityProjectionAccess;
     // DC DoCombat (events.cpp:6569, dc 0x9bf56) and Loki's (0x080f9ca9)
     // pass the private stats array straight to CHeroLevelUpdateMsg.
     friend class advManager;

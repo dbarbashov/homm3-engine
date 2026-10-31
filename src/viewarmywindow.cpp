@@ -207,7 +207,7 @@ TViewArmyWindow::TViewArmyWindow(const army* thisArmy, int x0, int y0,
             font::WHITE, -1, 0, 0, 8));
     }
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -312,7 +312,7 @@ TViewArmyWindow::TViewArmyWindow(armyGroup* group, int iarmy,
 
     MEMSET_LOCAL(m_influence, -1, sizeof(m_influence), 3, i);
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -377,7 +377,7 @@ TViewArmyWindow::TViewArmyWindow(int armyType, int x0, int y0,
     int i;
     MEMSET(m_influence, -1, sizeof(m_influence), i);
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -390,7 +390,7 @@ DC_ADDRESS(0x191660, 0x72)
 MAC_ADDRESS(0x200534, 0xc4)
 TViewArmyWindow::~TViewArmyWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }

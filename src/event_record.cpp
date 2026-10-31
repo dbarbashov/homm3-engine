@@ -1397,8 +1397,8 @@ DC_ADDRESS(0x08ead0, 0xf4)
 MAC_ADDRESS(0x0c2fe8, 0x19c)
 bool game::loadRecordedEvents(TAbstractFile* infile, int version)
 {
-    long count;
-    if (infile->read(&count, sizeof(count)) != sizeof(count))
+    int32_t count; // Save format is Win32, including on LP64 hosts.
+    if (infile->read(&count, sizeof(count)) != sizeof(count) || count < 0)
         return 0;
 
     clearEventRecords();
@@ -1424,7 +1424,7 @@ DC_ADDRESS(0x08ebc4, 0x98)
 MAC_ADDRESS(0x0c3184, 0xf4)
 bool game::saveRecordedEvents(TAbstractFile* outfile)
 {
-    long count = m_eventRecords.size();
+    int32_t count = m_eventRecords.size();
     outfile->write(&count, 4);
     for (int i = 0; i < count; ++i) {
         char type = m_eventRecords[i]->getType();

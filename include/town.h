@@ -1,3 +1,4 @@
+struct AuthorityProjectionAccess;
 #ifndef HOMM3_TOWN_H
 #define HOMM3_TOWN_H
 
@@ -403,6 +404,7 @@ DATA(0x0066cd98)
 extern __int64 g_bitNumber[];
 
 class town {
+    friend struct AuthorityProjectionAccess;
 public:
     enum { TOWN_DOCK_SITE_NONE = 0xff };
     // Index of this town in gpGame->towns (byte, sign-extended).
@@ -572,6 +574,9 @@ public:
         }
         return (m_populationMask & g_bitNumber[buildingId]) != 0;
     }
+
+    // Original town-screen free buildings, also needed by the headless host.
+    void setupViewBuildings();
 
     // Original: town::set_mask; Town.h:331
     DC_ADDRESS(0x168dfc, 0x28)

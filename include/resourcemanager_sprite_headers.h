@@ -15,6 +15,15 @@ struct SpriteDefHeader {
 };
 SIZE(SpriteDefHeader, 0x310);
 
+// Disk directory contains two 32-bit values and eight reserved bytes, not
+// native pointers. Keep it separate from the allocated host-side tables.
+struct TSpriteSequenceDiskHeader {
+    int32_t m_sequenceNumber;
+    int32_t m_numFrames;
+    uint32_t m_reserved[2];
+};
+static_assert(sizeof(TSpriteSequenceDiskHeader) == 16, "DEF sequence disk layout");
+
 struct TSpriteDataHeader {
     int m_sequenceNumber;
     int m_numFrames;

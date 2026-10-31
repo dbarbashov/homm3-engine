@@ -140,6 +140,11 @@ DC_ADDRESS(0x10d47c, 0x92)
 MAC_ADDRESS(0x13d5b8, 0xc8)
 void checkDoMain(int forceMouseCheck, int mouseOnly)
 {
+#ifdef HOMM3_HARNESS
+    // This polling loop gates the message pump on elapsed time. A virtual
+    // clock must progress here too, otherwise transfer/AI waits deadlock.
+    if (Port::Harness::accelerated()) Port::Harness::pump();
+#endif
     if (!(g_mainLoopInitFlags & 1)) {
         g_mainLoopInitFlags |= 1;
         g_lastFrameRateTimer = GameTime::get();
@@ -2270,7 +2275,7 @@ static void moveHero(hero* currentHero, long* dangerZones,
         return;
 
     g_aiHeroMoveActive = 0;
-    g_advManager->m_advWindow->animateBottomView(0);
+    if (g_advManager->m_advWindow) g_advManager->m_advWindow->animateBottomView(0);
     if (currentHero->m_movePoints > 0) {
         if (!g_config.m_blackoutComputer && !g_remoteOn
             && mapExtraPosAndAdjacentsSet(

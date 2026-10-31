@@ -1,3 +1,4 @@
+#include "frontend_bridge.h"
 #include "va.h"
 #include "includes.h"
 
@@ -396,7 +397,7 @@ TCombatResultsWindow::TCombatResultsWindow(const hero* attacker,
     accept->setHotkey(1);
     m_widgets.push_back(accept);
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -414,7 +415,7 @@ MAC_ADDRESS(0x07fa6c, 0xb4)
 TCombatResultsWindow::~TCombatResultsWindow()
 {
     g_combatResultsWindow = 0;
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -447,7 +448,7 @@ DC_ADDRESS(0x069268, 0x64)
 MAC_ADDRESS(0x07fbfc, 0x34)
 void TCombatResultsWindow::doModal()
 {
-    g_windowManager->doDialog(this, combatResultsWindowHandler, 0);
+    Port::runDialog(this, combatResultsWindowHandler, 0, "combat-results");
 }
 
 VA(0x00471b90, 0x84)

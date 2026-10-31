@@ -81,6 +81,7 @@ public:
     // source the Save/Release pair works on. Dreamcast supplies the
     // bmpFizzleSource member name.
     Bitmap16Bit* m_bmpFizzleSource;
+    heroWindow* topWindow() const { return m_tailWindow; }
     heroWindowManager();
     virtual int open(int newPriority);
     virtual void close();
@@ -101,10 +102,7 @@ public:
     // in-class definition is inferred from that visibility; the older DC
     // source defined the helper out of line.
     DC_ADDRESS(0x19b1f0, 0x3e)
-    void updateScreen()
-    {
-        updateScreen(0, 0, 800, 600);
-    }
+    void updateScreen();
     void updateScreen(int x, int y, int width, int height);
     void screenShot();
     void saveFizzleSource(int startX, int startY, int width, int height);

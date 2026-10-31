@@ -1,3 +1,4 @@
+#include "authority_actions_client.h"
 // 26 Dreamcast functions in link order; 20 compiler-generated $-thunks
 // omitted. Complete adds the two retail-only level-button callbacks below.
 #include "va.h"
@@ -155,7 +156,9 @@ void vwDrawSprite(CSprite* srcIcon, NewmapCell* thisCell, int frame, int x, int 
         tileh = 544 - baseY;
     if (tilew > 0 && tileh > 0) {
         int owner = -1;
-        if (thisCell->m_type == HERO)
+        const int authorityOwner=Port::AuthorityActionsClient::worldViewOwner(thisCell);
+        if (authorityOwner>=-1) owner=authorityOwner;
+        else if (thisCell->m_type == HERO)
             owner = g_game->getHero(thisCell->m_extraInfo)->m_owner;
         else if (hasFlag(thisCell->m_type))
             owner = getFlaggedObjectOwner(thisCell);
@@ -445,7 +448,10 @@ void advManager::vwDrawSymbols(int srcX, int srcY, int z, int destX, int destY)
     if (srcX < 0 || srcY < 0 || srcX >= g_mapWidth || srcY >= g_mapHeight)
         return;
 
-    NewmapCell* thisCell = getCell(type_point(srcX, srcY, z));
+    NewmapCell* thisCell = Port::AuthorityActionsClient::worldViewActive()
+        ? Port::AuthorityActionsClient::worldViewCell(srcX,srcY,z)
+        : getCell(type_point(srcX, srcY, z));
+    if (!thisCell) return;
 
     if (!thisCell->m_isTrigger)
         return;
@@ -1273,7 +1279,7 @@ TViewWorldWindow::TViewWorldWindow()
     ok->setHotkey(28);
     m_widgets.push_back(ok);
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -1310,7 +1316,7 @@ TViewWorldWindow::~TViewWorldWindow()
     delete g_memoryBuffer;
     ResourceManager::Dispose(g_csVwIcons);
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }

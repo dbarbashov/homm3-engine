@@ -1,3 +1,4 @@
+#include "host_path.h"
 #include "va.h"
 
 #include <stdarg.h>
@@ -40,7 +41,11 @@ int random(int min, int max)
         return max;
     if (max < min)
         return min;
+#ifdef HOMM3_HARNESS
+    return min + Port::Harness::random(min,max) % (max - min + 1);
+#else
     return min + rand() % (max - min + 1);
+#endif
 }
 
 // E:\gamedcs\misc.cpp:151
@@ -359,7 +364,7 @@ void setDefaultCombatOptions()
     g_config.m_showCombatMouseHex = 0;
     g_config.m_combatShadeLevel = 0;
     g_config.m_combatArmyInfoLevel = 0;
-    g_config.m_combatSpeed = 0;
+    g_config.m_combatSpeed = 2;  // Fast animation default; saved preferences still win.
     g_config.m_combatAutoCreatures = 1;
     g_config.m_combatAutoSpells = 1;
     g_config.m_combatCatapult = 1;
@@ -504,7 +509,7 @@ void readPrefsFromRegistry()
             static_cast<BYTE*>(static_cast<void*>(
                 g_config.cUniqueSystemID)), &cbData);
         g_config.cUniqueSystemID[3] = 0;
-        cbData = 31;
+        cbData = sizeof(g_config.m_networkDefaultName);
         RegQueryValueExA(key, g_prefNetworkDefaultName, 0, &type,
             static_cast<BYTE*>(static_cast<void*>(
                 g_config.m_networkDefaultName)), &cbData);
@@ -733,7 +738,7 @@ VA(0x0050c5a0, 0x49)
 DC_ADDRESS(0x0fe068, 0x50)
 long fileSize(char* filename)
 {
-    FILE* stream = fopen(filename, DATA_COMPGEN(0x0067ff20, fileSizeOpenMode, "r+b"));
+    FILE* stream = fopen(Port::hostPath(filename).c_str(), DATA_COMPGEN(0x0067ff20, fileSizeOpenMode, "r+b"));
     if (!stream)
         fileError(filename);
     fseek(stream, 0, SEEK_END);
@@ -772,7 +777,11 @@ int sRandom(int lower, int upper)
         return upper;
     if (upper < lower)
         return lower;
+#ifdef HOMM3_HARNESS
+    int value = Port::Harness::random(lower,upper);
+#else
     int value = rand();
+#endif
     return lower + value % (upper - lower + 1);
 }
 
@@ -842,10 +851,10 @@ DC_ADDRESS(0x0fe248, 0x70)
 MAC_ADDRESS(0x1316bc, 0x4c)
 unsigned long getAvailableDiskSpace()
 {
-    unsigned long sectorsPerCluster = 0;
-    unsigned long bytesPerSector = 0;
-    unsigned long numberOfFreeClusters = 0;
-    unsigned long totalNumberOfClusters = 0;
+    DWORD sectorsPerCluster = 0;
+    DWORD bytesPerSector = 0;
+    DWORD numberOfFreeClusters = 0;
+    DWORD totalNumberOfClusters = 0;
 
     if (!GetDiskFreeSpaceA(0, &sectorsPerCluster, &bytesPerSector,
                            &numberOfFreeClusters, &totalNumberOfClusters))

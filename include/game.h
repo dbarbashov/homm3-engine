@@ -1,3 +1,4 @@
+struct AuthorityProjectionAccess;
 #ifndef HOMM3_GAME_H
 #define HOMM3_GAME_H
 
@@ -526,6 +527,13 @@ public:
     NewSMapHeader()
     {
         m_version = 0;
+        m_isPlayable = 0;
+        m_size = 0;
+        m_hasTwoLayers = 0;
+        m_maxHeroLevel = 0;
+        m_numTeams = 0;
+        for (int i = 0; i < NUM_PLAYERS; ++i)
+            m_teamInfo[i] = i;
         m_difficulty = 0;
         m_numPlayers = 0;
         m_minNumHumanPlayers = 0;
@@ -597,6 +605,7 @@ SIZE(TownExtra, 0x88);
 // armyGroup::save, then serializes +0x3c..+0x3e. The remaining alignment
 // bytes stay opaque.
 class generator {
+    friend struct AuthorityProjectionAccess;
 public:
     char m_genClass;  // +0x00
     char m_genType;  // +0x01
@@ -1007,6 +1016,10 @@ extern playerData* g_currentPlayer;
 // armyGroup and the map record at once, and two headers cannot each
 // define the class.)
 class game {
+#ifdef HOMM3_HARNESS
+    friend bool Port::Harness::loadFixture();
+    friend void Port::Harness::exportFixture(const char*);
+#endif
 public:
     game();
     ~game();
@@ -1376,6 +1389,7 @@ public:
     int receiveSaveGame(int fileSize, int fullGameCRC, int fromWho,
                         unsigned char inGame, unsigned char isDiff);
     void doNewTurn();
+    void showNewWeek(); // Presentation shared with the authoritative worker.
     void showHeroesLogo();
     void setMapSize(int width, int height);  // 0x4ccef0
     void checkForTimeEvent();  // 0x4cd910

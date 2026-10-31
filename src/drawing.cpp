@@ -1,3 +1,4 @@
+#include "combat_presentation.h"
 #include "va.h"
 
 #include <string.h>
@@ -319,7 +320,7 @@ MAC_ADDRESS(0x0a46a8, 0x7c4)  // retail CFG/calls + DC source shape
 void combatManager::combatMessage(int command)
 {
     if (!m_combatShowIt
-            || isQuickCombat())
+            || suppressCombatPresentation())
         return;
 
     army* currentArmy = getCurrentArmy();
@@ -478,7 +479,7 @@ DC_ADDRESS(0x083e58, 0x34)
 MAC_ADDRESS(0x0a4ef0, 0x7c)  // MAC_ABSTRACTION_FROM(tokens1:a5bce575ad68,100.0000): restore DC 0x83e80's coordinate update overload; Mac expands the same bounds, but the wrapper changes width/height instruction scheduling.
 void combatManager::updateCombatArea()
 {
-    if (!isQuickCombat()
+    if (!suppressCombatPresentation()
             && m_combatShowIt) {
         g_windowManager->updateScreen(
             combatManager::s_combatAreaLimits.m_minX,
@@ -604,7 +605,7 @@ DC_ADDRESS(0x0842a8, 0x176)
 MAC_ADDRESS(0x0a4f6c, 0x1c8)
 void combatManager::setupGridForArmy(const army* thisArmy)
 {
-    if (isQuickCombat())
+    if (suppressCombatPresentation())
         return;
     if (thisArmy->m_creatureType == army::ARMY_CREATURE_ARROW_TOWER)
         return;
@@ -642,7 +643,7 @@ DC_ADDRESS(0x084420, 0x3bc)
 MAC_ADDRESS(0x0a5134, 0x4b8)
 int combatManager::updateGrid(int postGridIsClean, int setupGrid)
 {
-    if (isQuickCombat())
+    if (suppressCombatPresentation())
         return 0;
 
     army* currentArmy = getCurrentArmy();
@@ -761,7 +762,7 @@ DC_ADDRESS(0x0847dc, 0x1e8)
 MAC_ADDRESS(0x0a55ec, 0x230)
 void combatManager::drawBackground()
 {
-    if (isQuickCombat())
+    if (suppressCombatPresentation())
         return;
     if (m_backgroundDrawn)
         return;
@@ -827,7 +828,7 @@ void combatManager::updateMouseGrid(int newMouseGridIndex,
     static std::vector<long> oldHexes;
 
     if (m_battleOver
-            || isQuickCombat()
+            || suppressCombatPresentation()
             || !g_config.m_showCombatMouseHex)
         return;
     if (newMouseGridIndex == lastMouseGridIndex && !forceUpdate)
@@ -957,7 +958,7 @@ void combatManager::drawFrame(bool update,
                               bool doDelayTil)
 {
     if (m_battleOver
-            || isQuickCombat()
+            || suppressCombatPresentation()
             || !m_combatShowIt)
         return;
 
@@ -1689,7 +1690,7 @@ void combatManager::computeMaxExtent()
     }
 
     if (m_obstacles.size()) {
-        for (TObstacle* obstacle = m_obstacles.begin();
+        for (auto obstacle = m_obstacles.begin();
              obstacle != m_obstacles.end(); obstacle++) {
             CSprite* sprite = obstacle->m_sprite;
             if (sprite && sprite->GetNumFrames(0) > 1) {
@@ -1953,7 +1954,10 @@ MAC_ADDRESS(0x0a8c94, 0x29c)
 void combatManager::spellEffect(int effect, army* targetArmy, int delay,
                                 bool doWince)
 {
-    if (isQuickCombat())
+#ifdef HOMM3_SERVER
+    Port::Authority::recordCombatVisual(Port::Authority::VisualEffect,targetArmy,effect,-1,delay,doWince,0);
+#endif
+    if (suppressCombatPresentation())
         return;
     if (effect == -1)
         return;
@@ -2004,7 +2008,10 @@ MAC_ADDRESS(0x0a8f30, 0x278)
 void combatManager::spellEffect(int effect, int hex, int delay,
                                 bool leaveLastFrame)
 {
-    if (isQuickCombat())
+#ifdef HOMM3_SERVER
+    Port::Authority::recordCombatVisual(Port::Authority::VisualEffect,getCurrentArmy(),effect,hex,delay,leaveLastFrame,1);
+#endif
+    if (suppressCombatPresentation())
         return;
     if (effect == -1)
         return;

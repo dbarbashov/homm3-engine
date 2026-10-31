@@ -196,7 +196,7 @@ TQuickHeroWindow::TQuickHeroWindow(hero* thisHero, TViewLevel viewLevel)
         }
     }
 
-    for (widget** it = widgets.begin(); it != widgets.end(); ++it) {
+    for (auto it = widgets.begin(); it != widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
     }
@@ -209,7 +209,7 @@ DC_ADDRESS(0x1177b4, 0x62)
 MAC_ADDRESS(0x14b424, 0xac)
 TQuickHeroWindow::~TQuickHeroWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }

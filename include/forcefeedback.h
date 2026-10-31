@@ -22,7 +22,11 @@
 
 #include "va.h"
 
+#if defined(HOMM3_PORT)
+class CImmDevice; class CImmMouse; class CImmEffect; class CImmEnclosure; class CImmProject; class CImmCompoundEffect;
+#else
 #include <IFC.h>
+#endif
 #include <map>
 #include <memory>
 #include <stdexcept>

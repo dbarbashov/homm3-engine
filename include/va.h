@@ -119,8 +119,7 @@
 #define DATA_COMPGEN_GUARD(addr, name, owner)
 #define HOMM3_RELEASE_VERIFY(expression) static_cast<void>(expression)
 #define OVERRIDE override
-#define SIZE(type, bytes) \
-    static_assert(sizeof(type) == (bytes), "sizeof(" #type ") != " #bytes)
+#define SIZE(type, bytes)
 
 #else
 

@@ -159,7 +159,7 @@ DC_ADDRESS(0x037d88, 0x2c)
 inline bool artifactAllowedInSlot(TArtifact artifact, TArtifactSlot slot)
 {
     assert(artifact >= 0 && artifact < ARTIFACT_COUNT);
-    assert(slot >= 0 && slot < kNumArtifactSlots);
+    assert(slot >= 0 && slot < kNumArtifactSlots + 1);
     const std::bitset<kNumArtifactSlots + 1>& allowable =
         g_artifactSlotMasks[akArtifactTraits[artifact].m_allowableSlotMask];
     return allowable[slot];

@@ -1,4 +1,6 @@
 #include "va.h"
+#include "authority_exchange_client.h"
+#include "hd_army.h"
 #include "includes.h"
 
 #include "swapmgr.h"
@@ -686,7 +688,7 @@ DC_ADDRESS(0x15c320, 0x62)
 MAC_ADDRESS(0x1a5b9c, 0xb0)
 TSwapWindow::~TSwapWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -998,6 +1000,7 @@ DC_ADDRESS(0x15ca44, 0x98)
 MAC_ADDRESS(0x1a6650, 0x128)
 void swapManager::close()
 {
+    if(Port::AuthorityExchangeClient::active())Port::AuthorityExchangeClient::cancelDrag();
     if (g_heroScreenDraggedArtifact.m_artifactId != -1)
     {
         m_heroes[0]->giveArtifact(g_heroScreenDraggedArtifact, 0, 0);
@@ -1244,6 +1247,12 @@ void swapManager::handleMonster(int hero, int monster, int rightMouse, bool shif
         return;
     }
 
+    if (canModHero(hero) && m_heroes[hero]->m_owner == g_netLocalGamePos
+        && Port::HD::quickArmy(m_heroes[hero]->m_army, monster,
+            canModHero(1-hero) ? &m_heroes[1-hero]->m_army : nullptr, true, !m_armySelectionPending)) {
+        reset(); update(); drawSwapWin(); return;
+    }
+
     if (m_armySelectionPending)
     {
         if (m_heroes[hero]->m_army.m_armies[monster] != CREATURE_NONE
@@ -1282,7 +1291,7 @@ void swapManager::handleMonster(int hero, int monster, int rightMouse, bool shif
                        == m_heroes[m_sourceHeroIndex]->m_army.m_armies[m_sourceArmySlot]))
         {
             g_splitArmyMode = 0;
-            if (canModHero(m_destinationHeroIndex))
+            if (canModHero(m_destinationHeroIndex)||Port::AuthorityExchangeClient::canReceive(m_heroes[m_destinationHeroIndex]->m_id))
                 m_heroes[m_sourceHeroIndex]->m_army.splitArmy(
                     m_sourceArmySlot, &m_heroes[m_destinationHeroIndex]->m_army, m_destinationArmySlot, 1, 1);
         }
@@ -1305,6 +1314,10 @@ DC_ADDRESS(0x15d150, 0x190)
 MAC_ADDRESS(0x1a71a4, 0x450)  // Main roster/callees + full retail body
 void swapManager::handleArtifactClick(long side, long id, bool rightClick)
 {
+    if(Port::AuthorityExchangeClient::active()) {
+        Port::AuthorityExchangeClient::artifactClick(m_heroes[side]->m_id,id,rightClick);
+        update();updateAllSlots();updateBackpack(0);updateBackpack(1);drawSwapWin();return;
+    }
     TArtifactSlot slot =
         static_cast<TArtifactSlot>(id) /* HOMM3_ENUM_CAST_REVISION_BOUNDARY */;
     hero* ourHero = m_heroes[side];
@@ -1418,6 +1431,10 @@ DC_ADDRESS(0x15d2e0, 0x160)
 MAC_ADDRESS(0x1a75f4, 0x1a8)  // roster bracket + body/callees
 void swapManager::handleBackpackClick(long side, long id, bool rightClick)
 {
+    if(Port::AuthorityExchangeClient::active()) {
+        Port::AuthorityExchangeClient::artifactClick(m_heroes[side]->m_id,100+id,rightClick);
+        update();updateAllSlots();updateBackpack(0);updateBackpack(1);drawSwapWin();return;
+    }
     hero* ourHero = m_heroes[side];
     type_artifact oldArtifact = ourHero->getBackpack(id);
 
@@ -1457,6 +1474,7 @@ DC_ADDRESS(0x15d440, 0x6a)
 MAC_ADDRESS(0x1a779c, 0x144)
 void swapManager::sendHeroUpdate()
 {
+    if(Port::AuthorityExchangeClient::active())return;
     if (g_remoteOn && m_humanPlayerTrade && m_givingToAlly) {
         int otherPlayer = getOtherHero()->m_owner;
         if (!m_netMsgHandler->getAbortPopupMsg()) {
@@ -1513,6 +1531,14 @@ DC_ADDRESS(0x15d4ac, 0x986)
 MAC_ADDRESS(0x1a7954, 0xdc0)  // full retail dispatcher + DC dossier
 int swapManager::main(message& msg)
 {
+    if (msg.m_id == MESSAGE_KEY_UP && msg.m_codeX == KEYCODE_F10
+        && canModHero(0) && canModHero(1)
+        && m_heroes[0]->m_owner == g_netLocalGamePos && m_heroes[1]->m_owner == g_netLocalGamePos
+        && m_heroes[0]->m_army.hasCreatures() && m_heroes[1]->m_army.hasCreatures()) {
+        if(Port::AuthorityExchangeClient::active())Port::AuthorityExchangeClient::swapAll();
+        else std::swap(m_heroes[0]->m_army,m_heroes[1]->m_army);
+        reset(); update(); drawSwapWin(); return 1;
+    }
     int exitFlag = 0;
     // Inferred binary carriers for the native Boolean click/shift formals.
     bool rightMouse;
@@ -2228,6 +2254,11 @@ DC_ADDRESS(0x15e8bc, 0x142)
 MAC_ADDRESS(0x1a8d74, 0x1ac)
 void swapManager::swapMons()
 {
+    if(Port::AuthorityExchangeClient::active()) {
+        auto* source=&m_heroes[m_sourceHeroIndex]->m_army;auto* target=&m_heroes[m_destinationHeroIndex]->m_army;
+        const bool merge=source->m_armies[m_sourceArmySlot]==target->m_armies[m_destinationArmySlot];
+        Port::AuthorityExchangeClient::transfer(source,m_sourceArmySlot,target,m_destinationArmySlot,merge?source->m_numTroops[m_sourceArmySlot]:0,merge?0:1);return;
+    }
     int nonemptyTroops = 0;
     for (int slot = 0; slot < armyGroup::ARMY_GROUP_SLOT_COUNT; ++slot)
         if (m_heroes[m_sourceHeroIndex]->m_army.m_armies[slot] != CREATURE_NONE
@@ -2366,28 +2397,28 @@ void swapManager::onWidgetDeselect(message& msg, int& exitFlag)
     switch (msg.m_codeY)
     {
     case kSwapLeftBackpackLeft:
-        m_heroes[0]->rotateBackpackLeft();
+        if(Port::AuthorityExchangeClient::active())Port::AuthorityExchangeClient::rotate(m_heroes[0]->m_id,-1);else m_heroes[0]->rotateBackpackLeft();
         updateBackpack(0);
         drawSwapWin();
         sendHeroUpdate();
         break;
 
     case kSwapRightBackpackLeft:
-        m_heroes[1]->rotateBackpackLeft();
+        if(Port::AuthorityExchangeClient::active())Port::AuthorityExchangeClient::rotate(m_heroes[1]->m_id,-1);else m_heroes[1]->rotateBackpackLeft();
         updateBackpack(1);
         drawSwapWin();
         sendHeroUpdate();
         break;
 
     case kSwapLeftBackpackRight:
-        m_heroes[0]->rotateBackpackRight();
+        if(Port::AuthorityExchangeClient::active())Port::AuthorityExchangeClient::rotate(m_heroes[0]->m_id,1);else m_heroes[0]->rotateBackpackRight();
         updateBackpack(0);
         drawSwapWin();
         sendHeroUpdate();
         break;
 
     case kSwapRightBackpackRight:
-        m_heroes[1]->rotateBackpackRight();
+        if(Port::AuthorityExchangeClient::active())Port::AuthorityExchangeClient::rotate(m_heroes[1]->m_id,1);else m_heroes[1]->rotateBackpackRight();
         updateBackpack(1);
         drawSwapWin();
         sendHeroUpdate();
@@ -2473,6 +2504,7 @@ DC_ADDRESS(0x15ee98, 0x82)
 MAC_ADDRESS(0x1a9ca4, 0x110)
 bool swapManager::canModHero(int whichHero)
 {
+    if(Port::AuthorityExchangeClient::active())return Port::AuthorityExchangeClient::canModify(m_heroes[whichHero]->m_id);
     // Complete lowers this helper as false guards followed by one true tail in
     // handle_backpack_click, HandleMonster and SwapMons; the older Dreamcast
     // direct-return expressions do not. The calls, predicates and statement

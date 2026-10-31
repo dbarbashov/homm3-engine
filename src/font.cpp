@@ -37,7 +37,7 @@ MAC_ADDRESS(0x0c8d94, 0x7c)
 font::~font()
 {
     if (Data)
-        delete[] Data;
+        delete[] static_cast<unsigned char*>(Data);
 }
 
 // E:\gamedcs\font.cpp:56..76. Original name: GetColor.

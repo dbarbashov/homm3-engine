@@ -1,3 +1,13 @@
+#include "authority_local_files.h"
+#include "authority_actions_client.h"
+#include "authority_exchange_client.h"
+#include "authority_client.h"
+#include "authority_client.h"
+#ifdef HOMM3_SERVER
+#include "server_authority.h"
+#endif
+#include "fast_game.h"
+#include "host_path.h"
 #include "prefs.h"
 #include "text.h"
 #include "va.h"
@@ -1366,7 +1376,7 @@ int playerData::load(TAbstractFile* infile, int saveVersion)
         m_resources[i] = number;
     }
 
-    unsigned long flags;
+    uint32_t flags;
     if (readValue(infile, flags) < sizeof(flags))
         return -1;
     m_mysticalGardenFlags = flags;
@@ -1414,7 +1424,7 @@ DC_ADDRESS(0x0a55a8, 0x3f0)
 MAC_ADDRESS(0x0ccd7c, 0x4fc)  // anchor-global
 int playerData::save(TAbstractFile* outfile)
 {
-    unsigned long uintBuffer;
+    uint32_t uintBuffer;
     int intBuffer;
     int count;
     int x;
@@ -1498,19 +1508,19 @@ int playerData::save(TAbstractFile* outfile)
 
     uintBuffer = m_mysticalGardenFlags;
     count = writeScalar(outfile, uintBuffer);
-    if (count < sizeof(unsigned long))
+    if (count < sizeof(uintBuffer))
         return -1;
     uintBuffer = m_magicSpringFlags;
     count = writeScalar(outfile, uintBuffer);
-    if (count < sizeof(unsigned long))
+    if (count < sizeof(uintBuffer))
         return -1;
     uintBuffer = m_deadGuyFlags;
     count = writeScalar(outfile, uintBuffer);
-    if (count < sizeof(unsigned long))
+    if (count < sizeof(uintBuffer))
         return -1;
     uintBuffer = m_leanToFlags;
     count = writeScalar(outfile, uintBuffer);
-    if (count < sizeof(unsigned long))
+    if (count < sizeof(uintBuffer))
         return -1;
 
     ucharBuffer = m_placementHelpEnabled;
@@ -2390,7 +2400,7 @@ int game::saveRumours(TAbstractFile* outfile)
 {
     int rumourListSize;
     int count;
-    TRumour* rit;
+    std::vector<TRumour>::iterator rit;
     std::string currentRumour(m_currentRumour);
     char boolBuffer;
 
@@ -2439,7 +2449,7 @@ int game::loadRumours(TAbstractFile* infile)
         return -1;
 
     m_rumours.resize(count);
-    for (TRumour* it = m_rumours.begin(); it != m_rumours.end(); ++it) {
+    for (auto it = m_rumours.begin(); it != m_rumours.end(); ++it) {
         if (loadString(infile, it->m_text) < 0)
             return -1;
         if (readValue(infile, value) < sizeof(value))
@@ -2586,6 +2596,21 @@ bool saveVector(TAbstractFile* outfile, std::vector<T>& srcVector)
     return true;
 }
 
+// Win32 save-file words stay 32-bit on LP64 native authority workers.
+template <> bool loadVector<long>(TAbstractFile* file, std::vector<long>& values) {
+    int16_t count=0;
+    if(file->read(&count,2)!=2 || count<0)return false;
+    values.resize(count);
+    for(auto& value:values){int32_t word=0;if(file->read(&word,4)!=4)return false;value=word;}
+    return true;
+}
+template <> bool saveVector<long>(TAbstractFile* file, std::vector<long>& values) {
+    if(values.size()>32767)return false;
+    int16_t count=values.size();if(file->write(&count,2)!=2)return false;
+    for(auto value:values){int32_t word=value;if(file->write(&word,4)!=4)return false;}
+    return true;
+}
+
 // Original: load_object_vector; game.cpp:2733.
 // Both DC instantiations have the same source rows and reference interface.
 // Raw public YA_N proves bool; the primitive type display uses a byte alias.
@@ -2673,6 +2698,15 @@ SavedGameHeader::SavedGameHeader()
     memset(m_id, 0, sizeof(m_id));
     strcpy(m_id, "H3SVG");
     m_version = 42;
+    // New-map lobby rows serialize this unused save header as well. Never
+    // let allocator bytes become a bool or select the campaign wire layout.
+    m_gameVersion = GAME_VERSION_SOD;
+    m_campaignGame = false;
+    m_difficultyRating = 0;
+    m_numDeadPlayers = 0;
+    m_currentPlayer = 0;
+    memset(m_deadPlayer, 0, sizeof(m_deadPlayer));
+    memset(m_humanPlayer, 0, sizeof(m_humanPlayer));
 }
 
 // E:\gamedcs\Game.h:1312
@@ -2713,8 +2747,8 @@ DC_ADDRESS(0x0bcf6c, 0x78)
 MAC_ADDRESS(0x0cfa20, 0x214)  // anchor-layout + game::Save caller
 int SavedGameHeader::save(TAbstractFile* outfile)
 {
-    char fileNameBuffer[0x15f];
-    char compatibilityBuffer[32];
+    char fileNameBuffer[0x15f] = {};
+    char compatibilityBuffer[32] = {};
 
     outfile->write(m_id, sizeof(m_id));
 
@@ -3312,6 +3346,7 @@ MAC_ADDRESS(0x0d44fc, 0x2e8)
 bool game::saveGame(const char* filename, bool determineSuffix,
                     bool campaignWinMode, bool compressIt, bool xferFile)
 {
+    if(Port::AuthorityLocalFiles::blocked(false))return false;
     char nameNoExtension[351] = {0};
     char saveName[351] = {0};
     char fullPath[351];
@@ -3368,9 +3403,11 @@ bool game::saveGame(const char* filename, bool determineSuffix,
     try {
         {
             TGzFile outfile(fullPath, compression);
-            save(&outfile);
+            const int result=save(&outfile);
+            if (Port::Fast::executing() && result<0) return 0;
         }
         saveGameTimer.stop();
+        if (!Port::Fast::executing()) Port::notifySave(fullPath);
         return 1;
     } catch (const TGzFile::TOpenFailure&) {
         normalDialog(
@@ -3440,6 +3477,7 @@ DC_ADDRESS(0x0aa0d0, 0x31e)
 MAC_ADDRESS(0x0d4be0, 0x14c)
 int game::loadGame(const char* filename, int isOrigData, int isQuickLoad)
 {
+    if(Port::AuthorityLocalFiles::blocked(true))return 0;
     setupOrigData();
     if (isOrigData)
         return 0;
@@ -3474,8 +3512,8 @@ int game::loadGame(const char* filename, int isOrigData, int isQuickLoad)
         underground_gate_exits.clear();
         m_monsterIdentifiers.clear();
 
-        load(&infile);
-        return 1;
+        const int result=load(&infile);
+        return Port::Fast::enabled() && result<0 ? 0 : 1;
     } catch (const TGzFile::TOpenFailure&) {
         return 0;
     }
@@ -3735,6 +3773,7 @@ MAC_ADDRESS(0x0d5a9c, 0x8b4)
 void game::newMap(TAbstractFile* mapFile, HeroId* playerHeroFaces,
                   TCampaignBrief::ScenarioStruct* campaignContext, int gameVersion)
 {
+    Port::AuthorityClient::captureSetup();
     g_inSetup = 1;
 
     randomizeHeroPool();
@@ -3825,18 +3864,33 @@ void game::newMap(TAbstractFile* mapFile, HeroId* playerHeroFaces,
 
         if (m_players[setupPlayer].isHuman()) {
             m_players[setupPlayer].m_personality = 3;
+#ifdef HOMM3_SERVER
+                // LP64 long differs from the 32-bit original resource table.
+                std::copy_n(g_initResourcesHuman[m_setup.m_difficulty], NUM_RESOURCES, m_players[setupPlayer].m_resources);
+#else
             memcpy(m_players[setupPlayer].m_resources,
                    g_initResourcesHuman[m_setup.m_difficulty],
                    sizeof(m_players[setupPlayer].m_resources));
+#endif
             if (m_isTutorial)
+#ifdef HOMM3_SERVER
+                    // LP64 long differs from the 32-bit original resource table.
+                    std::copy_n(g_tutorialStartingResources, NUM_RESOURCES, m_players[setupPlayer].m_resources);
+#else
                 memcpy(m_players[setupPlayer].m_resources,
                        g_tutorialStartingResources,
                        sizeof(m_players[setupPlayer].m_resources));
+#endif
         } else {
             m_players[setupPlayer].m_personality = random(0, 2);
+#ifdef HOMM3_SERVER
+                // LP64 long differs from the 32-bit original resource table.
+                std::copy_n(g_initResourcesComputer[m_setup.m_difficulty], NUM_RESOURCES, m_players[setupPlayer].m_resources);
+#else
             memcpy(m_players[setupPlayer].m_resources,
                    g_initResourcesComputer[m_setup.m_difficulty],
                    sizeof(m_players[setupPlayer].m_resources));
+#endif
         }
 
         if (!g_inCampaign) {
@@ -5079,7 +5133,7 @@ bool game::loadMap(TAbstractFile* mapFile)
         return false;
     }
     m_rumours.resize(rumourListSize);
-    TRumour* rit;
+    std::vector<TRumour>::iterator rit;
     for (rit = m_rumours.begin(); rit != m_rumours.end(); ++rit) {
         std::string throwAway;
         int hr = NewSMapHeader::readString(mapFile, throwAway);
@@ -6707,6 +6761,8 @@ void game::viewArmy(armyGroup& group, int iarmy, const hero* thisHero,
                     ARTIFACT_ANGELIC_ALLIANCE);
     }
 
+    if (Port::Fast::nativeUI() && !Port::AuthorityActionsClient::enabled()) { showDismiss=false; upgradeToType=CREATURE_NONE; }
+    if(Port::AuthorityClient::armyExchangeActive()||Port::AuthorityExchangeClient::active())upgradeToType=CREATURE_NONE;
     TViewArmyWindow* viewArmyWindow = new TViewArmyWindow(
         &group, iarmy, thisHero, thisTown, x, y, upgradeToType, showDismiss,
         !isQuickView, hasAngelicAlliance);
@@ -6714,6 +6770,22 @@ void game::viewArmy(armyGroup& group, int iarmy, const hero* thisHero,
         viewArmyWindow->quickView();
     } else {
         viewArmyWindow->doModal();
+        if (Port::AuthorityActionsClient::enabled()) {
+            if(Port::AuthorityExchangeClient::active()) {
+                if(g_windowManager->m_dialogReturn==TViewArmyWindow::DISMISS_ID)Port::AuthorityExchangeClient::dismiss(&group,iarmy);
+                delete viewArmyWindow;return;
+            }
+            if(Port::AuthorityClient::armyExchangeActive()) {
+                if(g_windowManager->m_dialogReturn==TViewArmyWindow::DISMISS_ID)Port::AuthorityClient::chooseArmyDismiss(&group,iarmy);
+                delete viewArmyWindow;return;
+            }
+            int ref=Port::AuthorityActionsClient::armyId(&group);
+            if(ref!=(-2147483647-1)) {
+                if(g_windowManager->m_dialogReturn==TViewArmyWindow::DISMISS_ID) Port::AuthorityClient::request(25,ref,iarmy);
+                else if(g_windowManager->m_dialogReturn==TViewArmyWindow::UPGRADE_ID) Port::AuthorityClient::request(22,ref,iarmy);
+            }
+            delete viewArmyWindow;return;
+        }
         switch (g_windowManager->m_dialogReturn) {
         case TViewArmyWindow::DISMISS_ID:
             group.dismiss(iarmy);
@@ -6781,6 +6853,10 @@ DC_ADDRESS(0x0b1fd0, 0xb04)
 MAC_ADDRESS(0x0dd7dc, 0x89c)  // dc-name/order + retail caller/callee/body
 void game::nextPlayer()
 {
+#ifdef HOMM3_SERVER
+    if (Port::Authority::active()) { Port::Authority::advanceTurn(); return; }
+#endif
+    if (Port::Fast::enabled()) { if (Port::Fast::nativeUI()) Port::Fast::request(5); return; }
     int toWho;
     int humans;
     int i;
@@ -7997,7 +8073,7 @@ void game::convertObject(NewmapCell* tempCell)
                 continue;
             NewmapCell* newCell = m_worldMap.cell(object->m_x - horiz,
                                                 object->m_y - vert, object->m_z);
-            for (NewmapCell::TObjectCell* thisObj = newCell->m_objects.begin();
+            for (auto thisObj = newCell->m_objects.begin();
                  thisObj != newCell->m_objects.end(); thisObj++) {
                 if (thisObj->m_objectIndex == objectToConvert) {
                     object->m_typeIndex = static_cast<unsigned short>(
@@ -8276,6 +8352,9 @@ DC_ADDRESS(0x0b635c, 0x1dc)
 MAC_ADDRESS(0x0e1a24, 0x1d8)
 void game::showComputerScreen()
 {
+#ifdef HOMM3_SERVER
+    return; // AI blackout and progress widgets are presentation only.
+#endif
     setComputerScreenWidgetsEnabled(0);
 
     if (g_config.m_blackoutComputer && !g_currentPlayer->isHuman()) {
@@ -8676,7 +8755,7 @@ int game::transmitSaveGame(int toWho, int thisPlayerDead,
                              "orig.dat"), 0, 0, 0, 1);
 
     int fileSize = ::fileSize(fileName);
-    int handle = open(fileName, _O_BINARY);
+    int handle = open(Port::hostPath(fileName).c_str(), _O_BINARY);
     if (handle == -1) {
         fileError(fileName);
         return 0;
@@ -9221,9 +9300,9 @@ int game::receiveSaveGame(int fileSize, int fullGameCRC, int fromWho,
             DATA_COMPGEN(0x00660358, processSearchFoundFormat, "%s%s"),
             DATA_COMPGEN(0x00677d88, dataDirectoryPrefix, ".\\DATA\\"),
             g_config.m_rcFile);
-    int handle = open(fileName,
+    int handle = open(Port::hostPath(fileName).c_str(),
                        _O_BINARY | _O_CREAT | _O_TRUNC | _O_WRONLY,
-                       _S_IWRITE);
+                       S_IRUSR | S_IWUSR);
     if (handle == -1)
         fileError(fileName);
     write(handle, data, fileSize);
@@ -9256,9 +9335,10 @@ DC_ADDRESS(0x0b9408, 0x5c6)
 MAC_ADDRESS(0x0e3dbc, 0x4f0)
 void game::doNewTurn()
 {
+#ifdef HOMM3_SERVER
+    if (Port::Authority::active()) { Port::Authority::beginTurn(); return; }
+#endif
     int newHero;
-    char sample[13];
-    char temp[50];
 
     if (!g_currentPlayer->isHuman()) {
         checkForTimeEvent();
@@ -9309,6 +9389,13 @@ void game::doNewTurn()
     }
     g_advManager->checkDimNextHeroBut();
 
+    showNewWeek();
+}
+
+void game::showNewWeek()
+{
+    char sample[13];
+    char temp[50];
     if (m_day != 1
         || (m_month == 1 && m_week == 1)) {
         turnOffAIMusic();
@@ -9357,6 +9444,14 @@ void game::doNewTurn()
         }
     }
 
+#ifdef HOMM3_SERVER
+    if(Port::Authority::active()){
+        // Keep original week/month wording and acknowledgement, but the
+        // headless worker has no adventure window or sound presentation.
+        normalDialog(g_text,1,-1,-1,-1,0,-1,0,-1,0,-1,0);
+        return;
+    }
+#endif
     turnOffAIMusic();
     // Mac uses channel 2 here; Windows retail passes 3.
     launchSample(sample, 30000, 3);
@@ -9502,7 +9597,10 @@ void game::setCannedRumour()
             seen++;
         if (seen == selected) {
             m_rumourState[i] = 1;
-            strcpy(m_currentRumour, g_cannedRumours[selected]);
+            // The recovered routine selects 1..256, but the table has 256
+            // entries. Preserve every in-range retail lookup; at the invalid
+            // upper bound use the actual available slot instead of reading OOB.
+            strcpy(m_currentRumour, g_cannedRumours[selected < 256 ? selected : i]);
             return;
         }
     }
@@ -9696,8 +9794,12 @@ void game::giveTimeEventReward(const TTimedEvent* thisEvent)
         }
     }
 
-    if (g_currentPlayer->isLocalHuman()) {
-        g_advManager->m_advWindow->updateResourceDisplay(1, 1);
+    if (g_currentPlayer->isLocalHuman()
+#ifdef HOMM3_SERVER
+        || (Port::Authority::active() && g_currentPlayer->isHuman())
+#endif
+    ) {
+        if(g_advManager->m_advWindow) g_advManager->m_advWindow->updateResourceDisplay(1, 1);
         extendedDialog(thisEvent->Message.c_str(), rewards, -1, -1, 0);
 
         if (g_inCampaign) {
@@ -9957,9 +10059,9 @@ DC_ADDRESS(0x0bbe68, 0x7c)
 MAC_ADDRESS(0x0e6ba0, 0x54)
 boat* game::getHeroBoat(int id, bool occupied)
 {
-    for (boat* i = m_boats.begin(); i != m_boats.end(); i++) {
+    for (auto i = m_boats.begin(); i != m_boats.end(); i++) {
         if (i->m_allocated && i->m_occupyingHero == id && i->m_occupied == occupied)
-            return i;
+            return &*i;
     }
     return 0;
 }

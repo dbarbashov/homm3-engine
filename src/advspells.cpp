@@ -1,3 +1,6 @@
+#include "authority_actions_client.h"
+#include "authority_client.h"
+#include "fast_game.h"
 #include "prefs.h"
 #include "va.h"
 #include "includes.h"
@@ -77,6 +80,8 @@ DC_ADDRESS(0x021a2c, 0x158)
 MAC_ADDRESS(0x01d1a8, 0x1bc)  // linkorder + anchor-callee hero::Fly / get_spell_level
 void advManager::castSpell(SpellID whichSpell)
 {
+    if (Port::AuthorityActionsClient::enabled()) { Port::AuthorityActionsClient::castSpell(whichSpell); return; }
+    if (Port::Fast::nativeUI()) { Port::Fast::unavailable(); return; }
     hero* who = g_game->getCurrHero();
     if (who == 0)
         return;

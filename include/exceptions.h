@@ -10,6 +10,7 @@
 #include "va.h"
 
 #include <stdexcept>
+#include <string>
 
 // The catchable-type entries describe multiple inheritance, not a linear
 // chain: TRuntimeError is 32 bytes, its std::runtime_error base is 28 bytes

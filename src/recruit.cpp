@@ -1,3 +1,6 @@
+#include "fast_game.h"
+#include "authority_client.h"
+#include "authority_town_client.h"
 #include "text.h"
 #include "va.h"
 #include "includes.h"
@@ -276,7 +279,7 @@ TRecruitWindow::TRecruitWindow(int x2, int y2, int altResource,
                              recruitInfo->m_monType1, 0);
     }
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -291,7 +294,7 @@ DC_ADDRESS(0x1197bc, 0x62)
 MAC_ADDRESS(0x14eb7c, 0xac)
 TRecruitWindow::~TRecruitWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -930,6 +933,20 @@ int recruitUnit::main(message& msg)
                 if (m_numberToBuy == 0 && m_monType2 == CREATURE_NONE)
                     return finishRecruitUnit(msg);
 
+                if (Port::AuthorityClient::recruitChoiceActive()) {
+                    Port::AuthorityClient::chooseRecruit(m_monsterType,m_numberToBuy);
+                    m_numberToBuy=0;
+                    return finishRecruitUnit(msg);
+                }
+                if(Port::AuthorityTownClient::recruitPortal(m_currArmyGroup,m_numAvail,m_numberToBuy)) {
+                    m_numberToBuy=0;return finishRecruitUnit(msg);
+                }
+                if (Port::Fast::nativeUI()) {
+                    Port::Fast::requestRecruit(m_currArmyGroup,m_numAvail,m_monsterType,m_numberToBuy);
+                    m_numberToBuy=0;
+                    return finishRecruitUnit(msg);
+                }
+
                 if (akCreatureTypeTraits[m_monsterType].attributes
                     & g_ctaSiegeWeapon) {
                     if (m_thisHero->getNumberInBackpack(1) + m_numberToBuy
@@ -1155,7 +1172,7 @@ DC_ADDRESS(0x11af98, 0x62)
 MAC_ADDRESS(0x150ac4, 0xac)
 TRecruitQuickWindow::~TRecruitQuickWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }

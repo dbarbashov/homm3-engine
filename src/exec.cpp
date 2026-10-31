@@ -1,3 +1,7 @@
+#ifdef HOMM3_SERVER
+#include "server_authority.h"
+#endif
+#include "fast_game.h"
 #include "va.h"
 
 #include "exec.h"
@@ -67,6 +71,10 @@ DC_ADDRESS(0x09e66c, 0x10a)
 MAC_ADDRESS(0x0c3af4, 0x2c0)
 int executive::doDialog(baseManager* newDialog)
 {
+#ifdef HOMM3_SERVER
+    if (Port::Authority::active()) throw std::runtime_error("Missing typed server manager adapter");
+#endif
+    if (Port::Fast::executing()) { g_windowManager->m_dialogReturn=1; return 1; }
     executive dialogExec;
     baseManager* savedMgr[20];
     baseManager* savedPrev[20];

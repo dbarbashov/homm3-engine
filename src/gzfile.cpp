@@ -14,7 +14,14 @@
 #include <errno.h>
 
 #include "gzfile.h"
+#include "host_path.h"
 
+// Modern zlib rejects update-mode (+); these streams are exclusively read or write.
+static std::string portableGzipMode(const char* mode){
+    std::string result(mode);result.erase(std::remove(result.begin(),result.end(),'+'),result.end());return result;
+}
+
+#if !defined(HOMM3_PORT)
 #undef errno
 
 // zlib uses a process-global errno cell even though the game links LIBCMT.
@@ -23,11 +30,12 @@
 extern "C" {
 DATA(0x006ab15c) int errno;
 }
+#endif
 
 VA(0x004d6c50, 0x76)
 MAC_ADDRESS(0x221b9c, 0x7c)
 TGzFile::TGzFile(const char* path, const char* mode)
-    : m_file(gzopen(path, mode))
+    : m_file(gzopen(Port::hostPath(path).c_str(), portableGzipMode(mode).c_str()))
 {
     if (m_file == 0)
         throw TOpenFailure();

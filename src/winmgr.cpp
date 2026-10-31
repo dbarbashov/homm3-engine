@@ -1,4 +1,9 @@
+#ifdef HOMM3_SERVER
+#include "server_authority.h"
+#endif
+#include "fast_game.h"
 #include "va.h"
+#include "hd_view.h"
 
 #include <stdio.h>
 
@@ -169,8 +174,13 @@ void heroWindowManager::addWindow(heroWindow* newWindow, int newPriority,
             return;
     }
 
-    if (newWindow->open(newPriority, update))
+    // Capture the visible map before open() paints into the legacy surface.
+    if (newWindow->m_status & WINDOW_STATE_OPEN) return;
+    Port::HD::windowOpening(newWindow, Port::HD::isAdventureWindow(newWindow));
+    if (newWindow->open(newPriority, update)) {
+        Port::HD::windowClosed(newWindow);
         return;
+    }
 
     while (at && at->m_priority > newPriority)
         at = at->m_prevWindow;
@@ -203,6 +213,7 @@ void heroWindowManager::removeWindow(heroWindow* killWindow)
 {
     if (!killWindow)
         return;
+    Port::HD::windowClosing(killWindow);
     killWindow->close(1);
     if (killWindow == m_headWindow) {
         m_headWindow = killWindow->m_nextWindow;
@@ -224,6 +235,7 @@ void heroWindowManager::removeWindow(heroWindow* killWindow)
     if (m_activeWindow == killWindow)
         m_activeWindow = 0;
     m_lastActive = m_activeWindow ? m_activeWindow : m_tailWindow;
+    Port::HD::windowClosed(killWindow);
 }
 
 // E:\gamedcs\winmgr.cpp:461
@@ -236,6 +248,10 @@ MAC_ADDRESS(0x20d6c0, 0x308)  // anchor-global
 int heroWindowManager::doDialog(heroWindow* dialogWindow,
                                 TDialogHandler dialogFunction, int fadeIn)
 {
+#ifdef HOMM3_SERVER
+    if (Port::Authority::active()) throw std::runtime_error("Missing typed server window adapter");
+#endif
+    if (Port::Fast::executing()) { m_dialogReturn=1; return 1; }
     int endFlag;
 
     if (g_dialogNestCount++ == 0)
@@ -467,6 +483,15 @@ void heroWindowManager::doQuickView(heroWindow* window)
     g_mouseManager->showPointer(false);
 }
 
+// Full refreshes cover the adaptive map, while modal windows keep their
+// original source coordinate space for the overlay compositor.
+void heroWindowManager::updateScreen()
+{
+    const bool adventure = Port::HD::isAdventureWindow(topWindow());
+    updateScreen(0, 0, adventure ? Port::HD::width() : 800,
+                      adventure ? Port::HD::height() : 600);
+}
+
 VA(0x00602bd0, 0x7C)
 DC_ADDRESS(0x19b230, 0xf8)
 MAC_ADDRESS(0x20df2c, 0x9c)
@@ -480,10 +505,10 @@ void heroWindowManager::updateScreen(int x, int y, int width, int height)
         x = 0;
     if (y < 0)
         y = 0;
-    if (x + width > WINDOW_SCREEN_WIDTH)
-        width = WINDOW_SCREEN_WIDTH - x;
-    if (y + height > WINDOW_SCREEN_HEIGHT)
-        height = WINDOW_SCREEN_HEIGHT - y;
+    if (x + width > Port::HD::width())
+        width = Port::HD::width() - x;
+    if (y + height > Port::HD::height())
+        height = Port::HD::height() - y;
     blitToScreenWithPointer(x, y, width, height);
     g_mouseManager->enable();  // DC winmgr.cpp:899.
     pollSound();
@@ -512,6 +537,14 @@ DC_ADDRESS(0x19b428, 0x66)
 MAC_ADDRESS(0x20e03c, 0xb4)
 void heroWindowManager::fadeScreen(int inOut, int speed, unsigned char expectFadein)
 {
+    // Map overlays replace whole-screen fades: the surrounding world stays put.
+    // Preserve ordinary menu fades, and publish completed scenes on fade-in.
+    if (Port::HD::hasAdventureBackdrop()) {
+        if (m_isWaitingForFadeIn) g_mouseManager->showPointer(0);
+        m_isWaitingForFadeIn = 0;
+        if (!inOut) updateScreen(0, 0, 800, 600);
+        return;
+    }
     if (inOut == 1) {
         if (expectFadein)
             g_mouseManager->hidePointer();
@@ -555,10 +588,10 @@ void heroWindowManager::saveFizzleSource(int startX, int startY, int width, int 
         height += startY;
         startY = 0;
     }
-    if (startX + width > WINDOW_SCREEN_WIDTH)
-        width = WINDOW_SCREEN_WIDTH - startX;
-    if (startY + height > WINDOW_SCREEN_HEIGHT)
-        height = WINDOW_SCREEN_HEIGHT - startY;
+    if (startX + width > Port::HD::width())
+        width = Port::HD::width() - startX;
+    if (startY + height > Port::HD::height())
+        height = Port::HD::height() - startY;
     if (width <= 0 || height <= 0)
         return;
     if (m_bmpFizzleSource)
@@ -582,10 +615,10 @@ void heroWindowManager::saveFizzleSourceX(int startX, int startY, int width,
             height += startY;
             startY = 0;
         }
-        if (startX + width > 800)
-            width = 800 - startX;
-        if (startY + height > 600)
-            height = 600 - startY;
+        if (startX + width > Port::HD::width())
+            width = Port::HD::width() - startX;
+        if (startY + height > Port::HD::height())
+            height = Port::HD::height() - startY;
 
         if (width > 0 && height > 0) {
             delete m_bmpFizzleSource;
@@ -614,10 +647,10 @@ void heroWindowManager::fizzleForward(int startX, int startY, int width,
         height += startY;
         startY = 0;
     }
-    if (startX + width > WINDOW_SCREEN_WIDTH)
-        width = WINDOW_SCREEN_WIDTH - startX;
-    if (startY + height > WINDOW_SCREEN_HEIGHT)
-        height = WINDOW_SCREEN_HEIGHT - startY;
+    if (startX + width > Port::HD::width())
+        width = Port::HD::width() - startX;
+    if (startY + height > Port::HD::height())
+        height = Port::HD::height() - startY;
     if (width <= 0 || height <= 0)
         return;
     int savedColorCycling = m_colorCyclingOn;
@@ -704,10 +737,10 @@ void heroWindowManager::fizzleForwardX(int startX, int startY, int width,
             height += startY;
             startY = 0;
         }
-        if (startX + width > 800)
-            width = 800 - startX;
-        if (startY + height > 600)
-            height = 600 - startY;
+        if (startX + width > Port::HD::width())
+            width = Port::HD::width() - startX;
+        if (startY + height > Port::HD::height())
+            height = Port::HD::height() - startY;
 
         if (width > 0 && height > 0) {
             int savedColorCycling = m_colorCyclingOn;
@@ -822,10 +855,10 @@ void heroWindowManager::flash(int startX, int startY, int width, int height,
         height += startY;
         startY = 0;
     }
-    if (startX + width > WINDOW_SCREEN_WIDTH)
-        width = WINDOW_SCREEN_WIDTH - startX;
-    if (startY + height > WINDOW_SCREEN_HEIGHT)
-        height = WINDOW_SCREEN_HEIGHT - startY;
+    if (startX + width > Port::HD::width())
+        width = Port::HD::width() - startX;
+    if (startY + height > Port::HD::height())
+        height = Port::HD::height() - startY;
     if (width <= 0 || height <= 0)
         return;
     int savedColorCycling = m_colorCyclingOn;
@@ -960,7 +993,7 @@ void heroWindowManager::fadeToBlack(int speed, unsigned char expectFadein)
     const unsigned int greenMask2 = (Bitmap16Bit::green_mask << 16) | Bitmap16Bit::green_mask;
     const unsigned int blueMask2 = (Bitmap16Bit::blue_mask << 16) | Bitmap16Bit::blue_mask;
     const int fadePeriod = 50;
-    Bitmap16Bit bmpFadeSource(WINDOW_SCREEN_WIDTH, WINDOW_SCREEN_HEIGHT);
+    Bitmap16Bit bmpFadeSource(Port::HD::width(), Port::HD::height());
     bmpFadeSource.Grab(m_screenBitmap, 0, 0);
 
     // DC winmgr.cpp:1793 calls mouseManager::Disable after Grab; its result
@@ -974,10 +1007,10 @@ void heroWindowManager::fadeToBlack(int speed, unsigned char expectFadein)
         dst.m_pixels = m_screenBitmap->GetMap(0, 0);
         Bitmap16ConstMapPointer src;
         src.m_pixels = bmpFadeSource.GetMap(0, 0);
-        for (int y = 0; y < WINDOW_SCREEN_HEIGHT; y++) {
+        for (int y = 0; y < Port::HD::height(); y++) {
             const unsigned int* pixelSrc = src.m_pixelPairs;
             unsigned int* pixelDst = dst.m_pixelPairs;
-            for (int x = 0; x < WINDOW_SCREEN_WIDTH / 2; x++) {
+            for (int x = 0; x < Port::HD::width() / 2; x++) {
                 const unsigned int r = *pixelSrc;
                 unsigned long blue = (r & redMask2) >> shift;
                 unsigned long green = (r & greenMask2) >> shift;
@@ -990,18 +1023,18 @@ void heroWindowManager::fadeToBlack(int speed, unsigned char expectFadein)
             dst.m_bytes += m_screenBitmap->GetPitch();
             src.m_bytes += bmpFadeSource.GetPitch();
         }
-        blitToScreenWithPointer(0, 0, WINDOW_SCREEN_WIDTH,
-                                WINDOW_SCREEN_HEIGHT);
+        blitToScreenWithPointer(0, 0, Port::HD::width(),
+                                Port::HD::height());
         if (GameTime::get() - time1 > fadePeriod)
             break;
         GameTime::delayTil(nextFadeTime);
     }
 
-    m_screenBitmap->FillRect(0, 0, WINDOW_SCREEN_WIDTH, WINDOW_SCREEN_HEIGHT, 0);
-    blitToScreenWithPointer(0, 0, WINDOW_SCREEN_WIDTH,
-                            WINDOW_SCREEN_HEIGHT);
+    m_screenBitmap->FillRect(0, 0, Port::HD::width(), Port::HD::height(), 0);
+    blitToScreenWithPointer(0, 0, Port::HD::width(),
+                            Port::HD::height());
     if (expectFadein) {
-        bmpFadeSource.Draw(0, 0, WINDOW_SCREEN_WIDTH, WINDOW_SCREEN_HEIGHT,
+        bmpFadeSource.Draw(0, 0, Port::HD::width(), Port::HD::height(),
                            m_screenBitmap, 0, 0, false);
     }
 }
@@ -1030,7 +1063,7 @@ void heroWindowManager::fadeFromBlack(int speed)
     const unsigned int maskGreen = (Bitmap16Bit::green_mask << 16) | Bitmap16Bit::green_mask;
     const unsigned int maskBlue = (Bitmap16Bit::blue_mask << 16) | Bitmap16Bit::blue_mask;
     const int fadePeriod = 50;
-    Bitmap16Bit fadeFrom(WINDOW_SCREEN_WIDTH, WINDOW_SCREEN_HEIGHT);
+    Bitmap16Bit fadeFrom(Port::HD::width(), Port::HD::height());
     fadeFrom.Grab(m_screenBitmap, 0, 0);
 
     for (int shift = 2; shift > 0; shift--) {
@@ -1040,10 +1073,10 @@ void heroWindowManager::fadeFromBlack(int speed)
         dst.m_pixels = m_screenBitmap->GetMap(0, 0);
         Bitmap16ConstMapPointer src;
         src.m_pixels = fadeFrom.GetMap(0, 0);
-        for (int y = 0; y < WINDOW_SCREEN_HEIGHT; y++) {
+        for (int y = 0; y < Port::HD::height(); y++) {
             const unsigned int* pixelSrc = src.m_pixelPairs;
             unsigned int* pixelDst = dst.m_pixelPairs;
-            for (int x = 0; x < WINDOW_SCREEN_WIDTH / 2; x++) {
+            for (int x = 0; x < Port::HD::width() / 2; x++) {
                 unsigned long pair = *pixelSrc;
                 unsigned long blue = (pair & maskRed) >> shift;
                 unsigned long green = (pair & maskGreen) >> shift;
@@ -1056,17 +1089,17 @@ void heroWindowManager::fadeFromBlack(int speed)
             dst.m_bytes += m_screenBitmap->GetPitch();
             src.m_bytes += fadeFrom.GetPitch();
         }
-        blitToScreenWithPointer(0, 0, WINDOW_SCREEN_WIDTH,
-                                WINDOW_SCREEN_HEIGHT);
+        blitToScreenWithPointer(0, 0, Port::HD::width(),
+                                Port::HD::height());
         if (GameTime::get() - started > fadePeriod)
             break;
         GameTime::delayTil(deadline);
     }
 
-    fadeFrom.Draw(0, 0, WINDOW_SCREEN_WIDTH, WINDOW_SCREEN_HEIGHT,
+    fadeFrom.Draw(0, 0, Port::HD::width(), Port::HD::height(),
                   m_screenBitmap, 0, 0, false);
-    blitToScreenWithPointer(0, 0, WINDOW_SCREEN_WIDTH,
-                            WINDOW_SCREEN_HEIGHT);
+    blitToScreenWithPointer(0, 0, Port::HD::width(),
+                            Port::HD::height());
 }
 
 // Mac retains this shared window-state helper; DoDialog, DoDialogDraw and

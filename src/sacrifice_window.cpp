@@ -1,6 +1,8 @@
+#include "authority_client.h"
 #include "va.h"
 
 #include "sacrifice_window.h"
+static void moveAllArmies(armyGroup* source, armyGroup* dest);
 
 #include "border.h"
 #include "button.h"
@@ -299,7 +301,7 @@ type_sacrifice_window::type_sacrifice_window(hero* newHero, int curPlayer)
     m_canSacrificeCreatures = townType > TOWN_TOWER;
     m_totalExperience = 0;
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -1325,6 +1327,10 @@ int type_sacrifice_window::sacrifice(message& msg)
         && !(msg.m_qualifier & MESSAGE_MODIFIER_RIGHT)) {
         type_sacrifice_window* window =
             static_cast<type_sacrifice_window*>(msg.m_window);
+        if (Port::AuthorityClient::sacrificeChoiceActive()) {
+            Port::AuthorityClient::chooseSacrifice(window);
+            return window->exitDialog(msg);
+        }
         if (window->m_sacrificingArtifacts) {
             for (unsigned long i = 0;
                  i < window->m_artifactOfferings.size(); ++i) {
@@ -2031,6 +2037,7 @@ DC_ADDRESS(0x128080, 0x16)
 MAC_ADDRESS(0x15cc44, 0x2c)
 int type_skeleton_window::exitDialog(message& msg)
 {
+    if(Port::AuthorityClient::enabled())moveAllArmies(m_armies[1],m_armies[0]);
     msg.m_id = MESSAGE_WIDGET;
     g_windowManager->m_dialogReturn = 0;
     msg.m_codeX = msg.m_codeY = widget::WIDGET_END_DIALOG;
@@ -2209,3 +2216,5 @@ int type_skeleton_window::sacrifice(message& msg)
     }
     return 0;
 }
+
+int authorityDeathCreature(int creature){return creature>=0&&creature<145?int(g_deathCreature[creature]):-1;}

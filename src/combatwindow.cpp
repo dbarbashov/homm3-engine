@@ -415,7 +415,7 @@ MAC_ADDRESS(0x080d48, 0x400)
 void TCombatWindow::combatMessage(const char* newText,
                                    bool keep, bool priority)
 {
-    if (g_combatManager->isQuickCombat())
+    if (g_combatManager->suppressCombatPresentation())
         return;
     if (!m_controlSubWindow->m_rolloverWidget)
         return;

@@ -2,7 +2,7 @@
 
 A portable C++ runtime for Heroes III, with native SDL and browser WebAssembly
 targets. It includes the recovered game rules, original interface and rendering,
-portability patches, media adapters and a deterministic test harness.
+portability code, media adapters and a deterministic test harness.
 
 The browser shell lives in [homm3-web](https://github.com/dbarbashov/homm3-web).
 Original game files are supplied by the player and are not included here.
@@ -60,7 +60,9 @@ can attach a read-only reproduction link.
 
 ## Provenance and licenses
 
-The recovered source revision is pinned in `upstream.lock.json`. Portability and
-integration changes are recorded in `port/patches`; the upstream checkout remains
-unchanged. See `LICENSE`, `THIRD_PARTY.md` and `licenses/` for notices and dependencies.
+The recovered source origin is recorded in `upstream-origin.json`. The original
+import is a separate Git commit, followed by our adaptations. Edit the tracked
+`src/` and `include/` files directly; builds do not download or patch the upstream
+source. Helpers previously extracted during configuration are ordinary tracked
+files too. See [source maintenance](docs/source-maintenance.md) for updating the base. See `LICENSE`, `THIRD_PARTY.md` and `licenses/` for notices and dependencies.
 FFmpeg source and relinking materials must accompany applicable binary releases.

@@ -1,3 +1,4 @@
+#include "frontend_bridge.h"
 #include "va.h"
 
 #include <string.h>
@@ -267,7 +268,7 @@ TCampaignWindow::TCampaignWindow(unsigned char newGame, int newCampaign)
             campaign - m_firstCampaign + PREVIEW_FIRST_ID, 5, 0, 8));
     }
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -305,7 +306,7 @@ TCampaignWindow::~TCampaignWindow()
     }
 
     g_campaignWindow = 0;
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -317,7 +318,7 @@ MAC_ADDRESS(0x06ad48, 0x58)
 void TCampaignWindow::doModal()
 {
     g_soundManager->startMP3("MainMenu", 0, 1);
-    g_windowManager->doDialog(this, campaignWindowHandler, 0);
+    Port::runDialog(this, campaignWindowHandler, 0, "campaigns");
 }
 
 // File-static hover latch: the handler is its only image-wide reader and

@@ -25,7 +25,7 @@ TDimensionDoorWindow::TDimensionDoorWindow()
     m_widgets.push_back(new border(mapWidget->m_x, mapWidget->m_y,
         mapWidget->m_width, mapWidget->m_height, 0, 1));
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -40,7 +40,7 @@ DC_ADDRESS(0x082938, 0x68)
 MAC_ADDRESS(0x0a2cf4, 0xac)
 TDimensionDoorWindow::~TDimensionDoorWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -169,7 +169,7 @@ TSkuttleBoatWindow::TSkuttleBoatWindow()
     m_widgets.push_back(new border(mapWidget->m_x, mapWidget->m_y,
         mapWidget->m_width, mapWidget->m_height, 0, 1));
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -184,7 +184,7 @@ DC_ADDRESS(0x082cb0, 0x62)
 MAC_ADDRESS(0x0a3198, 0xac)
 TSkuttleBoatWindow::~TSkuttleBoatWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }

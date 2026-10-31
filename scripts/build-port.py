@@ -6,10 +6,9 @@ p=argparse.ArgumentParser();p.add_argument('--target',choices=['native','web'],d
 manifest=json.loads((ROOT/'port/sources.json').read_text())
 units=manifest['core']
 if not a.no_compile:
-    subprocess.run([sys.executable,'scripts/prepare-port.py'],cwd=ROOT,check=True)
     subprocess.run([sys.executable,'scripts/compile-port.py','--target',a.target,*(['--sanitize'] if a.sanitize else []),*units],cwd=ROOT,check=True)
 compiler=os.environ.get('CXX','clang++') if a.target=='native' else str(ROOT/'.local/emsdk/upstream/emscripten/em++')
-flags=['-std=c++14','-DHOMM3_PORT','-include','port/compat/prefix.h','-Iport/compat','-Ibuild/portable-source/include','-O1','-Wno-writable-strings','-ffunction-sections','-fdata-sections']
+flags=['-std=c++14','-DHOMM3_PORT','-include','port/compat/prefix.h','-Iport/compat','-Iinclude','-O1','-Wno-writable-strings','-ffunction-sections','-fdata-sections']
 if a.sanitize:flags+=['-g','-fsanitize=address','-fno-omit-frame-pointer']
 if a.target=='native':
     flags+=shlex.split(subprocess.check_output(['sdl2-config','--cflags','--libs'],text=True))

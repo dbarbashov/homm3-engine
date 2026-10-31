@@ -101,7 +101,7 @@ DC_ADDRESS(0x116b6c, 0x6a)
 MAC_ADDRESS(0x149ff8, 0xc8)
 TQuestLogWindow::~TQuestLogWindow()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }

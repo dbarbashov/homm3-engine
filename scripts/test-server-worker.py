@@ -75,7 +75,7 @@ if not objects:
 video = ROOT / 'build/ffmpeg-native/install'
 probe = out / 'rules-probe'
 command = ['clang++', '-std=c++14', '-DHOMM3_PORT', '-DHOMM3_FULL_GAME', '-DHOMM3_SERVER',
-           '-include', 'port/compat/prefix.h', '-Iport/compat', '-Ibuild/portable-source/include',
+           '-include', 'port/compat/prefix.h', '-Iport/compat', '-Iinclude',
            '-O2', '-Wno-writable-strings', '-Wno-deprecated-declarations',
            *shlex.split(subprocess.check_output(['sdl2-config', '--cflags', '--libs'], text=True)),
            '-Wl,-dead_strip' if platform.system() == 'Darwin' else '-Wl,--gc-sections',

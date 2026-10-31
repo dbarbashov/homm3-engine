@@ -21,9 +21,13 @@
 DC_ADDRESS(0x0525b4, 0x62)
 static inline long ftol(double d)
 {
-    const unsigned long magic = 0x59c00000;
-    d += *static_cast<const float*>(static_cast<const void*>(&magic));
-    return *static_cast<long*>(static_cast<void*>(&d));
+    const uint32_t magic = 0x59c00000;
+    float bias;
+    memcpy(&bias, &magic, sizeof(bias));
+    d += bias;
+    int32_t result;
+    memcpy(&result, &d, sizeof(result));
+    return result;
 }
 
 static void RGBToHSV(unsigned int r, unsigned int g, unsigned int b,

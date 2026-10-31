@@ -18,11 +18,7 @@ enum EGameResourceCount {
     NUM_RESOURCES = 7
 };
 
-namespace std {
-template<class T> class allocator;
-template<class E> struct char_traits;
-template<class E, class Tr, class A> class basic_string;
-}
+#include <string>
 
 // Creature IDs shared by the game and the editor's serialized stacks.
 // Dreamcast CodeView types armies[] and IsMember's parameter as

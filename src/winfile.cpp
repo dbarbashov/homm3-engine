@@ -111,7 +111,7 @@ VA(0x005ffc50, 0x30)
 DC_ADDRESS(0x1985b8, 0x2c)
 unsigned long File::write(void* data, unsigned long dBytes)
 {
-    unsigned long dBytesWritten;
+    DWORD dBytesWritten;
 
     if (!m_file)
         return 0;
@@ -123,7 +123,7 @@ VA(0x005ffc80, 0x30)
 DC_ADDRESS(0x1985e4, 0x2c)
 unsigned long File::read(void* data, unsigned long dBytes)
 {
-    unsigned long dBytesRead;
+    DWORD dBytesRead;
 
     if (!m_file)
         return 0;

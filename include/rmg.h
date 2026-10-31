@@ -212,7 +212,7 @@ class type_object;
 class type_treasure_def {
 public:
     type_treasure_def(int objectType, int subtype, int value, int density);
-#if defined(HOMM3_RMG_HOTFIX)
+#if defined(HOMM3_RMG_HOTFIX) || defined(HOMM3_PORT)
     // Factories are deleted through this base.
     virtual ~type_treasure_def() {}
 #endif
@@ -576,11 +576,11 @@ struct TRmgTemplateZone {
     TRmgTreasureRange m_treasure[3];     // +0xa0
     std::vector<TRmgZoneConnection> m_connections; // +0xc4
 
-#if defined(HOMM3_RMG_HOTFIX)
+#if defined(HOMM3_RMG_HOTFIX) || defined(HOMM3_PORT)
     void getTownCategories(s32* densities, s32* counts) const;
 #endif
     int selectAllowedTown();
-#if defined(HOMM3_RMG_HOTFIX)
+#if defined(HOMM3_RMG_HOTFIX) || defined(HOMM3_PORT)
     bool isUsable() const;
 #endif
     TRmgZoneConnection* findConnection(int destinationZone);
@@ -599,11 +599,11 @@ struct TRmgTemplate {
     TRmgTemplate();
     ~TRmgTemplate();
     TRmgTemplateZone* findZone(int zoneIndex);
-#if defined(HOMM3_RMG_HOTFIX)
+#if defined(HOMM3_RMG_HOTFIX) || defined(HOMM3_PORT)
     void getPlayerSlots(b8* humanSlots, b8* allSlots) const;
 #endif
     bool hasPlayerSlots(s32 humanPlayers, s32 computerPlayers) const;
-#if defined(HOMM3_RMG_HOTFIX)
+#if defined(HOMM3_RMG_HOTFIX) || defined(HOMM3_PORT)
     bool isUsable(s32 humanPlayers, s32 computerPlayers) const;
 #endif
 };
@@ -902,7 +902,7 @@ public:
     //   (2,0) (1,0) (0,0)=P
     TRmgMapPosition getPosition() const;
     TRmgMapPosition getPlacedGroupPosition(const TRmgMapPosition& groupPosition) const;
-#if defined(HOMM3_RMG_HOTFIX)
+#if defined(HOMM3_RMG_HOTFIX) || defined(HOMM3_PORT)
     TRmgMapPosition getEntrance() const;
 #endif
 
@@ -1275,7 +1275,7 @@ inline void TRmgMapItem::setPathClearance(unsigned char pathClearance)
 inline void TRmgMapItem::removeObject(type_object* object)
 {
     std::vector<type_object*>::iterator entry = std::find(m_objects.begin(), m_objects.end(), object);
-#if defined(HOMM3_RMG_HOTFIX)
+#if defined(HOMM3_RMG_HOTFIX) || defined(HOMM3_PORT)
     if (entry != m_objects.end())
 #else
     if (entry)
@@ -1925,7 +1925,7 @@ public:
         case RMG_MAP_SHADOW_OF_DEATH:
             return 28;
         }
-#if defined(HOMM3_RMG_HOTFIX)
+#if defined(HOMM3_RMG_HOTFIX) || defined(HOMM3_PORT)
         // Unknown request versions are written as Shadow of Death maps.
         return 28;
 #else
@@ -2011,7 +2011,7 @@ public:
     // guarded treasure group; 0x54bc50 removes the old object's map marks,
     // counts and list entry without deleting the object itself.
     unsigned char placeKeyTentGuard(type_object* object, int maxValue);
-#if defined(HOMM3_RMG_HOTFIX)
+#if defined(HOMM3_RMG_HOTFIX) || defined(HOMM3_PORT)
     bool hasRequiredPrototypes() const;
     bool hasPlayerTowns() const;
 #endif

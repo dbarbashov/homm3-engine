@@ -1,3 +1,4 @@
+#include "frontend_bridge.h"
 #include "prefs.h"
 #include "va.h"
 
@@ -540,9 +541,8 @@ TCampaignBrief::TCampaignBrief(bool newCampaign, bool viewFromGame)
     std::vector<widget*>& widgets = m_widgets;
     widgets.reserve(NWIDGETS);
 
-    const char* campaignFilename =
-        g_game->m_campaign.getCampaignFileName().c_str();
-    m_campaign = new CampaignHeaderStruct(campaignFilename);
+    const std::string campaignFilename = g_game->m_campaign.getCampaignFileName();
+    m_campaign = new CampaignHeaderStruct(campaignFilename.c_str());
     if (!m_campaign->load()) {
         // Retail's dec/je/dec/jne dispatch proves a sparse switch rather
         // than an if-chain; VC6 sinks these two arms ahead of the shared
@@ -550,12 +550,12 @@ TCampaignBrief::TCampaignBrief(bool newCampaign, bool viewFromGame)
         switch (m_campaign->m_fileError) {
         case CampaignHeaderStruct::CAMPAIGN_FILE_OPEN_FAILED:
             normalDialog(
-                formatString(g_generalText->GetText(GENERAL_TEXT_FILE_OPEN_ERROR_FORMAT), campaignFilename).c_str(),
+                formatString(g_generalText->GetText(GENERAL_TEXT_FILE_OPEN_ERROR_FORMAT), campaignFilename.c_str()).c_str(),
                 1, -1, -1, -1, 0, -1, 0, -1, 0, -1, 0);
             break;
         case CampaignHeaderStruct::CAMPAIGN_FILE_VERSION_UNSUPPORTED:
             normalDialog(
-                formatString(g_generalText->GetText(GENERAL_TEXT_CAMPAIGN_FILE_PARSE_ERROR_FORMAT), campaignFilename).c_str(),
+                formatString(g_generalText->GetText(GENERAL_TEXT_CAMPAIGN_FILE_PARSE_ERROR_FORMAT), campaignFilename.c_str()).c_str(),
                 1, -1, -1, -1, 0, -1, 0, -1, 0, -1, 0);
             break;
         }
@@ -941,7 +941,7 @@ void TCampaignBrief::doModal()
         g_windowManager->m_dialogReturn = DIALOG_RETURN_CANCEL;
         return;
     }
-    g_windowManager->doDialog(this, campaignBriefHandler, 0);
+    Port::runDialog(this, campaignBriefHandler, 0, "campaign-briefing");
 }
 
 // Dreamcast supplies the original statement groups, helper boundaries and
@@ -1216,12 +1216,10 @@ DC_ADDRESS(0x05ab48, 0x3a)
 MAC_ADDRESS(0x06824c, 0x94)
 std::string getCampaignName()
 {
-    const char* fileName = g_game->m_campaign.getCampaignFileName().c_str();
-    TCampaignBrief::CampaignHeaderStruct* header =
-        new TCampaignBrief::CampaignHeaderStruct(fileName);
-
-    header->load();
-    return header->getCampaignName();
+    const std::string fileName = g_game->m_campaign.getCampaignFileName();
+    TCampaignBrief::CampaignHeaderStruct header(fileName.c_str());
+    header.load();
+    return header.getCampaignName();
 }
 
 // COMDAT pairing: std::_Construct<type_map_hero_identity>.

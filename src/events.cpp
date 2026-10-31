@@ -1,3 +1,12 @@
+#ifdef HOMM3_SERVER
+#include "server_authority.h"
+#include "server_exchange.h"
+#include "server_encounters.h"
+#include "server_map_services.h"
+#include "server_guild.h"
+#include "server_combat.h"
+#endif
+#include "fast_game.h"
 #include "text.h"
 #include "va.h"
 #include "includes.h"
@@ -584,6 +593,9 @@ MAC_ADDRESS(0x0a94f0, 0x90)
 void advManager::eraseAndFizzle(NewmapCell* eventCell, type_point point,
                                 int fizzleSound)
 {
+#ifdef HOMM3_SERVER
+    if (Port::Authority::active()) { eraseObj(eventCell,point,true); fizzleCenter(fizzleSound); return; }
+#endif
     unsigned char savedFlag = g_colorCyclingEnabled;
     g_colorCyclingEnabled = 0;
     unsigned char savedPause = m_animCtrPaused;
@@ -615,6 +627,7 @@ DC_ADDRESS(0x0903b4, 0x2a4)
 MAC_ADDRESS(0x0a9580, 0x400)  // dc-bracket forced, ret 0xc=p4
 void advManager::doEventShipyard(NewmapCell* cell, type_point point, unsigned char humanPlayer)
 {
+    if (Port::Fast::nativeUI()) { Port::Fast::unavailable(); return; }
     mobilizeCurrHero(0, 0, 1);
 
     if (!g_game->onSameTeam(cell->m_shipyardInfo.owner, g_netLocalGamePos))
@@ -658,6 +671,11 @@ void advManager::doEventShipyard(NewmapCell* cell, type_point point, unsigned ch
         return;
     }
 
+#ifdef HOMM3_SERVER
+    if (Port::Authority::active()) {
+        Port::Authority::shipyardChoice(0);
+    } else
+#endif
     doShipyard(0);
     if (g_windowManager->m_dialogReturn == DIALOG_RETURN_OK
         && g_game->createBoat(
@@ -687,7 +705,7 @@ void advManager::doEventAnchor(hero* currentHero, bool humanPlayer)
             } else {
                 currentHero->m_movePoints = 0;
             }
-            m_advWindow->updateHeroLocator(-1, 1, 1);
+            if (m_advWindow) m_advWindow->updateHeroLocator(-1, 1, 1);
         }
 
         currentHero->m_facing = m_cursorDirection;
@@ -1364,7 +1382,7 @@ bool advManager::giveBlackBoxReward(const char* text, hero* currentHero,
     if (experienceGained > 0)
         currentHero->giveExperience(experienceGained, 1, 1);
     if (humanPlayer)
-        m_advWindow->updateHeroLocators(-1, 1, 1);
+        { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
     updBottomView(1, 1, 1);
     return rewardGiven;
 }
@@ -1494,7 +1512,7 @@ void advManager::doEventBoat(hero* currentHero, NewmapCell* cell)
         } else {
             currentHero->m_movePoints = 0;
         }
-        m_advWindow->updateHeroLocator(-1, 1, 1);
+        if (m_advWindow) m_advWindow->updateHeroLocator(-1, 1, 1);
     }
 
     heroBoat->m_occupyingHero = currentHero->m_id;
@@ -1926,7 +1944,7 @@ void advManager::doEventFountainOfYouth(hero* currentHero, NewmapCell* cell,
     currentHero->m_maxMovePoints += 400;
     currentHero->m_movePoints += 400;
     if (humanPlayer)
-        m_advWindow->updateHeroLocators(-1, 1, 1);
+        { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
 }
 
 VA(0x004a2710, 0xE4)
@@ -2413,7 +2431,7 @@ void advManager::doEventMagicSpring(hero* currentHero, ExtraInfoUnion* cell,
         cell->fillMagicSpring(0);
     }
     if (humanPlayer)
-        m_advWindow->updateHeroLocators(-1, 1, 1);
+        { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
     updBottomView(1, 1, 1);
 }
 
@@ -2446,7 +2464,7 @@ void advManager::doEventMagicWell(hero* currentHero, ExtraInfoUnion* cell,
     game* g = g_game;
     g->setInfoFlag(MagicWellInfo, g_netLocalGamePos);
     if (humanPlayer)
-        m_advWindow->updateHeroLocators(-1, 1, 1);
+        { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
     updBottomView(1, 1, 1);
 }
 
@@ -2582,7 +2600,7 @@ void advManager::doEventOasis(hero* currentHero, NewmapCell* cell,
     currentHero->m_maxMovePoints += 800;
     currentHero->m_movePoints += 800;
     if (humanPlayer)
-        m_advWindow->updateHeroLocators(-1, 1, 1);
+        { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
 }
 
 VA(0x004a3dc0, 0xE4)
@@ -2670,7 +2688,7 @@ void advManager::doEventPrison(hero* currentHero, NewmapCell* cell,
 
     CMCRecruitHero change(heroID, point, g_netLocalGamePos);
     sendMapChange(&change);
-    m_advWindow->updateHeroLocators(-1, 1, 1);
+    { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
 }
 
 // The spell is written back BEFORE the hero is asked whether he can carry
@@ -2764,9 +2782,9 @@ void advManager::doEventRallyFlag(hero* currentHero, NewmapCell* cell,
     currentHero->m_luckBonus++;
     currentHero->m_maxMovePoints += 400;
     currentHero->m_movePoints += 400;
-    m_advWindow->updateHeroLocators(-1, 0, 0);
+    { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 0, 0); }
     if (humanPlayer)
-        m_advWindow->updateHeroLocators(-1, 1, 1);
+        { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
     updBottomView(1, 1, 1);
 }
 
@@ -3269,7 +3287,7 @@ void advManager::doEventStables(hero* currentHero, NewmapCell* cell,
         currentHero->m_maxMovePoints += g_stablesMovementBonus;
         currentHero->m_movePoints += g_stablesMovementBonus;
         if (humanPlayer)
-            m_advWindow->updateHeroLocators(-1, 1, 1);
+            { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
         granted = STABLES_MOVEMENT;
     }
     // 10 and 11 are the Cavalier and its Champion upgrade; the reward
@@ -3762,7 +3780,7 @@ bool advManager::monstersSellOut(hero* currentHero, NewmapCell* cell,
 
     monstersGiveReward(currentHero, cell, humanPlayer);
     if (humanPlayer) {
-        m_advWindow->updateResourceDisplay(1, 1);
+        { if (m_advWindow) m_advWindow->updateResourceDisplay(1, 1); }
         updBottomView(1, 1, 1);
     }
 
@@ -4064,7 +4082,7 @@ void advManager::doEventWateringHole(hero* currentHero, NewmapCell* cell,
     currentHero->m_maxMovePoints += 400;
     currentHero->m_movePoints += 400;
     if (humanPlayer)
-        m_advWindow->updateHeroLocators(-1, 1, 1);
+        { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
 }
 
 VA(0x004a7fc0, 0xBD)
@@ -4291,6 +4309,13 @@ void advManager::dispatchEvent(hero* currentHero, NewmapCell* cell, type_point p
     switch (eventType) {
     case ALTAR_OF_SACRIFICE:
         if (humanPlayer) {
+#ifdef HOMM3_SERVER
+            if (Port::Authority::active()) {
+                Port::Authority::sacrificeEncounter(*currentHero);
+                g_game->setInfoFlag(const_sacrifice_info, g_netLocalGamePos);
+                break;
+            }
+#endif
             g_mouseManager->setPointer(0, mouseManager::ADVENTURE_SET);
             g_mouseManager->showPointer(1);
             {
@@ -4474,6 +4499,13 @@ void advManager::dispatchEvent(hero* currentHero, NewmapCell* cell, type_point p
         if (!humanPlayer) {
             aiVisitHillFort(currentHero);
         } else {
+#ifdef HOMM3_SERVER
+            if (Port::Authority::active()) {
+                Port::Authority::hillFortEncounter(*currentHero);
+                g_game->setInfoFlag(HillFortInfo, g_netLocalGamePos);
+                break;
+            }
+#endif
             g_mouseManager->setPointer(0, mouseManager::ADVENTURE_SET);
             g_mouseManager->showPointer(1);
             THillFortWindow hillFortWindow;
@@ -4751,10 +4783,16 @@ void advManager::dispatchEvent(hero* currentHero, NewmapCell* cell, type_point p
             break;
         type_point heroPos = currentHero->getLocation();
         if (heroPos != point) {
+#ifdef HOMM3_SERVER
+            if (Port::Authority::active()) {
+                Port::Authority::mapTavernEncounter(*currentHero, point);
+                break;
+            }
+#endif
             g_mouseManager->setPointer(0, mouseManager::ADVENTURE_SET);
             g_mouseManager->showPointer(1);
             doMapTavern(point);
-            m_advWindow->updateHeroLocators(-1, 1, 1);
+            { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
         }
         break;
     }
@@ -4769,6 +4807,9 @@ void advManager::dispatchEvent(hero* currentHero, NewmapCell* cell, type_point p
         normalDialog((*g_adventureEventText)[
                          ADV_EVENT_TEXT_THIEVES_DEN],
                      1, -1, -1, -1, 0, -1, 0, -1, 0, -1, 0);
+#ifdef HOMM3_SERVER
+        if (Port::Authority::active()) { Port::Authority::guildEncounter(currentHero->m_owner, true); break; }
+#endif
         TThievesGuildWindow* guildWindow =
             new TThievesGuildWindow(99);
         if (!guildWindow)
@@ -4824,6 +4865,12 @@ void advManager::dispatchEvent(hero* currentHero, NewmapCell* cell, type_point p
         break;
     }
     case UNIVERSITY:
+#ifdef HOMM3_SERVER
+        if (Port::Authority::active() && humanPlayer) {
+            Port::Authority::universityEncounter(*currentHero,*cell->getUniversity());
+            g_game->setInfoFlag(UniversityInfo,g_netLocalGamePos);break;
+        }
+#endif
         if (!humanPlayer || g_goSolo) {
             aiVisitUniversity(currentHero,
                                 cell->getUniversity());
@@ -4852,6 +4899,13 @@ void advManager::dispatchEvent(hero* currentHero, NewmapCell* cell, type_point p
             if (g_windowManager->m_dialogReturn != DIALOG_RETURN_ACCEPT)
                 break;
             short quantity = 4000;
+#ifdef HOMM3_SERVER
+            if (Port::Authority::active()) {
+                const int creatures[4]={CREATURE_BALLISTA,CREATURE_FIRST_AID_TENT,CREATURE_AMMO_CART,-1};
+                short* amounts[4]={&quantity,&quantity,&quantity,0};
+                Port::Authority::recruitEncounter(*currentHero,creatures,amounts,false,true);break;
+            }
+#endif
             recruitUnit* unitRecruiter = new recruitUnit(
                 currentHero, CREATURE_BALLISTA, &quantity,
                 CREATURE_FIRST_AID_TENT, &quantity,
@@ -4891,23 +4945,26 @@ DC_ADDRESS(0x099abc, 0xf0)
 MAC_ADDRESS(0x0b7b28, 0x194)
 void advManager::doEvent(NewmapCell* eventCell, type_point point)
 {
+    if (Port::Fast::nativeUI()) { Port::Fast::unavailable(); return; }
     hero* currentHero = g_game->getCurrHero();
 
     reseed(0, 0);
     eventSound(eventCell);
     dispatchEvent(currentHero, eventCell, point, 1);
 
+#ifndef HOMM3_SERVER
     updateRadar(1, 1, 0, 0, 0);
-    m_advWindow->updateHeroLocators(-1, 1, 0);
-    m_advWindow->updateTownLocators(-1, 1, 0);
+    { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 0); }
+    { if (m_advWindow) m_advWindow->updateTownLocators(-1, 1, 0); }
     m_advWindow->updateQuestLogButton(1);
     m_advWindow->updateSpellButton(currentHero);
     m_advWindow->updateSleepButton(currentHero);
     updBottomView(1, 1, 1);
-    m_advWindow->updateResourceDisplay(1, 1);
+    { if (m_advWindow) m_advWindow->updateResourceDisplay(1, 1); }
 
     if (!g_soundManager->m_mp3Playing)
         g_soundManager->resumeStream();
+#endif
     if (g_game->m_mapHeader.m_victoryCondition.checkForTotalCreatures())
         checkEndGame(0);
     if (g_game->m_mapHeader.m_victoryCondition.checkForTotalResources())
@@ -4952,7 +5009,7 @@ void advManager::eraseObj(NewmapCell* thisCell, type_point point,
                 continue;
             NewmapCell* cell = m_fullMap->cell(object->m_x - ix,
                                              object->m_y - iy, object->m_z);
-            for (NewmapCell::TObjectCell* entry = cell->m_objects.begin();
+            for (auto entry = cell->m_objects.begin();
                  entry != cell->m_objects.end(); entry++) {
                 if (entry->m_objectIndex == objectIndex) {
                     cell->m_objects.erase(entry);
@@ -4977,6 +5034,9 @@ DC_ADDRESS(0x099d98, 0x118)
 MAC_ADDRESS(0x0b7eec, 0x164)
 void advManager::heroSwap(hero* leftHero, hero* rightHero)
 {
+#ifdef HOMM3_SERVER
+    if (Port::Authority::active()) { Port::Authority::heroExchange(*leftHero,*rightHero); return; }
+#endif
     swapManager* manager = new swapManager(leftHero, rightHero);
     if (!manager)
         memError();
@@ -5018,7 +5078,7 @@ void advManager::townEvent(NewmapCell* cell, type_point point,
         }
         if (humanPlayer)
             thisTown->view(0);
-        else
+        else if (!Port::Fast::executing() || !g_game->isHuman(g_netLocalGamePos))
             aiEnterTown(currentHero, thisTown);
     } else if (!thisTown->getArmy().hasCreatures()
                && (thisTown->m_visitingHeroId < 0
@@ -5035,8 +5095,8 @@ void advManager::townEvent(NewmapCell* cell, type_point point,
         if (g_gameOver)
             return;
         updateRadar(1, 1, 0, 0, 0);
-        m_advWindow->updateHeroLocators(-1, 1, 1);
-        m_advWindow->updateTownLocators(-1, 1, 1);
+        { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
+        { if (m_advWindow) m_advWindow->updateTownLocators(-1, 1, 1); }
         if (g_game->m_mapHeader.m_victoryCondition
                 .checkForArtifactTransportWin(currentHero, point))
         {
@@ -5045,7 +5105,7 @@ void advManager::townEvent(NewmapCell* cell, type_point point,
         }
         if (humanPlayer)
             thisTown->view(0);
-        else
+        else if (!Port::Fast::executing() || !g_game->isHuman(g_netLocalGamePos))
             aiEnterTown(currentHero, thisTown);
     } else {
         hero* defender;
@@ -5083,8 +5143,8 @@ void advManager::townEvent(NewmapCell* cell, type_point point,
             if (g_gameOver)
                 return;
             updateRadar(1, 1, 0, 0, 0);
-            m_advWindow->updateHeroLocators(-1, 1, 1);
-            m_advWindow->updateTownLocators(-1, 1, 1);
+            { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
+            { if (m_advWindow) m_advWindow->updateTownLocators(-1, 1, 1); }
         }
     }
 
@@ -5252,6 +5312,12 @@ DC_ADDRESS(0x09a528, 0x86)
 MAC_ADDRESS(0x0b8914, 0xa8)
 short advManager::recruitEvent(hero* who, TCreatureType creature, short available)
 {
+#ifdef HOMM3_SERVER
+    if (Port::Authority::active() && who->belongsToHuman()) {
+        const int creatures[4]={creature,-1,-1,-1};short* amounts[4]={&available,0,0,0};
+        Port::Authority::recruitEncounter(*who,creatures,amounts);return available;
+    }
+#endif
     if (who->belongsToHuman()) {
         recruitUnit dialog(&who->m_army, 0, creature, &available,
                            CREATURE_NONE, 0, CREATURE_NONE, 0,
@@ -5306,6 +5372,13 @@ void advManager::generatorEvent(hero* who, NewmapCell* eventCell, type_point poi
             return;
     }
 
+#ifdef HOMM3_SERVER
+    if (Port::Authority::active() && who->belongsToHuman()) {
+        const int creatures[4]={currentGenerator.m_type[0],currentGenerator.m_type[1],currentGenerator.m_type[2],currentGenerator.m_type[3]};
+        short* amounts[4]={&currentGenerator.m_population[0],&currentGenerator.m_population[1],&currentGenerator.m_population[2],&currentGenerator.m_population[3]};
+        Port::Authority::recruitEncounter(*who,creatures,amounts,currentGenerator.getOwner()!=g_netLocalGamePos&&currentGenerator.getOwner()>=0);return;
+    }
+#endif
     recruitUnit* manager = new recruitUnit(&who->m_army, 0,
         currentGenerator.m_type[0], &currentGenerator.m_population[0],
         currentGenerator.m_type[1], &currentGenerator.m_population[1],
@@ -5691,7 +5764,9 @@ void advManager::heroLoses(hero* who, int vanishSound)
     fizzleCenter(vanishSound);
 
     updateRadar(1, 1, 0, 0, 0);
-    m_advWindow->updateHeroLocators(-1, 1, 1);
+#ifndef HOMM3_SERVER
+    { if (m_advWindow) m_advWindow->updateHeroLocators(-1, 1, 1); }
+#endif
     if (g_game->m_mapHeader.m_lossCondition.heroKilled(who)) {
         g_game->m_mapHeader.m_lossCondition.m_playerLoser = owner;
         checkEndGame(0);
@@ -5737,6 +5812,15 @@ DC_ADDRESS(0x09b564, 0x10c)
 MAC_ADDRESS(0x0ba25c, 0x10c)
 void advManager::fizzleCenter(int whichSound)
 {
+#ifdef HOMM3_SERVER
+    if (Port::Authority::active()) {
+        if(g_currentPlayer && g_currentPlayer->isHuman()){
+            if(whichSound==FIZZLE_SOUND_KILL_FADE)Port::Authority::adventureSound("killfade.82M");
+            else if(whichSound==FIZZLE_SOUND_PICKUP){char name[32];std::snprintf(name,sizeof(name),"pickup%02d.82M",random(1,7));Port::Authority::adventureSound(name);}
+        }
+        return;
+    }
+#endif
     if (!g_completeDrawEnabled)
         return;
     switch (whichSound) {
@@ -6064,7 +6148,9 @@ int advManager::doCombat(type_point point, hero* leftHero, armyGroup* leftArmyGr
     if (g_goSolo && g_goSoloTest) {
         replay = 1;
     }
-    if (!rightHuman && !leftHuman && !replay) {
+    // Ordinary AI-versus-AI keeps the original quick resolution policy.
+    // Human battles reach the authoritative manual loop below.
+    if (Port::Fast::executing() || (!rightHuman && !leftHuman && !replay)) {
         int winner;
         NewmapCell* target = g_game->getCell(point);
         if (aiQuickCombat(leftHero, rightHero, *rightArmyGroup, rightTown,
@@ -6090,6 +6176,22 @@ int advManager::doCombat(type_point point, hero* leftHero, armyGroup* leftArmyGr
     int savePlayer = g_netLocalGamePos;
     int saveShowIt = g_completeDrawEnabled;
     g_adventureCombatActive = 1;
+
+#ifdef HOMM3_SERVER
+    if (Port::Authority::active()) {
+        // Seed is internal; no legacy network combat init/result packet enters here.
+        g_combatManager->setupCombat(point, leftHero, leftArmyGroup, rightPlayer,
+            rightTown, rightHero, rightArmyGroup, point.m_x, point.m_y, seed, alternateLayout);
+        if (!leftHuman)
+            aiArrangeArmyForCombat(leftHero, rightHero, *rightArmyGroup);
+        if (!rightHuman && rightHero && (!leftHero ||
+            rightHero->getSecondarySkill(eSecSkillBattleTactics) >
+            leftHero->getSecondarySkill(eSecSkillBattleTactics)))
+            aiArrangeArmyForCombat(rightHero, leftHero, *leftArmyGroup);
+        Port::Authority::runCombat(*g_combatManager);
+        goto authorityCombatCompleted;
+    }
+#endif
 
     if (leftPlayer >= 0 && rightPlayer >= 0
         && g_game->isHuman(rightPlayer)) {
@@ -6182,6 +6284,9 @@ int advManager::doCombat(type_point point, hero* leftHero, armyGroup* leftArmyGr
     g_mouseManager->setPointer(0, mouseManager::ADVENTURE_SET);
     g_mouseManager->showPointer(1);
     g_adventureGraphicsPreserveMode = 0;
+#ifdef HOMM3_SERVER
+authorityCombatCompleted:
+#endif
     if (leftHero) {
         leftHero->checkLevel();
     }

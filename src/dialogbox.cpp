@@ -36,7 +36,7 @@ DC_ADDRESS(0x0817f8, 0x62)
 MAC_ADDRESS(0x0a15c0, 0xac)
 TDialogBox::~TDialogBox()
 {
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }
@@ -133,7 +133,7 @@ unsigned char TDialogBox::setup(int winX, int winY,
     }
 
     m_endId = id - 1;
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else

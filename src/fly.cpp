@@ -1,3 +1,4 @@
+#include "combat_presentation.h"
 // Seven DC procedures: five retained Complete bodies and two canonical
 // findFlyerAttackCell overloads expanded in validFlight. Retail validFlight
 // starts at 0x4b46c0; the old 0x4b4420 correlation is a bitset initializer.
@@ -133,6 +134,9 @@ DC_ADDRESS(0x0a1590, 0x40e)
 MAC_ADDRESS(0x0c82a0, 0x5dc)
 int army::fly(int destIndex)
 {
+#ifdef HOMM3_SERVER
+    Port::Authority::recordCombatVisual(Port::Authority::VisualFly,this,destIndex);
+#endif
     unsigned char turn;
     int sourceX = combatManager::gridX(m_gridIndex);
     int destX = combatManager::gridX(destIndex);
@@ -175,8 +179,12 @@ int army::fly(int destIndex)
     float stepY = static_cast<float>(spanY)
                   / static_cast<float>(ttlLoops);
     int loop;
+#ifdef HOMM3_SERVER
+    // Grid occupancy is simulation state, even when the flight animation is skipped.
+    g_combatManager->removeArmyFromGrid(*this);
+#endif
 
-    if (!g_combatManager->isQuickCombat()) {
+    if (!g_combatManager->suppressCombatPresentation()) {
         m_isMoving = 1;
         playSample(PRE_WALK_SAMPLE);
         playAnimation(20, -1, 0);
@@ -228,7 +236,7 @@ int army::fly(int destIndex)
     g_combatManager->placeArmyInGrid(*this, destIndex);
     m_gridIndex = destIndex;
 
-    if (!g_combatManager->isQuickCombat()) {
+    if (!g_combatManager->suppressCombatPresentation()) {
         playSample(POST_WALK_SAMPLE);
         g_soundManager->stopSample(m_armySample[WALK_SAMPLE]->memSample.memHSample);
         playAnimation(21, -1, 0);
@@ -283,7 +291,7 @@ int army::teleport(int destIndex)
     if (turn)
         this->turn(1);
 
-    if (!g_combatManager->isQuickCombat()) {
+    if (!g_combatManager->suppressCombatPresentation()) {
         playSample(PRE_WALK_SAMPLE);
         playAnimation(20, -1, 0);
     }
@@ -292,12 +300,12 @@ int army::teleport(int destIndex)
     g_combatManager->placeArmyInGrid(*this, destIndex);
     m_gridIndex = destIndex;
 
-    if (!g_combatManager->isQuickCombat()) {
+    if (!g_combatManager->suppressCombatPresentation()) {
         playSample(POST_WALK_SAMPLE);
         playAnimation(21, -1, 0);
     }
 
-    if (!g_combatManager->isQuickCombat())
+    if (!g_combatManager->suppressCombatPresentation())
         playAnimation(2, 1, 0);
 
     cancelSpellType(0);

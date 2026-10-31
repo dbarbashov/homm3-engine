@@ -12,13 +12,13 @@ args=parser.parse_args()
 out=ROOT/'build'/(f'cpp-{args.target}'+('-asan' if args.sanitize else ''));out.mkdir(exist_ok=True,parents=True)
 compiler='clang++' if args.target=='native' else str(ROOT/'.local/emsdk/upstream/emscripten/em++')
 flags=['-std=c++14','-fms-extensions','-DHOMM3_PORT','-Wno-writable-strings','-Wno-ignored-attributes','-Wno-unknown-pragmas','-Wno-deprecated-declarations','-Wno-non-c-typedef-for-linkage','-Wno-invalid-constexpr','-Wno-unused-value','-Wno-out-of-line-declaration','-Wno-address-of-temporary','-Wno-dangling-else','-ferror-limit=50','-O1','-ffunction-sections','-fdata-sections','-include',str(ROOT/'port/compat/prefix.h')]
-for inc in ['port/compat','build/portable-source/include']:
+for inc in ['port/compat','include']:
     flags+=['-I'+str(ROOT/inc)]
 if args.sanitize:flags+=['-g','-fsanitize=address','-fno-omit-frame-pointer']
 if args.target=='web':flags+=['-sUSE_ZLIB=1','-fexceptions']
 
 def compile_unit(unit):
-    source=ROOT/'build/portable-source/src'/f'{unit}.cpp'
+    source=ROOT/'src'/f'{unit}.cpp'
     cmd=[compiler,*flags,*(['-fsyntax-only'] if args.syntax else ['-c']),str(source),'-o',str(out/f'{unit}.o')]
     run=subprocess.run(cmd,cwd=ROOT,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
     (out/f'{unit}.log').write_text(run.stdout)

@@ -1996,6 +1996,9 @@ DC_ADDRESS(0x027138, 0xc8)
 MAC_ADDRESS(0x0245e4, 0x110)  // anchor-callee
 void combatManager::doCompAI(int whichGroup)
 {
+#ifdef HOMM3_HARNESS
+    Port::Harness::decision("combat-ai",m_currentSide,m_actingSlot);
+#endif
     m_lastMovedArmy = 0;
     turnOffHighlighter(1);
     army* currentArmy = getCurrentArmy();

@@ -1806,6 +1806,7 @@ VA(0x00572d60, 0xE0)
 MAC_ADDRESS(0x16943c, 0xc8)
 std::string TQuestGuard::getQuestLogText()
 {
+    if(Port::AuthorityQuestClient::enabled())return Port::AuthorityQuestClient::text(this,2);
     return formatString(
         m_quest->questTexts().m_text4.c_str(),
         m_quest->getRequirementText().c_str());
@@ -1815,6 +1816,7 @@ VA(0x00572e40, 0x1FF)
 MAC_ADDRESS(0x169504, 0x110)
 std::string TQuestGuard::getQuickInfoText(int player)
 {
+    if(Port::AuthorityQuestClient::enabled())return Port::AuthorityQuestClient::text(this,0);
     std::string text;
     text = g_quickViewText[215];
 
@@ -1830,6 +1832,7 @@ VA(0x00573040, 0x1FF)
 MAC_ADDRESS(0x169614, 0x110)
 std::string TQuestGuard::getRolloverText(int player)
 {
+    if(Port::AuthorityQuestClient::enabled())return Port::AuthorityQuestClient::text(this,1);
     std::string text;
     text = g_quickViewText[215];
 
@@ -2351,6 +2354,7 @@ VA(0x00574070, 0x138)
 MAC_ADDRESS(0x16a6c4, 0x108)  // UpdateQuestLocator caller; HD twin 0x574440
 std::string TSeerHut::getSeerLogText()
 {
+    if(Port::AuthorityQuestClient::enabled())return Port::AuthorityQuestClient::text(this,2);
     std::string logFormat =
         m_quest->questTexts().m_text4;
     return formatString(
@@ -2365,6 +2369,7 @@ VA(0x005741b0, 0x22C)
 MAC_ADDRESS(0x16a7cc, 0x150)
 std::string TSeerHut::getRolloverText(int player) const
 {
+    if(Port::AuthorityQuestClient::enabled())return Port::AuthorityQuestClient::text(this,1);
     if (!playerHasInfo(static_cast<unsigned char>(player)))
         return g_quickViewText[83];
 
@@ -2385,6 +2390,7 @@ VA(0x005743e0, 0x22C)
 MAC_ADDRESS(0x16a91c, 0x150)
 std::string TSeerHut::getQuickInfoText(int player) const
 {
+    if(Port::AuthorityQuestClient::enabled())return Port::AuthorityQuestClient::text(this,0);
     if (!playerHasInfo(static_cast<unsigned char>(player)))
         return g_quickViewText[83];
 

@@ -3,6 +3,7 @@
 #define HOMM3_SEERHUT_H
 
 #include "va.h"
+#include "authority_quest_client.h"
 
 #include <string>
 #include <vector>
@@ -53,6 +54,7 @@ public:
     bool questActiveforPlayer(
         const unsigned char playerNum) const
     {
+        if(Port::AuthorityQuestClient::enabled())return Port::AuthorityQuestClient::active(this,playerNum);
         return m_quest
             && m_quest->questTexts().m_text4.length()
             && playerHasInfo(playerNum)
@@ -219,6 +221,7 @@ public:
     bool questActiveforPlayer(
         const unsigned char playerNum) const
     {
+        if(Port::AuthorityQuestClient::enabled())return Port::AuthorityQuestClient::active(this,playerNum);
         return m_quest
             && m_quest->questTexts().m_text4.length()
             && playerHasInfo(playerNum)

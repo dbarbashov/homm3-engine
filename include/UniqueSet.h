@@ -16,15 +16,15 @@
 template <class T>
 class TUniqueSet {
     typedef std::map<T, size_t> TMap;
-    typedef TMap::value_type TMapItem;
+    typedef typename TMap::value_type TMapItem;
 
 public:
     MAC_ADDRESS(0x2268d0, 0xc4)
     size_t add(const T& item)
     {
-        std::map<T, size_t>::iterator pItem = _m_map.find(item);
+        typename std::map<T, size_t>::iterator pItem = _m_map.find(item);
         if (pItem == _m_map.end()) {
-            std::pair<std::map<T, size_t>::iterator, bool> insResult =
+            std::pair<typename std::map<T, size_t>::iterator, bool> insResult =
                 _m_map.insert(TMapItem(item, _m_apItem.size()));
             assert(insResult.second);
             pItem = insResult.first;
@@ -42,7 +42,7 @@ public:
 
 private:
     std::map<T, size_t> _m_map;
-    std::vector<std::map<T, size_t>::const_iterator> _m_apItem;
+    std::vector<typename std::map<T, size_t>::const_iterator> _m_apItem;
 };
 
 #endif  /* HOMM3_UNIQUESET_H */

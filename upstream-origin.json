@@ -1,0 +1,24 @@
+{
+  "repository": "https://github.com/sushi-shi/homm3-decomp",
+  "branch": "decomp-complete-4.0",
+  "commit": "e12906accf96c2662b1abadbc49ddc111991bf21",
+  "license": "CC0-1.0",
+  "components": [
+    "src: recovered units listed in port/sources.json and port/game-sources.json",
+    "include: recovered headers"
+  ],
+  "reference": [
+    "src/advmgr.cpp",
+    "src/hero.cpp"
+  ],
+  "importCommit": "7ddd349df58e52b5ab569c6f778602a60436e3d4",
+  "priorPortCommit": "46b09b3",
+  "derivedFiles": [
+    "src/platform_helpers.cpp",
+    "src/portable_helpers.cpp",
+    "src/sound_helpers.cpp",
+    "include/port_cursor_tables.h",
+    "include/port_video_descriptors.h"
+  ],
+  "purpose": "Provenance only; builds use tracked src/ and include/ directly."
+}

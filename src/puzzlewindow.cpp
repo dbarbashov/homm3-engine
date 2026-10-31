@@ -158,7 +158,7 @@ TPuzzleWindow::TPuzzleWindow(int puzzlenum)
     accept->setHotkey(1);
     m_widgets.push_back(accept);
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             addWidget(*it, -1);
         else
@@ -185,7 +185,7 @@ TPuzzleWindow::~TPuzzleWindow()
     for (int i = 0; i < TPuzzleWindow::PUZZLE_PIECE_COUNT; ++i)
         m_puzzlePieces[i]->dispose();
 
-    for (widget** it = m_widgets.begin(); it != m_widgets.end(); ++it) {
+    for (auto it = m_widgets.begin(); it != m_widgets.end(); ++it) {
         if (*it)
             delete *it;
     }

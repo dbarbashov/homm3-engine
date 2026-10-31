@@ -1,3 +1,4 @@
+#include "frontend_bridge.h"
 // campaign.cpp - the Complete-only campaign-set chooser: the five "CSS"
 // plates (Shadow of Death, Armageddon's Blade, Restoration of Erathia, the
 // custom-campaign chooser and Exit) that kb.cpp's DoCampaignWindow opens
@@ -241,7 +242,7 @@ void TCampaignSetWindow::doModal()
 {
     g_soundManager->startMP3(
         DATA_COMPGEN(0x00660e08, campaignSetMusic, "MainMenu"), 0, 1);
-    g_windowManager->doDialog(this, heroWindowHandler, 0);
+    Port::runDialog(this, heroWindowHandler, 0, "campaign-sets");
 }
 
 VA(0x004574d0, 0xC4)

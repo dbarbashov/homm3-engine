@@ -2,7 +2,7 @@
 from pathlib import Path
 import argparse,re,subprocess
 ROOT=Path(__file__).resolve().parents[1]
-p=argparse.ArgumentParser();p.add_argument('--source',type=Path,default=ROOT/'build/portable-source/src/singleselectionwindow.cpp');args=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--source',type=Path,default=ROOT/'src/singleselectionwindow.cpp');args=p.parse_args()
 s=args.source.read_text();table=re.search(r'static const int g_turnDurationMinutes\[10\] = \{.*?\};',s,re.S).group();start=s.index('static inline void updateTurnDuration()');end=s.index('\n}',start)+2;body=s[start:end]
 out=ROOT/'build/turn-duration-regression';out.mkdir(parents=True,exist_ok=True)
 source='''#include <cassert>

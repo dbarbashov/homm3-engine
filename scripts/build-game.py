@@ -12,10 +12,9 @@ m=json.loads((ROOT/'port/game-sources.json').read_text())
 subprocess.run([sys.executable,'scripts/build-video.py','--target',a.target],cwd=ROOT,check=True)
 video=ROOT/'build'/f'ffmpeg-{a.target}'/'install'
 if not a.no_compile:
-    subprocess.run([sys.executable,'scripts/prepare-port.py'],cwd=ROOT,check=True)
     subprocess.run([sys.executable,'scripts/compile-port.py','--target',a.target,*m['core']],cwd=ROOT,check=True)
 compiler='clang++' if a.target=='native' else str(ROOT/'.local/emsdk/upstream/emscripten/em++')
-flags=['-std=c++14','-DHOMM3_PORT','-DHOMM3_FULL_GAME','-include','port/compat/prefix.h','-Iport/compat','-Ibuild/portable-source/include','-O1','-g','-Wno-writable-strings','-Wno-deprecated-declarations']
+flags=['-std=c++14','-DHOMM3_PORT','-DHOMM3_FULL_GAME','-include','port/compat/prefix.h','-Iport/compat','-Iinclude','-O1','-g','-Wno-writable-strings','-Wno-deprecated-declarations']
 if a.target=='native':
     flags+=shlex.split(subprocess.check_output(['sdl2-config','--cflags','--libs'],text=True))+['-Wl,-dead_strip','-lz']
     output='build/game-probe' if a.probe else 'build/homm3-game'
