@@ -1002,7 +1002,10 @@ public:
     // first cast into an enum.
     union {
         TAdventureObjectType m_type;  // +0x1e
-        unsigned long m_typeValue;
+        // This overlay is a DWORD even on LP64 hosts. An eight-byte long
+        // leaves its upper half undefined whenever m_type is assigned, so
+        // empty-water checks can depend on allocator contents.
+        unsigned int m_typeValue;
     };
     short m_objectIndex;  // +0x22
     short m_objectTypeIndex;  // +0x24

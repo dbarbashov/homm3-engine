@@ -16,6 +16,11 @@ ROOT=Path(__file__).resolve().parents[2]
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--fixture',type=Path,required=True)
 p.add_argument('--out',type=Path,required=True)
+p.add_argument('--runtime',type=Path,default=ROOT.parent/'homm3-web/.local/runtime')
+p.add_argument('--site-root',type=Path,default=ROOT.parent/'homm3-web')
+p.add_argument('--relay',type=Path,default=ROOT.parent/'homm3-lobby/target/debug/homm3-lobby')
+p.add_argument('--worker',type=Path,default=ROOT/'build/cmake-parity-native/homm3-worker')
+p.add_argument('--web',type=Path,default=ROOT/'build/cmake-parity-web/web')
 p.add_argument('--quick',action='store_true',help='Combat + reference repeat + seeded faults; omit long town/week scenarios')
 args=p.parse_args();args.out=args.out.resolve();args.fixture=args.fixture.resolve()
 if args.out.exists() and any(args.out.iterdir()):raise SystemExit('Choose a new output directory to preserve prior evidence')
@@ -27,10 +32,10 @@ for suite in suites+['repeat-'+name for name in suites]:
     out=args.out/suite
     command=[sys.executable,str(ROOT/'scripts/parity/run.py'),'--fixture',str(args.fixture),'--out',str(out)]
     command+=['--scenario',str(ROOT/'scripts/parity/scenarios/combat.json')] if scenario=='combat' else ['--suite',scenario,'--virtual-ms','512' if scenario=='turns' else '60000']
-    if repeating:command+=['--modes','legacy']
+    for key in ['runtime','site_root','relay','worker','web']:command += ['--'+key.replace('_','-'),str(getattr(args,key).resolve())]
     run=subprocess.run(command,cwd=ROOT)
     traces={mode:json.loads((out/mode/'trace.json').read_text()) for mode in ['legacy','authority'] if (out/mode/'trace.json').exists()}
-    complete=len(traces)==(1 if repeating else 2) and all(not t.get('failure') and not t.get('overflow') for t in traces.values())
+    complete=len(traces)==2 and all(not t.get('failure') and not t.get('overflow') for t in traces.values())
     summary['harnessPassed'] &= complete
     result=json.loads((out/'comparison.json').read_text()) if (out/'comparison.json').exists() else {'passed':False}
     summary['runs'][suite]={'complete':complete,'exitCode':run.returncode,'parity':result['passed'],'report':suite+'/index.html'}
@@ -46,11 +51,13 @@ for suite in suites+['repeat-'+name for name in suites]:
 try:
     summary['repeatability']={}
     for suite in suites:
-        reference=json.loads((args.out/suite/'legacy/trace.json').read_text());repeated=json.loads((args.out/('repeat-'+suite)/'legacy/trace.json').read_text())
-        repeat=compare(reference,repeated)
-        (args.out/(suite+'-repeatability.json')).write_text(json.dumps(repeat,indent=2))
-        summary['repeatability'][suite]={'passed':repeat['passed'],'unstableChannels':sorted({f['channel'] for f in repeat['failures']})}
-        summary['harnessPassed'] &= repeat['passed']
+        summary['repeatability'][suite]={}
+        for mode in ['legacy','authority']:
+            reference=json.loads((args.out/suite/mode/'trace.json').read_text());repeated=json.loads((args.out/('repeat-'+suite)/mode/'trace.json').read_text())
+            repeat=compare(reference,repeated)
+            (args.out/(suite+'-'+mode+'-repeatability.json')).write_text(json.dumps(repeat,indent=2))
+            summary['repeatability'][suite][mode]={'passed':repeat['passed'],'unstableChannels':sorted({f['channel'] for f in repeat['failures']})}
+            summary['harnessPassed'] &= repeat['passed']
     faults=check(json.loads((args.out/'combat/legacy/trace.json').read_text()))
     (args.out/'seeded-faults.json').write_text(json.dumps(faults,indent=2))
     summary['seededFaults']=faults['passed'];summary['harnessPassed'] &= faults['passed']

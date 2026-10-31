@@ -13,6 +13,7 @@
 #include "soundmgr.h"
 #include "winmgr.h"
 #include "fast_game.h"
+#include "inputmgr.h"
 #include "recruit.h"
 #include <iostream>
 #include <sstream>
@@ -20,6 +21,11 @@
 bool portableLoadGameData();void portableInitVars();void aiInitialize();void sRand(int);
 namespace {void check(bool value,const char* why){if(!value)throw std::runtime_error(why);}}
 int main(int argc,char** argv){try{
+    static_assert(sizeof(NewmapCell().m_typeValue)==4,"Map object type must be a DWORD");
+    NewmapCell emptyWater;emptyWater.m_typeValue=~0U;emptyWater.m_type=NOTHING;
+    check(emptyWater.m_typeValue==0,"empty map type clears the entire overlay");
+    inputManager unopenedInput;
+    check(unopenedInput.m_head==0&&unopenedInput.m_tail==0,"unopened input ring is valid");
     if(argc!=3||chdir(argv[1]))return 2;initMainClasses();sRand(42);g_noSound=1;
     g_config.m_soundVolume=0;g_config.m_musicVolume=0;g_config.m_blackoutComputer=1;
     ResourceManager::SetPath("data/");ResourceManager::SetPixelFormat(0xf800,0x07e0,0x001f);

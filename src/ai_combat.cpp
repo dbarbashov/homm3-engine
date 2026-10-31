@@ -1243,6 +1243,8 @@ void createSkeletons(const hero* currentHero, const armyGroup* deadArmy, armyGro
     for (long i = 0; i < armyGroup::ARMY_GROUP_SLOT_COUNT; i++) {
         long creature = deadArmy->m_armies[i];
         long count = deadArmy->m_numTroops[i];
+        if (creature == CREATURE_NONE || count <= 0)
+            continue;
         long hitPoints = akCreatureTypeTraits[creature].hitPoints;
         if (hitPoints > skeletonHitPoints)
             hitPoints = skeletonHitPoints;

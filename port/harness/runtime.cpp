@@ -52,6 +52,7 @@ std::string quoteBytes(const std::string& value){
 void interfaceSnapshot(){
 #ifdef __EMSCRIPTEN__
     if(g_game&&g_advManager&&g_game->getLocalPlayer()){
+        EM_ASM({window.homm3Harness.presentationClock=({adventureFrame:$0,adventureTimer:$1});},g_advManager->m_animCtr,g_timers[GLOBAL_ADVENTURE_ANIMATION_TIMER_SLOT]);
         auto* local=g_game->getLocalPlayer();
         EM_ASM({window.homm3AdventureState=({hero:$0,town:$1,mobile:!!$2,cursor:!!$3,heroes:[]});},int(local->m_currHeroId),local->m_currTownId,g_advManager->m_curHeroMobile,g_advManager->m_drawCursor);
         EM_ASM({window.homm3AdventureState.bottom=({type:$0,resource:$1,quantity:$2,text:new TextDecoder('windows-1251').decode(HEAPU8.subarray($3,$3+$4))});},g_advManager->m_bottomViewType,g_advManager->m_bottomViewResourceType,g_advManager->m_bottomViewResourceQuantity,g_advManager->m_bottomViewMessage.data(),g_advManager->m_bottomViewMessage.size());
@@ -64,7 +65,9 @@ void interfaceSnapshot(){
             // exposing diagnostic arrays to JS typed-array views.
             int army[7],counts[7];for(int i=0;i<7;++i){army[i]=own.m_army.m_armies[i];counts[i]=own.m_army.m_numTroops[i];}
             EM_ASM({window.homm3AdventureState.heroes.push({id:$0,x:$1,y:$2,z:$3,onMap:!!$4,army:Array.from(HEAP32.subarray($5>>2,($5>>2)+7)),counts:Array.from(HEAP32.subarray($6>>2,($6>>2)+7))});},int(own.m_id),int(own.m_x),int(own.m_y),int(own.m_z),cell->m_type==HERO&&cell->m_extraInfo==own.m_id,army,counts);
-            EM_ASM({window.homm3AdventureState.heroes.at(-1).target=([$0,$1,$2]);},own.m_pathTargetX,own.m_pathTargetY,own.m_pathTargetZ);
+            // With no X/Y destination, the retained plane byte is not a route.
+            const bool target=own.m_pathTargetX>=0&&own.m_pathTargetY>=0;
+            EM_ASM({window.homm3AdventureState.heroes.at(-1).target=([$0,$1,$2]);},target?own.m_pathTargetX:-1,target?own.m_pathTargetY:-1,target?own.m_pathTargetZ:-1);
         }
     }
     if(g_combatActive&&g_combatManager){
@@ -127,6 +130,9 @@ std::string world(bool initial) {
             s<<"]}";
         }
     }
+    if(initial){s<<"],\"objectAnimations\":[";bool separator=false;for(const auto& object:g_game->m_worldMap.m_objects){s<<(separator?",":"")<<int(object.m_animationOffset);separator=true;}}
+    if(initial){s<<"],\"objects\":[";bool separator=false;for(const auto& o:g_game->m_worldMap.m_objects){s<<(separator?",":"")<<'['<<int(o.m_x)<<','<<int(o.m_y)<<','<<int(o.m_z)<<','<<o.m_typeIndex<<']';separator=true;}}
+    if(initial){s<<"],\"objectTypes\":[";bool separator=false;for(const auto& o:g_game->m_worldMap.m_objectTypes){s<<(separator?",":"")<<quoteBytes(o.m_imageName);separator=true;}}
     if(initial){s<<"],\"buildingRules\":[";for(int faction=0;faction<9;++faction)for(int id=0;id<44;++id)s<<(faction||id?",":"")<<town::s_includedBuildings[faction][id];}
     s<<"],\"heroes\":[";bool comma=false;
     for(int i=0;i<game::HERO_COUNT;++i){const auto& h=g_game->m_heroes[i];if(h.m_owner<0||h.m_owner>=8)continue;
@@ -146,7 +152,7 @@ std::string world(bool initial) {
     for(auto& t:g_game->m_towns){s<<(comma?",":"")<<"{\"id\":"<<int(t.m_id)<<",\"type\":"<<int(t.m_type)<<",\"storedBuildings\":\""<<storedBuildings(t)<<"\",\"owner\":"<<int(t.m_owner)<<",\"visitor\":"<<t.m_visitingHeroId<<",\"garrisonHero\":"<<t.m_garrisonHeroId<<",\"builtToday\":"<<int(t.m_builtThisTurn)<<",\"population\":[";for(int j=0;j<14;++j)s<<(j?",":"")<<t.m_population[j];
       s<<"],\"buildings\":\""<<t.getBuildingMask()<<"\",\"army\":[";
       for(int j=0;j<7;++j)s<<(j?",":"")<<'['<<t.m_garrison.m_armies[j]<<','<<t.m_garrison.m_numTroops[j]<<']';
-      s<<"],\"guild\":[";for(int level=0;level<5;++level)for(int j=0;j<6;++j)s<<(level||j?",":"")<<int(t.m_mageGuildSpells[level][j]);
+      s<<"],\"guild\":[";for(int level=0;level<5;++level)for(int j=0;j<6;++j)s<<(level||j?",":"")<<int(j<6-level?t.m_mageGuildSpells[level][j]:SPELL_NONE);
       s<<"]}";comma=true;}
     s<<"],\"cells\":[";comma=false;
     for(int z=0;z<g_game->getNumMapLevels();++z)for(int y=0;y<g_mapHeight;++y)for(int x=0;x<g_mapWidth;++x){
@@ -177,7 +183,12 @@ void pump(unsigned milliseconds){
     clockMs=EM_ASM_INT({return window.homm3Harness.tick($0,$1);},milliseconds,SDL_GetTicks());
     controlled=EM_ASM_INT({return !!window.homm3Harness.controlled;});
     if(!controlled)emscripten_sleep(8);
-    else if(EM_ASM_INT({return window.homm3Harness.shouldYield();}))parityYield();
+    else if(EM_ASM_INT({return window.homm3Harness.shouldYield();})){
+        parityYield();
+        // An asset/transport wait can finish the suspended quantum in JS.
+        // The resumed C++ continuation must observe that same instant.
+        clockMs=EM_ASM_INT({return window.homm3Harness.t;});
+    }
 #else
     clockMs+=milliseconds;
 #endif
@@ -216,6 +227,10 @@ void arm(){
 #endif
     for(auto& timer:g_timers)timer=clockMs;
     g_advManager->m_animFrame=0;g_advManager->m_animCtr=0;
+    // pollSound can cycle these mutable palettes during real asset startup.
+    // Reset their epoch alongside timers; subsequent original cycles run normally.
+    for(int index:{7,8})if(auto* sprite=g_advManager->m_groundTileset[index])sprite->ResetPalette();
+    for(int index:{1,3,4})if(auto* sprite=g_advManager->m_riverTileset[index])sprite->ResetPalette();
     g_soundManager->stopAllSamples(1);
 }
 void checkpoint(const char* label){
@@ -332,6 +347,11 @@ void exportFixture(const char* path){
     }
 #endif
     TGzFile output(path,"wb6");if(g_game->save(&output)<0)throw std::runtime_error("Cannot export fixture");
+    // GM2 deliberately regenerates cosmetic phases on load. The reference
+    // fixture must retain them, without consuming gameplay RNG to recreate them.
+    std::ofstream animations(std::string(path)+".animation",std::ios::binary);
+    for(const auto& object:g_game->m_worldMap.m_objects)animations.put(char(object.m_animationOffset));
+    if(!animations)throw std::runtime_error("Cannot export animation fixture");
 }
 bool loadFixture(){
     if(loaded)return false;
@@ -344,6 +364,13 @@ bool loadFixture(){
     const int local=g_localGamePos,watch=g_curWatchPlayer;
     unsigned dpids[8];int locals[8];for(int i=0;i<8;++i){dpids[i]=g_game->m_players[i].m_dpid;locals[i]=g_game->m_players[i].m_isLocal;}
     {TGzFile input(path,"rb");if(g_game->load(&input)<0)throw std::runtime_error("Harness save failed to load");}
+    std::ifstream animations(std::string(path)+".animation",std::ios::binary);
+    for(auto& object:g_game->m_worldMap.m_objects){
+        const int value=animations.get();
+        if(value==std::char_traits<char>::eof())throw std::runtime_error("Missing/truncated animation fixture; regenerate it");
+        object.m_animationOffset=static_cast<unsigned char>(value);
+    }
+    if(animations.get()!=std::char_traits<char>::eof())throw std::runtime_error("Animation fixture object count differs");
     for(int i=0;i<8;++i){g_game->m_players[i].m_dpid=dpids[i];g_game->m_players[i].m_isLocal=locals[i];}
     g_localGamePos=local;g_curWatchPlayer=watch;g_mapVisibilityBit=1<<watch;
     g_playerTurn=g_netLocalGamePos;g_currentPlayer=&g_game->m_players[g_netLocalGamePos];

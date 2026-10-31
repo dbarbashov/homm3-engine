@@ -2,7 +2,7 @@
 
 Private, silent, accelerated two-browser testing of the legacy network game
 against the native authoritative worker. Both load the **same original GM2
-file**, with a separate RNG continuation. No screenshots, image recognition or
+file**, with a separate RNG continuation and exact object animation phases. No screenshots, image recognition or
 changes to normal production clocks are required.
 
 ## Run
@@ -29,7 +29,7 @@ python3 scripts/parity/matrix.py --quick --fixture test-results/parity/fixture-c
   --out test-results/parity/matrix
 ```
 
-Omit `--quick` to add adventure/week scenarios and repeat **each** reference.
+Omit `--quick` to add adventure/week scenarios and repeat both modes for **each** scenario.
 `summary.json` separates `harnessPassed` from `parityPassed`, and lists unstable
 channels if A/A fails. Such a run is blocked evidence, not an automatic gameplay
 bug. Choose a new output directory for each matrix run.
@@ -94,6 +94,19 @@ The canonical world observer covers map cells/fog, date/resources, owned heroes
 and their armies/items/spells/skills, towns/buildings/garrisons/population/guild.
 It is not a byte dump of every internal C++ field or a full engine save comparer.
 
+## Fixture schema 2
+
+Regenerate schema-1 fixtures. GM2 loads randomize each map object's animation
+phase, so the same save/RNG alone was insufficient to reproduce pixels.
+`start.gm2.animation` records the original phases byte-for-byte; its checksum
+is part of the manifest. Native reload and both browser lanes validate the
+object count and initial phases. Gameplay RNG continuation is unchanged.
+
+The matrix requires A/A repeatability in **both** modes before treating their
+comparison as valid evidence. An unstable candidate is a harness failure too.
+Each runner owns a separate history directory; `--site-root` identifies the
+browser checkout and no development preview history is reused.
+
 ## Two clocks
 
 Default `--clock virtual` advances the original game timer at pump/poll points.
@@ -129,8 +142,9 @@ supported. The browser scenario starts with two humans on Arrogance; the
 combat fixture pins Conflux/Brissa and Haste. A new map requires its own replay
 and setup. Original assets and generated saves stay outside Git.
 
-Network transport remains real WebSockets/Rust IPC. Long transfer/AI episodes
-can retain scheduling variation; run A/A on a new scenario before using its
+Network transport remains real WebSockets/Rust IPC. The paired combat, adventure
+and fourteen-handoff week scenarios pass A/A in both modes with the coordinated
+clock and transport barrier. Run A/A on each new scenario before using its
 strict frame/timing diff as a regression gate. A timing failure alone is not
 proof of a gameplay bug. No claim of complete feature coverage, mobile parity,
 all spells/campaigns or Internet reconnect is made by these scenarios.
@@ -401,8 +415,8 @@ Virtual transport pausing now includes success-result-before-world ordering;
 receiving the result alone cannot charge a later socket task as gameplay time.
 State receipt releases the clock before presentation so real animations still
 execute. `test-clock.mjs` covers the delayed packet and stale-packet cases.
-Real socket/IPC latency remains recorded separately. Repeated legacy waiting
-seat audio onset may still vary; report it as unstable evidence, not a server
+Real socket/IPC latency remains recorded separately. The repeated legacy waiting-seat audio gate now passes with the coordinated
+clock. If a new scenario is unstable, report that as unstable evidence, not a server
 regression. World/route/pose checks remain independently inspectable.
 
 Protocol notes: the existing visible-cell word is 0 (hidden), 1 (visible), or

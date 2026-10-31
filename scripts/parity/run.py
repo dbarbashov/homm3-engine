@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.request import urlopen
 from playwright.async_api import async_playwright
 from compare import compare, report
+from scheduler import PresentationScheduler
 
 ROOT=Path(__file__).resolve().parents[2]
 
@@ -24,14 +25,14 @@ class Services:
         environment={**os.environ,**env}
         for key in list(environment):
             if key.startswith(('HOMM3_AUTHORITY_','HOMM3_HARNESS_')) and not environment[key]:environment.pop(key)
-        p=subprocess.Popen(command,cwd=ROOT,env=environment,stdout=stream,stderr=subprocess.STDOUT,start_new_session=True);self.processes.append(p)
+        p=subprocess.Popen(command,cwd=self.args.site_root,env=environment,stdout=stream,stderr=subprocess.STDOUT,start_new_session=True);self.processes.append(p)
     async def __aenter__(self):
         try:return await self.start()
         except BaseException:
             await self.__aexit__();raise
     async def start(self):
         relay_port,site_port=free_port(),free_port();out=self.args.out/self.mode;out.mkdir(parents=True,exist_ok=True)
-        env={'LOBBY_BIND':f'127.0.0.1:{relay_port}','HOMM3_METRICS_PORT':'0','HOMM3_WEB_ROOT':str(ROOT/'web')}
+        env={'LOBBY_BIND':f'127.0.0.1:{relay_port}','HOMM3_METRICS_PORT':'0','HOMM3_WEB_ROOT':str(self.args.site_root/'web'),'HOMM3_HISTORY_DIR':str(out/'history')}
         if self.mode=='authority':env.update(HOMM3_AUTHORITY_ENGINE=str(ROOT/'scripts/parity/worker.py'),HOMM3_HARNESS_ENGINE_BINARY=str(self.args.worker),HOMM3_AUTHORITY_RUNTIME=str(self.args.runtime),HOMM3_HARNESS_SAVE=str(self.args.fixture/'start.gm2'),HOMM3_HARNESS_RNG=str(self.fixture['rng']),HOMM3_HARNESS_OUTPUT=str(out),HOMM3_HARNESS_COMBAT_RNG=self.fixture.get('combatRng',''))
         else:
             # No inherited authority configuration may turn the reference into a candidate.
@@ -58,16 +59,17 @@ class Services:
 def validate_fixture(directory):
     data=json.loads((directory/'manifest.json').read_text())
     if data.get('combatRng','msvc-lcg32') not in ['msvc-lcg32','browser-libc']:raise ValueError('Unsupported combat RNG')
-    if data.get('schema')!=1 or data.get('boundary')!='before-first-turn':raise ValueError('Unsupported fixture schema/boundary')
+    if data.get('schema')!=2 or data.get('boundary')!='before-first-turn':raise ValueError('Unsupported fixture schema/boundary')
     if sha(directory/'start.gm2')!=data['sha256']:raise ValueError('Fixture SHA256 mismatch')
+    if sha(directory/'start.gm2.animation')!=data.get('animationSha256'):raise ValueError('Animation fixture SHA256 mismatch')
     if not isinstance(data.get('rng'),int) or not 0<=data['rng']<=0xffffffff:raise ValueError('Invalid fixture RNG')
     return data
 
 
 async def mode_run(args,mode,manifest,browser):
-    out=args.out/mode;out.mkdir(parents=True,exist_ok=True);contexts=[];pages=[];errors=[];console=[];authority_phases={}
-    trace={'schema':1,'mode':mode,'fixtureSha256':manifest['sha256'],'rng':manifest['rng'],'buildConfig':'parity-v1-'+args.clock,'viewport':list(getattr(args,'viewport',[800,600])),'initial':None,'actions':{},'overflow':False,'wasmSha256':sha(args.web/'game.wasm'),'observerSha256':hashlib.sha256(b''.join((ROOT/'scripts/parity'/name).read_bytes() for name in ['browser.js','virtual-audio.js','run.py'])).hexdigest()}
-    fixture={**manifest,'saveBase64':base64.b64encode((args.fixture/'start.gm2').read_bytes()).decode()}
+    out=args.out/mode;out.mkdir(parents=True,exist_ok=True);scheduler=PresentationScheduler();contexts=[];pages=[];errors=[];console=[];authority_phases={}
+    trace={'schema':1,'mode':mode,'fixtureSha256':manifest['sha256'],'rng':manifest['rng'],'buildConfig':'parity-v1-'+args.clock,'viewport':list(getattr(args,'viewport',[800,600])),'initial':None,'actions':{},'overflow':False,'wasmSha256':sha(args.web/'game.wasm'),'observerSha256':hashlib.sha256(b''.join((ROOT/'scripts/parity'/name).read_bytes() for name in ['browser.js','virtual-audio.js','run.py','scheduler.py'])).hexdigest()}
+    fixture={**manifest,'animationBase64':base64.b64encode((args.fixture/'start.gm2.animation').read_bytes()).decode(),'saveBase64':base64.b64encode((args.fixture/'start.gm2').read_bytes()).decode()}
     boot_started=time.monotonic()
     async with Services(args,mode,manifest) as service:
       try:
@@ -75,6 +77,8 @@ async def mode_run(args,mode,manifest,browser):
             view=getattr(args,'viewport',[800,600]);context=await browser.new_context(viewport={'width':view[0],'height':view[1]});contexts.append(context)
             await context.add_init_script(script='window.__homm3ParityClock='+json.dumps(args.clock)+';\n'+(ROOT/'scripts/parity/virtual-audio.js').read_text()+'\n'+(ROOT/'scripts/parity/browser.js').read_text())
             # A single init script avoids unspecified ordering between separate registrations.
+            await context.expose_binding('homm3HarnessBarrier',lambda source,event,seat=seat:scheduler.arrive(seat,event))
+            await context.expose_binding('homm3HarnessNetwork',lambda source,event,seat=seat:scheduler.network(seat,event))
             await context.clear_cookies()
             page=await context.new_page();pages.append(page)
             page.on('pageerror',lambda error:errors.append(str(error)))
@@ -142,7 +146,8 @@ async def mode_run(args,mode,manifest,browser):
         bounds=await asyncio.gather(*(p.locator('#canvas').bounding_box() for p in pages))
         await asyncio.gather(*(p.evaluate('window.homm3Harness.arm()') for p in pages))
         async def advance(ms):
-            return await asyncio.wait_for(asyncio.gather(*(p.evaluate('(ms)=>window.homm3Harness.advance(ms)',ms) for p in pages)),timeout=30)
+            epoch=scheduler.begin() if args.clock=='virtual' else 0
+            return await asyncio.wait_for(asyncio.gather(*(p.evaluate('(v)=>{const h=window.homm3Harness;h.schedulerEnabled=!!v.epoch;h.clockEpoch=v.epoch;return h.advance(v.ms);}',{'ms':ms,'epoch':epoch}) for p in pages)),timeout=30)
         # Let the unchanged renderer replace pre-epoch cached pixels and finish
         # scheduled startup fades before the reproducible action stream begins.
         if args.clock=='virtual':await advance(1024)
@@ -275,12 +280,13 @@ async def mode_run(args,mode,manifest,browser):
             except Exception:pass
       finally:
         (out/'trace.json').write_text(json.dumps(trace,separators=(',',':')));(out/'console.json').write_text(json.dumps(console,ensure_ascii=False));(out/'errors.json').write_text(json.dumps(errors))
+        scheduler.close()
         for c in contexts:await asyncio.wait_for(c.close(),timeout=5)
     return trace
 
 
 async def main(args):
-    for name in ['out','fixture','runtime','worker','web','relay']:
+    for name in ['out','fixture','runtime','worker','web','relay','site_root']:
         setattr(args,name,getattr(args,name).resolve())
     args.out.mkdir(parents=True,exist_ok=True);manifest=validate_fixture(args.fixture)
     async with async_playwright() as playwright:
@@ -296,6 +302,7 @@ async def main(args):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--site-root',type=Path,default=ROOT.parent/'homm3-web',help='Browser shell checkout used by the isolated site')
     parser.add_argument('--runtime',type=Path,default=ROOT.parent/'runtime');parser.add_argument('--relay',type=Path,default=ROOT.parent/'homm3-lobby/target/debug/homm3-lobby')
     parser.add_argument('--worker',type=Path,default=ROOT/'build/cmake-parity-native/homm3-worker');parser.add_argument('--web',type=Path,default=ROOT/'build/cmake-parity-web/web')
     parser.add_argument('--fixture',type=Path,default=ROOT/'test-results/parity/fixture');parser.add_argument('--out',type=Path,default=ROOT/'test-results/parity/run')

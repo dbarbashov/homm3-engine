@@ -148,6 +148,10 @@ DC_ADDRESS(0x0dd97c, 0x68)
 MAC_ADDRESS(0x10e068, 0x7c)
 inputManager::inputManager()
 {
+    // Headless rules can request a hover refresh before open(). Keep the ring
+    // valid even when no window/input backend is installed.
+    m_head = 0;
+    m_tail = 0;
     m_keyboardFilter = 1;
     m_keyCodeType = 1;
     m_status = 0;

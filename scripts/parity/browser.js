@@ -4,7 +4,8 @@
   const channel=new MessageChannel();channel.port1.onmessage=()=>queue.shift()?.();
   const immediate=()=>new Promise(resolve=>{queue.push(resolve);channel.port2.postMessage(0);});
   const contexts=[];
-  let assetPending=0;
+  let assetPending=0,wirePending=0,wireSequence=0;
+  const wireInbox=new Map();
   const transportPending=new Map();
   const nativeFetch=window.fetch.bind(window);
   window.fetch=async function(input,init){
@@ -28,7 +29,7 @@
   }
   const mediaPlay=HTMLMediaElement.prototype.play;
   HTMLMediaElement.prototype.play=function(...args){this.muted=true;this.volume=0;return mediaPlay.apply(this,args);};
-  let pending=null,batch=0,wake=null;
+  let pending=null,batch=0,wake=null,suspendedTick=0;
   const h=window.homm3Harness={
     schema:1,clock,t:0,recording:false,action:'boot',fixture:null,frames:[],events:[],worlds:[],audio:[],inputs:[],overflow:false,
     maxRecords:100000,wallStart:performance.now(),frameCount:0,pumpCount:0,
@@ -42,16 +43,20 @@
         catch(error){pending.reject(error);pending=null;advance=0;}
       }
       if(h.controlled&&!pending)advance=0;
-      if(pending&&clock==='virtual')advance=assetPending||transportPending.size||contexts.some(c=>c.pending)?0:Math.min(ms,pending.end-h.t);
+      if(pending&&clock==='virtual'){
+        const step=Math.min(ms,pending.end-h.t);
+        const blocked=assetPending||wirePending||transportPending.size||contexts.some(c=>c.pending);
+        advance=blocked?0:step;suspendedTick=blocked?step:0;
+      }
       if(advance){
         h.t+=advance;
         for(const ctx of contexts){const pcm=ctx.advance(advance);if(h.recording)h.append(h.audio,{t:h.t,action:h.action,...pcm});}
       }
-      if(pending&&h.t>=pending.end){const task=pending;pending=null;task.predicate?task.reject(Error('Virtual deadline: '+h.action)):task.resolve({t:h.t});}
+      if(pending&&h.t>=pending.end){const task=pending;pending=null;if(h.schedulerEnabled)window.homm3HarnessBarrier({epoch:h.clockEpoch,t:h.t,done:true});task.predicate?task.reject(Error('Virtual deadline: '+h.action)):task.resolve({t:h.t});}
       return h.t;
     },
-    shouldYield(){return !pending||batch>=16||assetPending||transportPending.size||contexts.some(c=>c.pending);},
-    async yield(){batch=0;if(h.controlled&&!pending)await new Promise(resolve=>{wake=resolve;});do {await immediate();} while(clock==='virtual'&&(assetPending||contexts.some(c=>c.pending)));},
+    shouldYield(){return !pending||batch>=(h.schedulerEnabled?1:16)||assetPending||wirePending||transportPending.size||contexts.some(c=>c.pending);},
+    async yield(){batch=0;if(h.controlled&&!pending)await new Promise(resolve=>{wake=resolve;});do {await immediate();} while(clock==='virtual'&&(assetPending||wirePending||transportPending.size||contexts.some(c=>c.pending)));if(suspendedTick){const step=suspendedTick;suspendedTick=0;h.tick(step,0);}if(h.schedulerEnabled&&pending){const result=await window.homm3HarnessBarrier({epoch:h.clockEpoch,t:h.t});for(const id of result?.deliver||[]){const entry=wireInbox.get(id);if(!entry)throw Error('Missing scheduled packet');wireInbox.delete(id);entry.socket.onmessage?.call(entry.socket,entry.event);}}},
     async advance(ms,predicate=null){
       if(pending)throw Error('Concurrent advance');
       if(!Number.isFinite(ms)||ms<=0||ms>600000)throw Error('Invalid virtual budget');
@@ -73,23 +78,52 @@
       if(!h.recording)return;++h.frameCount;
       const ui=h.ui();h.lastFrame={t:h.t,wallMs:performance.now()-h.wallStart,action:h.action,width,height,tiles,ui};h.append(h.frames,h.lastFrame);
     },
-    ui(){return structuredClone({window:h.interfaceState,game:window.homm3GameState,adventure:window.homm3AdventureState,combat:h.exactCombat,video:h.video,network:window.homm3NetworkState,hd:window.homm3HDState,turn:window.homm3TurnPresentation,screen:window.homm3PortDiagnostics?.screen,music:window.homm3Music?.state});},
+    ui(){return structuredClone({timers:h.presentationClock,window:h.interfaceState,game:window.homm3GameState,adventure:window.homm3AdventureState,combat:h.exactCombat,video:h.video,network:window.homm3NetworkState,hd:window.homm3HDState,turn:window.homm3TurnPresentation,screen:window.homm3PortDiagnostics?.screen,music:window.homm3Music?.state});},
     world(label,world,rng){h.append(h.worlds,{label,world,rng:typeof rng==='string'?rng:rng>>>0,t:h.t});},
     installFixture(FS){
       if(!h.fixture)return false;
-      if(h.fixture.schema!==1||!Number.isInteger(h.fixture.rng)||!h.fixture.saveBase64)throw Error('Invalid fixture manifest');
+      if(h.fixture.schema!==2||!Number.isInteger(h.fixture.rng)||!h.fixture.saveBase64)throw Error('Invalid fixture manifest');
       const bytes=Uint8Array.from(atob(h.fixture.saveBase64),c=>c.charCodeAt(0));
-      FS.writeFile('/runtime/data/RMTparity.gm2',bytes);return true;
+      FS.writeFile('/runtime/data/RMTparity.gm2',bytes);
+      if(typeof h.fixture.animationBase64!=='string')throw Error('Missing animation fixture');
+      FS.writeFile('/runtime/data/RMTparity.gm2.animation',Uint8Array.from(atob(h.fixture.animationBase64),c=>c.charCodeAt(0)));return true;
     },
     snapshot(){return {t:h.t,ui:h.ui(),frames:h.frameCount,pumps:h.pumpCount,wallMs:performance.now()-h.wallStart};},
     drain(){const out={schema:h.schema,overflow:h.overflow,action:h.action,...h.snapshot(),frames:h.frames,events:h.events,worlds:h.worlds,audio:h.audio,inputs:h.inputs};h.frames=[];h.events=[];h.audio=[];h.inputs=[];h.worlds=[];return out;}
   };
   // Real IPC must not consume an arbitrarily accelerated simulation budget.
-  // Keep pumping the original continuation; only pause virtual time until the
-  // response/decision arrives. Real transport duration remains in the trace.
+  // Suspend the original continuation until its response/decision arrives. Real transport duration remains in the trace.
+  if(clock==='virtual' && window.WebSocket && window.homm3HarnessNetwork){
+    const NativeSocket=window.WebSocket;
+    function trackWire(bytes,event){
+      ++wirePending;
+      const started=performance.now();
+      crypto.subtle.digest('SHA-256',bytes).then(digest=>window.homm3HarnessNetwork({...event,hash:Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('')}))
+        .then(()=>h.event('legacy-transport',{kind:event.kind,wallMs:performance.now()-started}))
+        .catch(error=>{h.overflow=true;h.event('transport-error',{message:String(error)});})
+        .finally(()=>--wirePending);
+    }
+    window.WebSocket=new Proxy(NativeSocket,{construct(Target,args){
+      const socket=new Target(...args),send=socket.send.bind(socket);
+      socket.send=data=>{
+        if(h.schedulerEnabled && h.controlled && typeof data!=='string' && !window.homm3Room?.serverAuthority){
+          const bytes=data instanceof ArrayBuffer?new Uint8Array(data):new Uint8Array(data.buffer,data.byteOffset,data.byteLength);
+          if(bytes.length>=8)trackWire(bytes,{kind:'send',t:h.t,target:new DataView(bytes.buffer,bytes.byteOffset).getUint32(0,true)});
+        }
+        return send(data);
+      };
+      socket.addEventListener('message',event=>{
+        if(h.schedulerEnabled && h.controlled && event.data instanceof ArrayBuffer && event.data.byteLength>=12){
+          event.stopImmediatePropagation();const id=++wireSequence;wireInbox.set(id,{socket,event});
+          const bytes=new Uint8Array(event.data);trackWire(bytes.subarray(4),{kind:'receive',id,source:new DataView(bytes.buffer).getUint32(0,true)});
+        }
+      });
+      return socket;
+    }});
+  }
   let authority;
   let latestWorldRevision=-1;
-  const awaitingWorld=new Map();
+  const awaitingWorld=new Map(), acceptedAnswers=new Map();
   Object.defineProperty(window,'homm3Authority',{configurable:true,get:()=>authority,set:next=>{
     authority=next;
     const start=next.start,receive=next.receive;
@@ -98,22 +132,34 @@
         transportPending.set(String(message.id),performance.now());h.event('transport-send',{id:message.id,type:message.type});
       }
       return send(message);
-    });};
+    },clock==='virtual'?()=>h.t:undefined);};
     next.receive=function(message){
+      const pendingAtArrival=[...transportPending.keys()];
       const accepted=receive.call(this,message);
       if(!accepted)return accepted;
       // A success result may precede its world packet in a separate socket
       // task. Do not charge that delivery gap as simulated movement time.
       if(message.type==='authority_state'||message.type==='state')latestWorldRevision=Math.max(latestWorldRevision,(message.state||message).revision);
       const ids=[];
-      if(['authority_result','authority_answer_result'].includes(message.type)){
-        const id=String(message.id);
-        if(message.ok&&message.revision>Math.max(latestWorldRevision,next.revision))awaitingWorld.set(id,message.revision);
-        else ids.push(id);
+      if(message.type==='authority_answer_result'&&message.ok)acceptedAnswers.set(String(message.id),message.revision);
+      // An accepted answer only acknowledges receipt; the engine is still
+      // executing it. Resume on the next decision or completed command/world.
+      if(message.type==='authority_result'||message.type==='authority_answer_result'&&!message.ok){
+        const completed=[String(message.id)];
+        if(message.type==='authority_result')for(const [id,revision] of acceptedAnswers)if(message.revision>=revision)completed.push(id);
+        for(const id of completed){
+          if(message.ok&&message.revision>Math.max(latestWorldRevision,next.revision))awaitingWorld.set(id,message.revision);
+          else ids.push(id);
+        }
       }
-      if(message.type==='authority_choice'||message.type==='authority_status'&&message.activeActor!==next.actor)ids.push(...transportPending.keys());
+      if(message.type==='authority_status' && message.phase==='adventure')
+        for(const [id,revision] of acceptedAnswers)if(message.revision>revision)awaitingWorld.set(id,message.revision);
+      if(message.type==='authority_choice')ids.push(...pendingAtArrival);
+      // End-turn can suspend on the NEXT player's human dialog. The initiating
+      // client cannot wait for command completion before that player may answer.
+      if(message.type==='authority_status' && message.phase==='choice' && message.activeActor!==next.actor)ids.push(...pendingAtArrival);
       for(const [id,revision] of awaitingWorld)if(revision<=latestWorldRevision)ids.push(id);
-      for(const id of ids)awaitingWorld.delete(id);
+      for(const id of ids){awaitingWorld.delete(id);acceptedAnswers.delete(id);}
       for(const id of ids)if(transportPending.has(id)){
         h.event('transport-ready',{id,wallMs:performance.now()-transportPending.get(id),type:message.type});transportPending.delete(id);
       }

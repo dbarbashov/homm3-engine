@@ -31,7 +31,8 @@ for seat,roster in enumerate(expected['world']['rosters']):
 subprocess.run(command,input='quit\n',text=True,env={**env,'HOMM3_HARNESS_SAVE':str(args.out/'start.gm2'),'HOMM3_HARNESS_RNG':str(expected['rng'])},check=True,capture_output=True,timeout=30)
 actual=json.loads((args.out/'fixture-loaded.json').read_text());diff=first_difference(expected,actual)
 if diff:raise RuntimeError('Save round-trip failed: '+json.dumps(diff))
-manifest={'schema':1,'boundary':'before-first-turn','map':args.map,'seed':args.seed,'rng':expected['rng'],'rngAlgorithm':'msvc-lcg32','sha256':hashlib.sha256((args.out/'start.gm2').read_bytes()).hexdigest(),'canonicalSha256':hashlib.sha256(json.dumps(expected['world'],sort_keys=True).encode()).hexdigest(),'workerSha256':hashlib.sha256(args.worker.read_bytes()).hexdigest(),'roundTrip':True,'profile':('town-'+args.town_profile) if args.town is not None else ('combat' if args.combat else 'adventure'),'town':args.town,'combatRng':args.combat_rng,'movementCorridor':args.movement or args.exchange,'exchange':args.exchange,'feedback':args.feedback}
+manifest={'schema':2,'boundary':'before-first-turn','map':args.map,'seed':args.seed,'rng':expected['rng'],'rngAlgorithm':'msvc-lcg32','sha256':hashlib.sha256((args.out/'start.gm2').read_bytes()).hexdigest(),'canonicalSha256':hashlib.sha256(json.dumps(expected['world'],sort_keys=True).encode()).hexdigest(),'workerSha256':hashlib.sha256(args.worker.read_bytes()).hexdigest(),'roundTrip':True,'profile':('town-'+args.town_profile) if args.town is not None else ('combat' if args.combat else 'adventure'),'town':args.town,'combatRng':args.combat_rng,'movementCorridor':args.movement or args.exchange,'exchange':args.exchange,'feedback':args.feedback}
+manifest['animationSha256']=hashlib.sha256((args.out/'start.gm2.animation').read_bytes()).hexdigest()
 setup_path=args.out/'fixture-setup.json'
 if setup_path.exists():manifest['setup']=json.loads(setup_path.read_text())
 if args.object is not None:

@@ -878,6 +878,8 @@ DC_ADDRESS(0x10f94c, 0x136)
 MAC_ADDRESS(0x1413ac, 0xb0)
 long type_spellvalue::getSummoningValue(long damage, long timesCastable) const
 {
+    if (m_stackValue <= 0)
+        return 0;
     double damageRatio = static_cast<double>(damage * 10);
     damageRatio /= static_cast<double>(m_stackValue);
     if (damageRatio > 0.9)
@@ -2239,7 +2241,10 @@ void philAI::doAI(int whichPlayer)
     if (!g_gameOver) {
         if (!g_limitPlayer || whichPlayer == g_limitPlayer) {
             int mapSize = (g_mapWidth * g_mapHeight) * g_game->getNumMapLevels();
-            long* dangerZones = new long[mapSize];
+            // The first selected hero can already be the current hero. That
+            // path skips moveHero's memset, so the initial danger map must be
+            // defined rather than depending on allocator contents.
+            long* dangerZones = new long[mapSize]();
             g_aiPlayers[whichPlayer].startTurn();
             getTurnAIVars(whichPlayer);
             showStatus();
@@ -2382,6 +2387,10 @@ MAC_ADDRESS(0x140f90, 0x180)
 long type_spellvalue::getDamageSpellValue(SpellID spell, TSkillMastery mastery,
     long timesCastable, long combatValue) const
 {
+    // Empty armies (including hypothetical AI probes) have no combat value
+    // to scale. Dividing by zero here made the integer appraisal undefined.
+    if (combatValue <= 0)
+        return 0;
     long damage = akSpellTraits[spell].m_AI_value[mastery]
         * (m_power + mastery);
     if (spell == SPELL_TITANS_LIGHTNING_BOLT)

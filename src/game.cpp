@@ -1912,8 +1912,11 @@ int game::setupPuzzlePieces(int whichPlayer, int countOnly)
 
     piecesRemoved = getNumObelisks(whichPlayer);
     extraPieces = g_obeliskCount - m_numObelisks;
-    percentObelisksFound =
-        static_cast<float>(getNumObelisks(whichPlayer)) / m_numObelisks;
+    // Maps without obelisks reveal no pieces below. Avoid converting the
+    // intermediate 0/0 NaN to an integer before applying that rule.
+    percentObelisksFound = m_numObelisks
+        ? static_cast<float>(getNumObelisks(whichPlayer)) / m_numObelisks
+        : 0.0f;
     percentExtraPieces =
         (percentObelisksFound * percentObelisksFound + percentObelisksFound) / 2.0f;
     piecesRemoved = static_cast<int>(
