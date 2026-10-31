@@ -9,7 +9,7 @@ changes to normal production clocks are required.
 
 Prerequisites: the repository's original game assets (`.local/game.json` and
 `.local/runtime`), Emscripten, native SDL/FFmpeg build dependencies, Python with
-Playwright browsers, Node, and the sibling `server-relay` debug executable.
+Playwright browsers, Node, and the sibling `homm3-lobby` debug executable.
 Paths can be overridden with `run.py --help` / `fixture.py --help`.
 
 ```sh

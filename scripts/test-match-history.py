@@ -5,7 +5,7 @@ import asyncio,json,os,socket,subprocess,time,urllib.request,argparse,shutil
 from pathlib import Path
 import websockets
 ROOT=Path(__file__).resolve().parents[1]
-p=argparse.ArgumentParser();p.add_argument('--runtime',type=Path,default=ROOT.parent/'runtime');p.add_argument('--relay',type=Path,default=ROOT.parent/'server-relay/target/release/homm3-lobby');p.add_argument('--worker',type=Path,default=ROOT/'build/cmake-parity-release-control/homm3-worker');p.add_argument('--out',type=Path,default=ROOT/'test-results/match-history');a=p.parse_args();a.out=a.out.resolve();a.out.mkdir(parents=True,exist_ok=True)
+p=argparse.ArgumentParser();p.add_argument('--runtime',type=Path,default=ROOT.parent/'runtime');p.add_argument('--relay',type=Path,default=ROOT.parent/'homm3-lobby/target/release/homm3-lobby');p.add_argument('--worker',type=Path,default=ROOT.parent/'homm3-lobby/build/worker/homm3-worker');p.add_argument('--out',type=Path,default=ROOT/'test-results/match-history');a=p.parse_args();a.out=a.out.resolve();a.out.mkdir(parents=True,exist_ok=True)
 # A unique store preserves previous evidence instead of deleting it.
 store=a.out/str(time.time_ns());store.mkdir();relay=a.relay.resolve()
 s=socket.socket();s.bind(('127.0.0.1',0));port=s.getsockname()[1];s.close();url=f'http://127.0.0.1:{port}'

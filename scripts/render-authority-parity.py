@@ -1,9 +1,9 @@
 """Render the visual feature audit with the actual paired screenshots and videos."""
 from pathlib import Path
-import json,base64,html,collections,io
+import os, json,base64,html,collections,io
 from PIL import Image
 ROOT=Path(__file__).resolve().parents[1]
-DATA=json.loads((ROOT/'port/server/presentation-coverage.json').read_text())
+DATA=json.loads((Path(os.environ.get('HOMM3_WORKER_SOURCE', ROOT.parent/'homm3-lobby/worker'))/'presentation-coverage.json').read_text())
 OUT=ROOT/'docs/authority-parity-2026-10-29';OUT.mkdir(parents=True,exist_ok=True)
 labels={'verified':'Проверено в указанном сценарии','partial':'Частично проверено','pending':'Визуально не проверено','known_gap':'Отсутствует в новой версии'}
 counts=collections.Counter(f['status'] for f in DATA['features'])

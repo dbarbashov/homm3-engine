@@ -296,7 +296,7 @@ async def main(args):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--runtime',type=Path,default=ROOT.parent.parent/'.local/runtime');parser.add_argument('--relay',type=Path,default=ROOT.parent/'server-relay/target/debug/homm3-lobby')
+    parser.add_argument('--runtime',type=Path,default=ROOT.parent/'runtime');parser.add_argument('--relay',type=Path,default=ROOT.parent/'homm3-lobby/target/debug/homm3-lobby')
     parser.add_argument('--worker',type=Path,default=ROOT/'build/cmake-parity-native/homm3-worker');parser.add_argument('--web',type=Path,default=ROOT/'build/cmake-parity-web/web')
     parser.add_argument('--fixture',type=Path,default=ROOT/'test-results/parity/fixture');parser.add_argument('--out',type=Path,default=ROOT/'test-results/parity/run')
     parser.add_argument('--scenario',type=Path,help='Replay a saved scenario.json (same fixture required)')

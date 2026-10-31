@@ -5,7 +5,7 @@ import argparse, hashlib, json, os, subprocess
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
-parser.add_argument('--worker', type=Path, default=ROOT/'build/cmake-parity-release-control/homm3-worker')
+parser.add_argument('--worker', type=Path, default=ROOT.parent/'homm3-lobby/build/worker/homm3-worker')
 parser.add_argument('--runtime', type=Path, default=ROOT.parent/'runtime')
 args = parser.parse_args()
 results = []
