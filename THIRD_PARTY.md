@@ -63,7 +63,8 @@ verifies its SHA-256 and records the exact minimal configure command.
 
 To replace or modify FFmpeg, edit its source under `.local/ffmpeg-8.0.3`, remove
 `build/ffmpeg-web/install/version.txt` (or the native equivalent), and rebuild
-with the normal CMake commands in README. For new binary distributions from this private repository, provide the required
-application objects, dependency libraries and linking instructions for relinking. FFmpeg source archives
+with the normal CMake commands in README. The application and build sources are available in this public repository.
+Binary distributions must include the applicable source, dependencies and
+linking instructions required for relinking. FFmpeg source archives
 accompany downloadable client releases. Original `.vid`, `.bik` and `.smk`
 assets are supplied separately by the user and are not part of those releases.

@@ -1,7 +1,8 @@
-# Heroes III shared engine (private)
+# Heroes III shared engine
 
 The portable C++ runtime used by the browser and native authoritative server.
-Only `homm3-web` is public. This repository and `homm3-lobby` are private.
+This repository and [homm3-web](https://github.com/dbarbashov/homm3-web) are public.
+The Rust server and native authority implementations in `homm3-lobby` remain private.
 
 ## Ownership
 
@@ -38,14 +39,17 @@ python3 scripts/build-worker.py --engine /path/to/homm3-engine
 ```
 
 The browser build exports only `game.js`, `game.wasm`, and `engine-build.json`.
-Private C++ source, worker executables, saves, reports and retail assets are never
+Worker executables, saves, reports and retail assets are never
 copied into the public web directory. Browser artifacts contain client code and
-are inspectable by design; private source visibility is not an anti-cheat boundary.
+are inspectable by design; the server validates gameplay commands independently.
 Native workers use exactly the same pinned rules and patches as the WASM client.
 
 ## Integration tests
 
-Cross-runtime tests belong here. Supply explicit checkouts; the helper creates
+The client and its source-level tests can be built without server access.
+Run `npm test` for the standalone C++ input probes. The full legacy/authority
+comparison also needs the private server checkout; maintainers run that portion
+for public engine contributions. Supply explicit checkouts; the helper creates
 ignored links to the public client and never changes its tracked files:
 
 ```sh
@@ -63,16 +67,29 @@ The full parity runner accepts `--relay`, `--worker`, `--web` (harness WASM),
 `--runtime` and `--fixture`. Test game resources remain outside Git. Use isolated
 services and dummy/offline audio; do not restart an existing play session.
 
+## Contributing
+
+Gameplay, rendering, animation and portability fixes are welcome as pull requests
+here. Website and JavaScript shell changes belong in `homm3-web`. Retail game data
+is supplied locally by each developer and must never be committed.
+
+For a matching browser build, clone both public repositories, check out the engine
+commit named in the client's `engine.lock.json`, install the SDK here, then run
+`npm run build` from the client. The client README contains the complete commands.
+To test engine changes, commit them on your local branch and update the client's
+lock to that commit. Maintainers update the server pin and run private authority
+checks before releasing a shared revision. Native client builds use CMake with
+`HOMM3_SERVER=OFF` (the default) and do not require the private worker.
+
 ## Provenance and publication
 
-Imported from the committed `homm3-web` integration snapshot `dda2854`, preserving
-its license notices. The upstream pin and patches remain reviewable. See
-`THIRD_PARTY.md` and `licenses/`. Private visibility does not change upstream licenses.
-The archive before this split remains in local Git history; existing public Git
-history has not been rewritten. Publish only reviewed public client files, never
-an engine branch or an unrestricted export of this repository.
+Imported from the committed integration snapshot, preserving its license notices.
+The upstream pin and patches remain reviewable. See `LICENSE`, `THIRD_PARTY.md`
+and `licenses/`. The public main history contains the extracted shared engine.
+The mixed pre-split history, including server implementations, is retained in
+private `homm3-engine-history`; it must not be pushed to this repository.
 
-FFmpeg remains LGPL. Before distributing new binary bundles from private source,
-provide the required FFmpeg source and relinking materials (application objects,
-link instructions and dependencies); repository privacy does not waive those
-obligations. This migration itself does not publish a new binary release.
+FFmpeg remains LGPL. Its source and the application/linking sources are available;
+binary distributions must continue to include the applicable source and relinking
+materials. Opening this repository does not publish a new binary release or
+include any original retail game resources.
