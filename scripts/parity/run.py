@@ -31,7 +31,7 @@ class Services:
             await self.__aexit__();raise
     async def start(self):
         relay_port,site_port=free_port(),free_port();out=self.args.out/self.mode;out.mkdir(parents=True,exist_ok=True)
-        env={'LOBBY_BIND':f'127.0.0.1:{relay_port}','HOMM3_WEB_ROOT':str(ROOT/'web')}
+        env={'LOBBY_BIND':f'127.0.0.1:{relay_port}','HOMM3_METRICS_PORT':'0','HOMM3_WEB_ROOT':str(ROOT/'web')}
         if self.mode=='authority':env.update(HOMM3_AUTHORITY_ENGINE=str(ROOT/'scripts/parity/worker.py'),HOMM3_HARNESS_ENGINE_BINARY=str(self.args.worker),HOMM3_AUTHORITY_RUNTIME=str(self.args.runtime),HOMM3_HARNESS_SAVE=str(self.args.fixture/'start.gm2'),HOMM3_HARNESS_RNG=str(self.fixture['rng']),HOMM3_HARNESS_OUTPUT=str(out),HOMM3_HARNESS_COMBAT_RNG=self.fixture.get('combatRng',''))
         else:
             # No inherited authority configuration may turn the reference into a candidate.

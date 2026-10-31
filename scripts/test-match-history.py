@@ -9,7 +9,7 @@ p=argparse.ArgumentParser();p.add_argument('--runtime',type=Path,default=ROOT.pa
 # A unique store preserves previous evidence instead of deleting it.
 store=a.out/str(time.time_ns());store.mkdir();relay=a.relay.resolve()
 s=socket.socket();s.bind(('127.0.0.1',0));port=s.getsockname()[1];s.close();url=f'http://127.0.0.1:{port}'
-env={**os.environ,'LOBBY_BIND':f'127.0.0.1:{port}','HOMM3_AUTHORITY_ENGINE':str(a.worker.resolve()),'HOMM3_AUTHORITY_RUNTIME':str(a.runtime.resolve()),'HOMM3_HISTORY_DIR':str(store),'HOMM3_WEB_ROOT':str(ROOT/'web')}
+env={**os.environ,'LOBBY_BIND':f'127.0.0.1:{port}','HOMM3_METRICS_PORT':'0','HOMM3_AUTHORITY_ENGINE':str(a.worker.resolve()),'HOMM3_AUTHORITY_RUNTIME':str(a.runtime.resolve()),'HOMM3_HISTORY_DIR':str(store),'HOMM3_WEB_ROOT':str(ROOT/'web')}
 proc=None;logs=[]
 async def start():
  global proc
