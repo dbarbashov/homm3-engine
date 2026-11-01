@@ -89,7 +89,7 @@ try:
             complete=not trace.get('failure') and not trace.get('overflow')
             checks=check_waiting_town(trace) if complete else {'passed':False,'checks':[]}
             (out/'waiting-town-checks.json').write_text(json.dumps(checks,indent=2))
-            summary['runs'][name]={'complete':complete,'exitCode':run.returncode,
+            summary['runs'][name]={'complete':complete,'exitCode':run.returncode,'parity':None,
                                   'regressionsPassed':checks['passed'],'scope':'authority-only control lifecycle','report':name+'/index.html'}
             summary['harnessPassed'] &= complete
             summary['parityPassed'] &= checks['passed']

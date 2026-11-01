@@ -220,9 +220,9 @@ async def mode_run(args,mode,manifest,browser):
             for i,chunk in enumerate(chunks):
                 world=chunk['worlds'][-1]['world'];state=chunk['ui'];adventure=state.get('adventure') or {};heroes=adventure.get('heroes') or []
                 invariants=[{'id':'owned-hero-present','passed':all(h['onMap'] or (h['id']==adventure.get('hero') and adventure.get('mobile')) or any(t['garrisonHero']==h['id'] for t in world['towns']) for h in heroes)}]
-                if mode=='authority' and not adventure.get('motion',{}).get('local',True) and state.get('hd',{}).get('layers')==0:
-                    invariants.append({'id':'waiting-player-has-no-active-hero-cursor',
-                                       'passed':not adventure.get('mobile') and not adventure.get('cursor')})
+                waiting=mode=='authority' and not adventure.get('motion',{}).get('local',True) and state.get('hd',{}).get('layers')==0
+                invariants.append({'id':'authoritative-waiting-player-has-no-active-hero-cursor',
+                                   'passed':not waiting or (not adventure.get('mobile') and not adventure.get('cursor'))})
                 ui_window=state.get('window')
                 if ui_window:
                     for item in ui_window['widgets']:item['status']&=1|2|4|8|16|32|8192
