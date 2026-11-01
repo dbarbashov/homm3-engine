@@ -1,3 +1,4 @@
+#include "browser_rng.h"
 #include "host_path.h"
 #include "authority_client.h"
 #include "va.h"
@@ -27,12 +28,13 @@ int safeRandom(int min, int max)
     // a network presentation. Keep cosmetic cycles on the original clock path
     // instead of consuming the single-player RNG on every animation frame.
     if (!g_remoteOn && !Port::AuthorityClient::enabled())
-        return random(min, max);
+        return Port::CosmeticRng::range(min, max);
     if (max == min)
         return max;
     if (max < min)
         return min;
-    return min + static_cast<int>(GameTime::get()
+    return min + static_cast<int>((static_cast<std::uint32_t>(GameTime::get())
+                                  - Port::CosmeticRng::clockEpoch())
                                   % static_cast<unsigned>(max - min + 1));
 }
 
@@ -63,11 +65,11 @@ void generateUniqueSystemID()
             "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789");
 
     memset(g_config.cUniqueSystemID, 0, sizeof(g_config.cUniqueSystemID));
-    value = random(1, 999999) + GameTime::get();
+    value = Port::CosmeticRng::range(1, 999999) + GameTime::get();
     g_config.cUniqueSystemID[2] = characters[value % 36];
-    value += random(1, 999999) + GameTime::get();
+    value += Port::CosmeticRng::range(1, 999999) + GameTime::get();
     g_config.cUniqueSystemID[1] = characters[value % 36];
-    value += random(1, 999999) + GameTime::get();
+    value += Port::CosmeticRng::range(1, 999999) + GameTime::get();
     g_config.cUniqueSystemID[0] = static_cast<char>(value % 26 + 'A');
 }
 

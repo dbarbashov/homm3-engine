@@ -1,3 +1,4 @@
+#include "browser_rng.h"
 #ifdef HOMM3_SERVER
 #include "server_authority.h"
 #include "server_exchange.h"
@@ -5817,7 +5818,7 @@ void advManager::fizzleCenter(int whichSound)
     if (Port::Authority::active()) {
         if(g_currentPlayer && g_currentPlayer->isHuman()){
             if(whichSound==FIZZLE_SOUND_KILL_FADE)Port::Authority::adventureSound("killfade.82M",true);
-            else if(whichSound==FIZZLE_SOUND_PICKUP){char name[32];std::snprintf(name,sizeof(name),"pickup%02d.82M",random(1,7));Port::Authority::adventureSound(name,true);}
+            else if(whichSound==FIZZLE_SOUND_PICKUP){char name[32];std::snprintf(name,sizeof(name),"pickup%02d.82M",Port::CosmeticRng::range(1,7));Port::Authority::adventureSound(name,true);}
         }
         return;
     }
@@ -5831,7 +5832,7 @@ void advManager::fizzleCenter(int whichSound)
     case FIZZLE_SOUND_PICKUP:
         sprintf(g_text,
                 DATA_COMPGEN(0x00670268, pickupSampleFormat, "pickup%02d.82M"),
-                random(1, 7));
+                Port::CosmeticRng::range(1, 7));
         break;
     default:
         return;
@@ -6340,7 +6341,7 @@ combatFinished:
 
     if (g_combatManager->m_raisedCreatureCount > 0 && winner == 0
         && g_game->isLocalHuman(leftPlayer)) {
-        sprintf(g_text, "pickup%02d.82M", sRandom(1, 7));
+        sprintf(g_text, "pickup%02d.82M", Port::CosmeticRng::range(1, 7));
         SAMPLE2 sample = loadPlaySample(g_text);
         if (g_combatManager->m_raisedCreatureCount == 1) {
             sprintf(g_text, g_generalText->GetText(GENERAL_TEXT_NECROMANCY_RAISE_ONE_FORMAT),

@@ -29,12 +29,15 @@ def run(seed):
     env.update(SDL_AUDIODRIVER='dummy', SDL_VIDEODRIVER='dummy',
                HOMM3_HARNESS_SAVE=str(a.fixture/'start.gm2'),
                HOMM3_HARNESS_RNG=str(manifest['rng']),
+               HOMM3_HARNESS_RULES_RNG=manifest.get('rngAlgorithm','msvc-lcg32'),
                HOMM3_HARNESS_SEED=str(manifest['seed']),
                HOMM3_HARNESS_TRACE_RNG='1', HOMM3_HARNESS_OUTPUT=str(folder),
                HOMM3_HARNESS_COMBAT_RNG=manifest.get('combatRng',''),
                HOMM3_HARNESS_ENGINE_BINARY=str(a.worker))
     with (folder/'stderr.log').open('w') as err:
-        process = subprocess.Popen([str(ROOT/'scripts/parity/worker.py'), str(a.runtime),
+        # Exercise genuinely different constructor seeds. The network adapter
+        # pins its bootstrap seed, which would hide omitted save fields here.
+        process = subprocess.Popen([str(a.worker), str(a.runtime),
             str(a.runtime/manifest['map']), str(seed),'--humans','2','--setup',
             ','.join(map(str,manifest['setup']))], env=env, stdin=subprocess.PIPE,
             stdout=subprocess.PIPE, stderr=err, text=True)

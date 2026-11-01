@@ -28,7 +28,7 @@ inline char* strupr(char* s){for(char* p=s;*p;++p)*p=static_cast<char>(std::toup
 #include "parity_harness.h"
 #define rand() ::Port::Harness::random()
 #define srand(value) ::Port::Harness::seed(value)
-#elif defined(HOMM3_SERVER)
+#else
 #include "browser_rng.h"
 #define rand() ::Port::BrowserRng::next()
 #define srand(value) ::Port::BrowserRng::seed(value)

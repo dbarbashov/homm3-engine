@@ -136,6 +136,7 @@ std::string world(bool initial) {
             s<<"]}";
         }
     }
+    if(initial){s<<"],\"heroAggressionBits\":[";bool separator=false;for(const auto& h:g_game->m_heroes){uint32_t bits;std::memcpy(&bits,&h.m_aggression,sizeof(bits));s<<(separator?",":"")<<bits;separator=true;}}
     if(initial){s<<"],\"objectAnimations\":[";bool separator=false;for(const auto& object:g_game->m_worldMap.m_objects){s<<(separator?",":"")<<int(object.m_animationOffset);separator=true;}}
     if(initial){s<<"],\"objects\":[";bool separator=false;for(const auto& o:g_game->m_worldMap.m_objects){s<<(separator?",":"")<<'['<<int(o.m_x)<<','<<int(o.m_y)<<','<<int(o.m_z)<<','<<o.m_typeIndex<<']';separator=true;}}
     if(initial){s<<"],\"objectTypes\":[";bool separator=false;for(const auto& o:g_game->m_worldMap.m_objectTypes){s<<(separator?",":"")<<quoteBytes(o.m_imageName);separator=true;}}
@@ -227,7 +228,22 @@ void decision(const char* kind,int side,int slot){
 #endif
 }
 int random(int lower,int upper){if(traceRandom)decision("rng-draw",lower,upper);if(browserCombatRng)return BrowserRng::next();rng=rng*214013u+2531011u;return (rng>>16)&0x7fff;}
-void seed(unsigned value){if(browserCombatRng)BrowserRng::seed(value);else rng=value;if(traceRandom)decision("rng-seed",0,0);}
+void seed(unsigned value){
+#ifndef __EMSCRIPTEN__
+    if(!loaded){const char* mode=std::getenv("HOMM3_HARNESS_RULES_RNG");browserCombatRng=mode&&std::strcmp(mode,"browser-libc")==0;}
+#endif
+    if(browserCombatRng)BrowserRng::seed(value);else rng=value;if(traceRandom)decision("rng-seed",0,0);
+}
+unsigned rngAlgorithm(){return browserCombatRng?1:2;}
+uint64_t rngState(){return browserCombatRng?BrowserRng::state():uint64_t(rng);}
+bool restoreRng(unsigned algorithm,uint64_t value){
+    if(algorithm!=1&&algorithm!=2)return false;
+    if(algorithm==2&&value>UINT32_MAX)return false;
+    browserCombatRng=algorithm==1;
+    if(browserCombatRng)BrowserRng::state()=value;else rng=uint32_t(value);
+    if(traceRandom)decision("rng-restore",0,0);
+    return true;
+}
 void arm(){
     clockMs=1000000;
 #ifdef __EMSCRIPTEN__
@@ -263,8 +279,16 @@ void exportFixture(const char* path){
         h.m_movePoints=h.m_maxMovePoints=h.getMobility();h.m_mana=0;
         auto& guard=*g_game->getCell(type_point(5,8,0));
         if(guard.m_type!=MONSTER)throw std::runtime_error("Feedback fixture requires Arrogance guard at 5,8");
+        // Pin the actual opponent, not just its quantity. Random map setup
+        // can otherwise produce earth elementals and an automatic-retreat
+        // question instead of this fixture's morale/luck victory chain.
+        guard.m_objectIndex=CREATURE_PIXIE;
+        g_game->m_worldMap.m_objectTypes[guard.m_objectTypeIndex].m_extra=CREATURE_PIXIE;
         guard.m_extraInfo=(guard.m_extraInfo&~4095u)|300u;
-        if(guard.m_objectIndex>=0)g_game->m_worldMap.m_objects[guard.m_objectIndex].m_extraInfo=guard.m_extraInfo;
+        for(auto& object:g_game->m_worldMap.m_objects)
+            if(object.m_x==5&&object.m_y==8&&object.m_z==0&&
+               g_game->m_worldMap.m_objectTypes[object.m_typeIndex].m_objectType==MONSTER)
+                object.m_extraInfo=guard.m_extraInfo;
     }
 #endif
 #ifndef __EMSCRIPTEN__
@@ -404,10 +428,17 @@ bool loadFixture(){
     g_localGamePos=local;g_curWatchPlayer=watch;g_mapVisibilityBit=1<<watch;
     g_playerTurn=g_netLocalGamePos;g_currentPlayer=&g_game->m_players[g_netLocalGamePos];
 #ifdef __EMSCRIPTEN__
-    rng=EM_ASM_INT({return window.homm3Harness.fixture.rng;});
+    browserCombatRng=EM_ASM_INT({return window.homm3Harness.fixture.rngAlgorithm==='browser-libc';});
+    if(browserCombatRng){
+        const uint32_t lo=EM_ASM_INT({return Number(BigInt(window.homm3Harness.fixture.rng)&0xffffffffn);});
+        const uint32_t hi=EM_ASM_INT({return Number(BigInt(window.homm3Harness.fixture.rng)>>32n);});
+        BrowserRng::state()=(uint64_t(hi)<<32)|lo;
+    }else rng=EM_ASM_INT({return window.homm3Harness.fixture.rng;});
     traceRandom=EM_ASM_INT({return !!window.homm3Harness.fixture.traceRngFromLoad;});
 #else
-    const char* state=std::getenv("HOMM3_HARNESS_RNG");if(!state)throw std::runtime_error("Save requires RNG sidecar");rng=std::stoul(state);
+    const char* state=std::getenv("HOMM3_HARNESS_RNG");if(!state)throw std::runtime_error("Save requires RNG sidecar");
+    const char* algorithm=std::getenv("HOMM3_HARNESS_RULES_RNG");browserCombatRng=algorithm&&std::strcmp(algorithm,"browser-libc")==0;
+    if(browserCombatRng)BrowserRng::state()=std::stoull(state);else rng=std::stoul(state);
     if(const char* trace=std::getenv("HOMM3_HARNESS_TRACE_RNG");trace&&*trace)traceRandom=true;
 #endif
 #ifdef __EMSCRIPTEN__

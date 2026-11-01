@@ -1,3 +1,4 @@
+#include "browser_rng.h"
 #include "va.h"
 
 #include "iconwdgt.h"
@@ -435,7 +436,7 @@ void iconWidget::nextRandomFrame()
                 {cs_range_r, 1},
                 {cs_range_dr, 1},
             };
-            int roll = random(1, 100);
+            int roll = Port::CosmeticRng::range(1, 100);
             int cumulative = 0;
             unsigned int pick = 0;
             for (; pick < 11; ++pick) {
@@ -477,7 +478,7 @@ void iconWidget::nextRandomSiegeEngineFrame()
             {cs_range_r, 2},
             {cs_range_dr, 2},
         };
-        int roll = random(1, 100);
+        int roll = Port::CosmeticRng::range(1, 100);
         int cumulative = 0;
         unsigned int pick = 0;
         for (; pick < 4; ++pick) {

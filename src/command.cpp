@@ -1,3 +1,4 @@
+#include "browser_rng.h"
 #ifdef HOMM3_SERVER
 #include "server_combat.h"
 #include "server_authority.h"
@@ -323,7 +324,9 @@ int combatManager::main(message& msg)
                     DATA_COMPGEN(0x00670218, receivedCombatActionLog,
                                  "Received action [%d]--> [%d,%d,%d]"),
                     m_nextAction, m_nextActionExtra, m_nextActionGridIndex, m_nextActionGridIndex2);
-                sRand(combatMsg->m_seed);
+                // New peers continue the serialized rules stream. Retain the
+                // original seed field for recordings made by older peers.
+                if(combatMsg->m_seed!=-1)sRand(combatMsg->m_seed);
                 goto process_action;
             }
 
@@ -1669,7 +1672,7 @@ void combatManager::showEagleEye(int winningGroup, int dialogTimeout)
             launchSample(
                 formatString(DATA_COMPGEN(0x00670268, pickupSampleFormat,
                                            "pickup%02d.82M"),
-                              sRandom(1, 7))
+                              Port::CosmeticRng::range(1, 7))
                     .c_str(),
                 -1, 3);
             extendedDialog(msg.c_str(), rewards, -1, -1, dialogTimeout);
@@ -1701,7 +1704,7 @@ void combatManager::showLootedArtifacts(
             launchSample(
                 formatString(DATA_COMPGEN(0x00670268, pickupSampleFormat,
                                            "pickup%02d.82M"),
-                              sRandom(1, 7))
+                              Port::CosmeticRng::range(1, 7))
                     .c_str(),
                 -1, 3);
             extendedDialog(g_generalText->GetText(GENERAL_TEXT_COMBAT_CAPTURED_ARTIFACT), rewards, -1, -1,
@@ -2428,8 +2431,9 @@ int combatManager::processNextAction(message& msg, bool automaticTurn)
             && m_playerIds[0] >= 0 && m_playerIds[1] >= 0
             && g_game->isHuman(m_playerIds[1])
             && g_game->isHuman(m_playerIds[0])) {
-        int seed = GameTime::get();
-        sRand(seed);
+        // Wall-clock reseeding makes the same PvP action resolve differently
+        // after reconnect or on a headless authority. -1 means continuation.
+        const int seed = -1;
         CCombatMainMsg combatMsg(m_nextAction, m_nextActionExtra, m_nextActionGridIndex, m_nextActionGridIndex2,
                                  seed);
         g_logFile.log(
@@ -2673,6 +2677,7 @@ MAC_ADDRESS(0x087e70, 0xa4)
 void combatManager::resetCycleTimers()
 {
     unsigned long now = GameTime::get();
+    Port::CosmeticRng::clockEpoch()=static_cast<std::uint32_t>(now);
     cmbtHeroLastFidgetTime[0] = now;
     cmbtHeroLastFidgetTime[1] = now;
 
@@ -2681,8 +2686,11 @@ void combatManager::resetCycleTimers()
             army* stack = &m_armies[side][slot];
             if (stack->m_monFrameInfo.m_fidgetFrequency > 51) {
                 stack->m_lastFidgetTime =
-                    now + 2 * random(50, stack->m_monFrameInfo.m_fidgetFrequency)
+                    now + 2 * Port::CosmeticRng::range(50, stack->m_monFrameInfo.m_fidgetFrequency)
                         - stack->m_monFrameInfo.m_fidgetFrequency;
+#ifdef HOMM3_HARNESS
+                Port::Harness::decision("cycle-delay",side*21+slot,static_cast<int32_t>(stack->m_lastFidgetTime-now));
+#endif
             }
         }
     }

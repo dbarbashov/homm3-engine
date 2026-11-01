@@ -1,4 +1,5 @@
 #include "authority_local_files.h"
+#include "game_rng.h"
 #include "authority_actions_client.h"
 #include "authority_exchange_client.h"
 #include "authority_client.h"
@@ -1938,6 +1939,7 @@ int game::setupPuzzlePieces(int whichPlayer, int countOnly)
     }
     g_puzzlePiecesRemoved.reset();
 
+    Port::GameRng::Preserve puzzleRandom;
     sRand(whichPlayer * 424909 + 423869);
 
     // Dreamcast names SRandom at game.cpp:2051/2052; Mac calls it at
@@ -2821,6 +2823,7 @@ DC_ADDRESS(0x0a83d0, 0x778)
 MAC_ADDRESS(0x0d051c, 0x1eac)  // anchor-callee set (4 claimed pool loaders) + 'H3SVG'
 int game::load(TAbstractFile* infile)
 {
+    Port::GameRng::Preserve loadedRandom;
     SavedGameHeader saved;
     if (saved.load(infile))
         return -1;
@@ -3045,6 +3048,30 @@ int game::load(TAbstractFile* infile)
     setupAdjacentMons();
     aiExamineMap();
 
+    auto continuation=loadedRandom.continuation;
+    Port::GameRng::Extras extras;
+    if(!Port::GameRng::read(infile,continuation,&extras))return -1;
+    if(!extras.phases.empty()){
+        if(extras.phases.size()!=m_worldMap.m_objects.size())return -1;
+        for(size_t index=0;index<extras.phases.size();++index)m_worldMap.m_objects[index].m_animationOffset=extras.phases[index];
+    }
+    if(!extras.aggression.empty()&&extras.aggression.size()!=HERO_COUNT)return -1;
+    for(int id=0;id<HERO_COUNT;++id){
+        auto& h=m_heroes[id];
+        if(!extras.aggression.empty()){
+            float value;std::memcpy(&value,&extras.aggression[id],sizeof(value));
+            if(!std::isfinite(value)||value<0||value>100)return -1;
+            h.m_aggression=value;
+        }else{
+            // Retail saves omit this gameplay parameter. Derive a stable
+            // fallback from serialized identity, never from a loading process.
+            std::uint64_t state=unsigned(id)*424909u+unsigned(h.m_levelSeed)*67843u+423869u;
+            auto draw=[&](){state=UINT64_C(6364136223846793005)*state+1;return int(state>>33);};
+            const int numerator=75+draw()%26,denominator=100+draw()%26;
+            h.m_aggression=float(numerator)*akHeroClassTraits[h.m_heroClass].m_aggression/float(denominator);
+        }
+    }
+    loadedRandom.continuation=continuation;
     return 0;
 }
 
@@ -3338,7 +3365,10 @@ int game::save(TAbstractFile* outfile)
     if (!saveRecordedEvents(outfile))
         return -1;
 
-    return 0;
+    Port::GameRng::Extras extras;extras.phases.reserve(m_worldMap.m_objects.size());
+    for(const auto& object:m_worldMap.m_objects)extras.phases.push_back(object.m_animationOffset);
+    for(const auto& h:m_heroes){std::uint32_t value;std::memcpy(&value,&h.m_aggression,sizeof(value));extras.aggression.push_back(value);}
+    return Port::GameRng::write(outfile,&extras)?0:-1;
 }
 
 // Original public ?SaveGame@game@@QAA_NPBD_N111@Z proves the Boolean
@@ -3481,7 +3511,7 @@ MAC_ADDRESS(0x0d4be0, 0x14c)
 int game::loadGame(const char* filename, int isOrigData, int isQuickLoad)
 {
     if(Port::AuthorityLocalFiles::blocked(true))return 0;
-    setupOrigData();
+    {Port::GameRng::Preserve temporaryRandom;setupOrigData();}
     if (isOrigData)
         return 0;
 
@@ -6822,8 +6852,13 @@ void startAITheme()
 {
     char name[40];
 
+    // The same viewer/date gets the same waiting theme after a reload or on
+    // either transport. Widget animation must not affect music selection.
+    const unsigned key=g_game->m_month*28u+g_game->m_week*7u+g_game->m_day
+        +unsigned(g_game->getLocalPlayerGamePos()+1)*17u;
+    const auto sample=(UINT64_C(6364136223846793005)*key+1)>>33;
     sprintf(name, DATA_COMPGEN(0x00677eac, aiThemeFormat, "AITheme%d"),
-            random(1, 3) - 1);
+            int(sample%3));
     g_soundManager->startMP3(name, 0, 1);
 }
 
@@ -7198,6 +7233,9 @@ MAC_ADDRESS(0x0de818, 0x6e4)
 // DC game.cpp:8094..8254 records hero/array references and a long town_id.
 void game::perDay()
 {
+#ifdef HOMM3_HARNESS
+    Port::Harness::decision("calendar-day-start",getCurrentTurn(),0);
+#endif
     ++m_day;
     if (!g_gameOver) {
         if (m_day > 7) {
@@ -7447,6 +7485,9 @@ DC_ADDRESS(0x0b41e0, 0x5d8)
 MAC_ADDRESS(0x0df4d8, 0x6bc)  // PerDay/PerMonth bracket + dc lines/callees; MAC_ABSTRACTION_FROM(tokens1:1041d282a786,21.8677): DC-evidenced recoveries since this checkpoint (57336c584 weekly-visit hero row, e01fd6b03 calendar domain, cell helpers in place of the ExtraInfoUnion casts, DC traits spellings); CW reallocates the loop.
 void game::perWeek()
 {
+#ifdef HOMM3_HARNESS
+    Port::Harness::decision("calendar-week-start",getCurrentTurn(),0);
+#endif
     hero* obscuringHero;
     int align;
     TCreatureType alternateBonus;
@@ -7608,6 +7649,9 @@ void game::perWeek()
     giveTroopsToNeutralTowns();
 
     setSummoningGenerators();
+#ifdef HOMM3_HARNESS
+    Port::Harness::decision("calendar-week-end",g_weekType,g_weekTypeExtra);
+#endif
 }
 
 VA(0x004c8f40, 0x378)
@@ -10116,6 +10160,7 @@ DC_ADDRESS(0x0bc0c0, 0x13a)
 MAC_ADDRESS(0x0e6d54, 0xe0)
 type_point game::getPuzzleOrigin() const
 {
+    Port::GameRng::Preserve puzzleRandom;
     type_point result(m_ultimateArtifactX - 9,
                       m_ultimateArtifactY - 8,
                       m_ultimateArtifactZ);

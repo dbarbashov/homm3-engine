@@ -33,7 +33,7 @@ class Services:
     async def start(self):
         relay_port,site_port=free_port(),free_port();out=self.args.out/self.mode;out.mkdir(parents=True,exist_ok=True)
         env={'LOBBY_BIND':f'127.0.0.1:{relay_port}','HOMM3_METRICS_PORT':'0','HOMM3_WEB_ROOT':str(self.args.site_root/'web'),'HOMM3_HISTORY_DIR':str(out/'history')}
-        if self.mode=='authority':env.update(HOMM3_AUTHORITY_ENGINE=str(ROOT/'scripts/parity/worker.py'),HOMM3_HARNESS_ENGINE_BINARY=str(self.args.worker),HOMM3_AUTHORITY_RUNTIME=str(self.args.runtime),HOMM3_HARNESS_SAVE=str(self.args.fixture/'start.gm2'),HOMM3_HARNESS_RNG=str(self.fixture['rng']),HOMM3_HARNESS_SEED=str(self.fixture['seed']),HOMM3_HARNESS_OUTPUT=str(out),HOMM3_HARNESS_COMBAT_RNG=self.fixture.get('combatRng',''),HOMM3_HARNESS_TRACE_RNG='1' if self.fixture.get('traceRngFromLoad') else '')
+        if self.mode=='authority':env.update(HOMM3_AUTHORITY_ENGINE=str(ROOT/'scripts/parity/worker.py'),HOMM3_HARNESS_ENGINE_BINARY=str(self.args.worker),HOMM3_AUTHORITY_RUNTIME=str(self.args.runtime),HOMM3_HARNESS_SAVE=str(self.args.fixture/'start.gm2'),HOMM3_HARNESS_RNG=str(self.fixture['rng']),HOMM3_HARNESS_RULES_RNG=self.fixture.get('rngAlgorithm','msvc-lcg32'),HOMM3_HARNESS_SEED=str(self.fixture['seed']),HOMM3_HARNESS_OUTPUT=str(out),HOMM3_HARNESS_COMBAT_RNG=self.fixture.get('combatRng',''),HOMM3_HARNESS_TRACE_RNG='1' if self.fixture.get('traceRngFromLoad') else '')
         else:
             # No inherited authority configuration may turn the reference into a candidate.
             for key in ['HOMM3_AUTHORITY_ENGINE','HOMM3_AUTHORITY_RUNTIME','HOMM3_HARNESS_SAVE']:env[key]=''
@@ -62,7 +62,10 @@ def validate_fixture(directory):
     if data.get('schema')!=2 or data.get('boundary')!='before-first-turn':raise ValueError('Unsupported fixture schema/boundary')
     if sha(directory/'start.gm2')!=data['sha256']:raise ValueError('Fixture SHA256 mismatch')
     if sha(directory/'start.gm2.animation')!=data.get('animationSha256'):raise ValueError('Animation fixture SHA256 mismatch')
-    if not isinstance(data.get('rng'),int) or not 0<=data['rng']<=0xffffffff:raise ValueError('Invalid fixture RNG')
+    if data.get('rngAlgorithm')=='browser-libc':
+        value=data.get('rng')
+        if not isinstance(value,str) or not value.isascii() or not value.isdecimal() or not 1<=len(value)<=20 or not 0<=int(value)<=0xffffffffffffffff:raise ValueError('Invalid uint64 fixture RNG')
+    elif data.get('rngAlgorithm','msvc-lcg32')!='msvc-lcg32' or not isinstance(data.get('rng'),int) or not 0<=data['rng']<=0xffffffff:raise ValueError('Invalid fixture RNG')
     return data
 
 

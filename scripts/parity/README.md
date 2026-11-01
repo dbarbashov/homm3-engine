@@ -2,7 +2,7 @@
 
 Private, silent, accelerated two-browser testing of the legacy network game
 against the native authoritative worker. Both load the **same original GM2
-file**, with a separate RNG continuation and exact object animation phases. No screenshots, image recognition or
+file**, including exact RNG continuation, AI hero aggression and object animation phases. No screenshots, image recognition or
 changes to normal production clocks are required.
 
 Manual PvP fixtures support `fixture.py --pvp attacker` and `--pvp defender`.
@@ -20,6 +20,34 @@ fixture's result audio cleanup, original map fade and waiting-seat terrain
 music. Both inject faults to verify that missing presentation is detected.
 For calendar diagnosis, set `traceRngFromLoad: true` in a private fixture manifest;
 the runner retains bounded RNG draw/reseed traces with browser call stacks.
+
+## RNG and saves
+
+For production-equivalent rules throughout the game, generate fixtures with
+`--rng-algorithm browser-libc --combat-rng browser-libc`. The explicit 64-bit
+musl generator is identical in browser and native builds; the manifest stores
+its state as a decimal string to avoid JavaScript number rounding. The original
+32-bit harness mode remains available for existing regression fixtures.
+
+New GM2 saves append a bounded, little-endian `H3RNG003` trailer with rules RNG,
+object animation offsets and exact hero aggression bits. Retail saves still
+load; their omitted aggression gets a deterministic fallback based on hero
+identity and level seed. Deserialization and cosmetic UI must not advance the
+rules continuation. `scripts/test-game-rng.py` checks independent musl vectors,
+rollback, malformed/truncated trailers and exact save continuation without assets.
+
+`test-native-fixture.py` loads one fixture under three genuinely different
+constructor seeds and compares fourteen handoffs, complete frames and RNG.
+This is a fast rules gate; it does not replace the browser/audio matrix.
+`calendar_checks.py` additionally checks every day/week RNG boundary, actual
+tavern offers/armies, weekly growth and settled waiting music. Raw transport,
+intermediate track restarts, pixel and PCM differences remain separately visible.
+
+Manual network combat now continues the saved RNG instead of reseeding from
+the clock per action. New command headers use seed `-1` for continuation;
+older seeded headers remain readable. Peers in a new game must use the same
+engine version. `pvp_checks.py` compares actual damage draws on both seats to
+the worker, as well as rewards and continuation.
 
 ## Run
 

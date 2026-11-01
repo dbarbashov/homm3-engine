@@ -1,3 +1,4 @@
+#include "browser_rng.h"
 #include "prefs.h"
 #include "frontend_bridge.h"
 #include "va.h"
@@ -707,10 +708,10 @@ public:
     void wait(unsigned long forWho, const char* text)
     {
         m_forWho = forWho;
-        sRand(GameTime::get());
+        Port::CosmeticRng::seed(GameTime::get());
         int creature;
         do {
-            creature = sRandom(0, 111);
+            creature = Port::CosmeticRng::range(0, 111);
         } while (creature == WAIT_CREATURE_ARCH_DEVIL
                  || creature == WAIT_CREATURE_DEVIL);
         setup(text, g_mediumFont,
@@ -2030,7 +2031,7 @@ TSingleSelectionWindow::TSingleSelectionWindow(int gameMode)
 
     m_widgets.reserve(111);
 
-    sprintf(g_text, "gamselb%d.pcx", random(1, 100) < 51);
+    sprintf(g_text, "gamselb%d.pcx", Port::CosmeticRng::range(1, 100) < 51);
     // Complete's separate 16-bit backdrop has no recorded DC local name.
     bitmapBorder16* tempBack16 = new bitmapBorder16(
         0, 0, 800, 600, 100, g_text, 0x800);

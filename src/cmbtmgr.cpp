@@ -1,3 +1,4 @@
+#include "browser_rng.h"
 #include "combat_feedback.h"
 #include "battle_client.h"
 #include "combat_presentation.h"
@@ -674,7 +675,7 @@ int combatManager::open(int newPriority)
         sprintf(name,
                 DATA_COMPGEN(0x0066fee8, battleSampleFormat,
                              "battle%02d.wav"),
-                random(1, 8) - 1);
+                Port::CosmeticRng::range(1, 8) - 1);
         sample = loadPlaySample(name);
         g_windowManager->fadeScreen(1, 4, 1);
     }
@@ -758,12 +759,13 @@ int combatManager::open(int newPriority)
         char music[100];
         sprintf(music,
                 DATA_COMPGEN(0x0066fedc, combatMusicFormat, "combat%02d"),
-                sRandom(1, 4));
+                Port::CosmeticRng::range(1, 4));
         g_soundManager->startMP3(music, 0, 1);
     }
 
     g_timers[8] = GameTime::get();
     resetCycleTimers();
+    Port::BattleClient::restoreOpeningCycles();
     g_inputManager->flush();
     resetMouse();
 
@@ -1062,6 +1064,7 @@ void combatManager::setupCombat(type_point point, hero* leftHero, armyGroup* lef
     Port::Harness::decision("combat-setup",x,y);
 #endif
     g_combatSeed = seed;
+    Port::CosmeticRng::seed(x * 0x1aed3 + y * 0x28f79 + 0x13ea1);
     sRand(x * 0x1aed3 + y * 0x28f79 + 0x13ea1);
     m_mapPoint = point;
     m_combatCell = g_advManager->getCell(point);

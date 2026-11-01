@@ -47,9 +47,32 @@ def check(traces, winner):
             'intermediateDefenderWorldDifference':first_difference(state('legacy','settled',1)['world'],state('authority','settled',1)['world']) if winner else None}
 
 
+def combat_rng(records):
+    # This fixture has one manual lethal shot. Stop before reward/level RNG.
+    start=next((i for i,e in enumerate(records) if e['kind']=='action-start'),None)
+    if start is None:return []
+    output=[]
+    for event in records[start+1:]:
+        if event['kind']=='rng-seed':break
+        if event['kind']=='rng-draw':output.append(event)
+    return output
+
+
 def check_run(directory,winner):
     traces={m:json.loads((directory/m/'trace.json').read_text()) for m in ['legacy','authority']}
     result=check(traces,winner)
+    directory=Path(directory)
+    server=combat_rng([json.loads(line) for line in (directory/'authority/decisions.jsonl').read_text().splitlines()])
+    for seat in [0,1]:
+        events=[]
+        for step in json.loads((directory/'legacy/scenario.json').read_text()):
+            chunk=json.loads((directory/'legacy'/(step['name']+f'-p{seat}.json')).read_text())
+            events.extend(e['data'] for e in chunk['events'] if e['kind']=='decision')
+        reference=combat_rng(events)
+        passed=bool(reference) and reference==server
+        result['checks'].append({'name':f'p{seat}: exact manual PvP damage RNG', 'passed':passed,
+                                 'detail':first_difference(reference,server)})
+        result['passed'] &= passed
     if result['passed']:
         faults={}
         for name in ['missing-loot','missing-level','lost-control','dead-hero-retained']:

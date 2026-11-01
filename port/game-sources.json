@@ -155,6 +155,7 @@
     "smooth_camera",
     "fast_game",
     "authority_client",
+    "authority_remote_move",
     "battle_client",
     "authority_actions_client",
     "authority_town_client",

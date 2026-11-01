@@ -1,3 +1,4 @@
+#include "authority_remote_move.h"
 #include "parity_wait.h"
 #include "adventure_fizzle.h"
 #include "presentation_pointer.h"
@@ -432,6 +433,7 @@ void tick(){
     const bool previousMobile=g_advManager->m_curHeroMobile;
     const type_point previousLocation=previousHero>=0?g_game->m_heroes[previousHero].getLocation():type_point(-1,-1,-1);
     applying=true;
+    if(length&&viewInstalled&&HD::adventureVisible())AuthorityRemoteMove::capture(actor);
     if(length){
         if(HD::adventureVisible()&&g_completeDrawEnabled&&EM_ASM_INT({return window.homm3Authority.pendingAdventureFizzle;})){
             g_windowManager->saveFizzleSourceX(0xc0,0xa0,0xe0,0xe0);
@@ -444,7 +446,6 @@ void tick(){
             // cells. Demobilizing afterwards would write the old hero over them.
             g_advManager->deactivateCurrTown(false);
             g_advManager->deactivateCurrHero(false);
-            g_game->turnOnAIMusic();
         }
         if(viewInstalled&&HD::adventureVisible()&&length>=6&&pending[2]==actor&&(previousTurn!=actor||previousDate!=pending[5]*28+pending[4]*7+pending[3])){
             transferStage=2;turnView(false,true,true);Port::Harness::wait(16);transferStage=0;
@@ -477,6 +478,7 @@ void tick(){
         g_advManager->setInitialMapOrigin();
     }
     if(viewInstalled&&previousTurn==actor&&turn!=actor){
+        g_game->turnOnAIMusic();
         // Original turn handoff clears selection before entering wait mode.
         // Keep the projected hero in its map cell; do not turn it into a cursor.
         p.m_currHeroId=static_cast<HeroId>(-1);p.m_currTownId=-1;
@@ -566,6 +568,7 @@ void tick(){
         for(int id=0;id<game::HERO_COUNT;++id)if(viewInstalled&&g_game->m_heroes[id].m_owner==actor){auto& h=g_game->m_heroes[id];h.m_pathTargetX=targets[id].m_x;h.m_pathTargetY=targets[id].m_y;h.m_pathTargetZ=targets[id].m_z;}
         g_advManager->reseed(0,0);
         if(turn==actor&&selected&&selected->m_pathTargetX>=0&&selected->getTarget()!=selected->getLocation()){g_advManager->seedTo(selected->getTarget());g_advManager->showRoute(0,0,1);}
+        if(length&&viewInstalled&&turn==previousTurn&&turn!=actor)AuthorityRemoteMove::replay(actor);
         g_advManager->forceNewHover();g_advManager->updateRadar(1,1,0,0,0);
         g_advManager->redrawAdvScreen(1,0);
         // redrawAdvScreen already commits the framebuffer. When a predicted

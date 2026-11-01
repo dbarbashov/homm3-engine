@@ -82,7 +82,10 @@
     world(label,world,rng){h.append(h.worlds,{label,world,rng:typeof rng==='string'?rng:rng>>>0,t:h.t});},
     installFixture(FS){
       if(!h.fixture)return false;
-      if(h.fixture.schema!==2||!Number.isInteger(h.fixture.rng)||!h.fixture.saveBase64)throw Error('Invalid fixture manifest');
+      const validRng=h.fixture.rngAlgorithm==='browser-libc'
+        ? typeof h.fixture.rng==='string'&&/^\d{1,20}$/.test(h.fixture.rng)&&BigInt(h.fixture.rng)<=0xffffffffffffffffn
+        : Number.isInteger(h.fixture.rng)&&h.fixture.rng>=0&&h.fixture.rng<=0xffffffff;
+      if(h.fixture.schema!==2||!validRng||!h.fixture.saveBase64)throw Error('Invalid fixture manifest');
       const bytes=Uint8Array.from(atob(h.fixture.saveBase64),c=>c.charCodeAt(0));
       FS.writeFile('/runtime/data/RMTparity.gm2',bytes);
       if(typeof h.fixture.animationBase64!=='string')throw Error('Missing animation fixture');

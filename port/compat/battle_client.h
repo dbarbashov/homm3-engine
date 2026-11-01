@@ -8,5 +8,6 @@ void settleDeath(army&);
 bool begin();
 void project();
 void installOpening();
+void restoreOpeningCycles();
 int main(message&);
 } }

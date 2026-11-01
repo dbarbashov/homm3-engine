@@ -1,3 +1,4 @@
+#include "browser_rng.h"
 #include "va.h"
 
 #include <string.h>
@@ -1489,11 +1490,11 @@ DC_ADDRESS(0x11f928, 0xc8)
 void CWaitForReadyPlayersDlg::wait()
 {
     m_startTime = GameTime::get();
-    sRand(m_startTime);
+    Port::CosmeticRng::seed(m_startTime);
 
-    int creature = sRandom(0, 111);
+    int creature = Port::CosmeticRng::range(0, 111);
     while (creature == CREATURE_ARCH_DEVIL || creature == CREATURE_DEVIL)
-        creature = sRandom(0, 111);
+        creature = Port::CosmeticRng::range(0, 111);
 
     setup(g_generalText->GetText(GENERAL_TEXT_WAIT_FOR_READY_PLAYERS), g_mediumFont,
           akCreatureTypeTraits[creature].m_sprite_name, 0);
@@ -2199,11 +2200,11 @@ MAC_ADDRESS(0x2147a0, 0xd4)
 void CLevelPickWaitDlg::waitForLevels(int fromWho)
 {
     m_fromWho = fromWho;
-    sRand(GameTime::get());
+    Port::CosmeticRng::seed(GameTime::get());
 
-    int creature = sRandom(0, 111);
+    int creature = Port::CosmeticRng::range(0, 111);
     while (creature == CREATURE_ARCH_DEVIL || creature == CREATURE_DEVIL)
-        creature = sRandom(0, 111);
+        creature = Port::CosmeticRng::range(0, 111);
 
     setup(g_generalText->GetText(GENERAL_TEXT_WAIT_FOR_LEVEL_SELECTION), g_mediumFont,
           akCreatureTypeTraits[creature].m_sprite_name, 0);
@@ -2314,7 +2315,7 @@ MAC_ADDRESS(0x214c04, 0xac)
 void CWaitForRemoteBattleDlg::wait(int playerPos)
 {
     m_playerPos = playerPos;
-    int creature = sRandom(0, 111);
+    int creature = Port::CosmeticRng::range(0, 111);
     setup(g_generalText->GetText(GENERAL_TEXT_WAIT_FOR_REMOTE_BATTLE), g_mediumFont,
           akCreatureTypeTraits[creature].m_sprite_name, 12);
     doModal(0);

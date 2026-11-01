@@ -1,3 +1,4 @@
+#include "browser_rng.h"
 #include "soundmgr.h"
 #include "mousemgr.h"
 #include "bitmap16.h"
@@ -87,6 +88,20 @@ bool take(){
 }
 }
 struct AuthorityBattleAccess {
+    static void cycleTimers(const Port::Authority::CombatVisualRecord& event){
+        auto& c=*g_combatManager;const auto now=GameTime::get();
+        Port::CosmeticRng::clockEpoch()=static_cast<std::uint32_t>(now);
+        c.cmbtHeroLastFidgetTime[0]=c.cmbtHeroLastFidgetTime[1]=now;
+        for(int i=0;i<5&&event[6]+i<42;++i)if(event[7+i]!=INT_MIN){
+            const int side=(event[6]+i)/21,slot=(event[6]+i)%21;
+            if(slot<c.m_numArmies[side]){
+                c.m_armies[side][slot].m_lastFidgetTime=now+event[7+i];
+#ifdef HOMM3_HARNESS
+                Port::Harness::decision("cycle-restored",side*21+slot,event[7+i]);
+#endif
+            }
+        }
+    }
     static const combatManager::TObstacleInfo* shape(const std::string& name){
         for(int i=0;i<91;++i)if(name==combatManager::s_obstacleInfo[i].m_spriteName)return &combatManager::s_obstacleInfo[i];
         if(name==combatManager::s_quicksandInfo[0].m_spriteName)return &combatManager::s_quicksandInfo[0];
@@ -130,7 +145,12 @@ struct AuthorityBattleAccess {
         button(TCombatWindow::COMBAT_LEFT_COMMAND_1_ID,offered(4));
         button(TCombatWindow::COMBAT_LEFT_COMMAND_2_ID,canAct);
         button(TCombatWindow::COMBAT_LEFT_COMMAND_3_ID,ready && EM_ASM_INT({return window.homm3Authority.combatCanAuto();}));
-        button(TCombatWindow::COMBAT_RIGHT_COMMAND_0_ID,!c.m_creaturePlacement&&offered(101));
+        // The original lets a hero inspect the book even with no affordable
+        // spell. Opening the book is not a cast; the selected spell is still
+        // validated by the authority when it becomes an action.
+        const auto* caster=c.m_heroes[c.m_currentSide];
+        button(TCombatWindow::COMBAT_RIGHT_COMMAND_0_ID,canAct&&!c.m_creaturePlacement&&caster&&
+            (!c.m_spellsCast[c.m_currentSide]||c.m_debugNoSpellLimit)&&caster->isWieldingArtifact(ARTIFACT_SPELLBOOK));
         button(TCombatWindow::COMBAT_RIGHT_COMMAND_1_ID,!c.m_creaturePlacement&&offered(8));
         button(TCombatWindow::COMBAT_RIGHT_COMMAND_2_ID,!c.m_creaturePlacement&&offered(3));
         // getControl enables the combat log on a local turn. Its arrows keep
@@ -256,11 +276,7 @@ struct AuthorityBattleAccess {
                 a->playAnimation(cs_wait,1,0);break;
             case VisualCycleTimers:{
                 finishCast();
-                const auto now=GameTime::get();
-                c.cmbtHeroLastFidgetTime[0]=c.cmbtHeroLastFidgetTime[1]=now;
-                for(int i=0;i<5&&e[6]+i<42;++i)if(e[7+i]!=INT_MIN){
-                    if(auto* target=stack((e[6]+i)/21,(e[6]+i)%21))target->m_lastFidgetTime=now+e[7+i];
-                }
+                cycleTimers(e);
                 break;
             }
             case VisualRound:
@@ -462,6 +478,10 @@ bool active(){return running;}
 void settleDeath(army& stack){AuthorityBattleAccess::settleDeath(stack);}
 void project(){if(running)AuthorityBattleAccess::project();}
 void installOpening(){if(running)AuthorityBattleAccess::project(false);}
+void restoreOpeningCycles(){
+    if(running)for(const auto& event:snapshot.events)
+        if(event[1]==Port::Authority::VisualCycleTimers)AuthorityBattleAccess::cycleTimers(event);
+}
 int main(message& msg){try{return AuthorityBattleAccess::main(msg);}catch(const std::exception& e){
 #ifdef __EMSCRIPTEN__
     EM_ASM({window.homm3Authority.fail(UTF8ToString($0));},e.what());
@@ -486,6 +506,9 @@ bool begin(){
         // Match the original adventure-to-combat boundary: leave a static
         // map hero behind, not a live adventure cursor under the battle.
         g_advManager->demobilizeCurrHero(false,false);
+        // The original encounter consumes the route before opening combat.
+        // Keep the target from leaking through the battle and its return.
+        if(heroes[0]){heroes[0]->m_pathTargetX=-1;heroes[0]->m_pathTargetY=-1;heroes[0]->m_pathTargetZ=-1;}
         AuthorityBattleAccess::heroes();
         g_combatManager->setupCombat(type_point(s.x,s.y,s.z),heroes[0],&groups[0],s.players[1],t,heroes[1],&groups[1],s.x,s.y,0,s.surrounded);
         AuthorityBattleAccess::configure();g_executive->doDialog(g_combatManager);running=false;
