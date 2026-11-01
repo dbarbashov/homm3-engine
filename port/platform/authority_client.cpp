@@ -1,4 +1,5 @@
 #include "parity_wait.h"
+#include "adventure_fizzle.h"
 #include "presentation_pointer.h"
 #include "authority_puzzle_client.h"
 #include "authority_client.h"
@@ -50,6 +51,7 @@ bool active=false,applying=false,failed=false,choosing=false,viewInstalled=false
 int actor=-1,turn=-1;
 int shownTurn=-1;bool pendingTurnPopup=false,pendingNewDay=false;
 bool battleReturnPending=false;
+bool adventureFizzleSource=false;
 int transferStage=0;
 int choiceMode=0,choiceValue=-1,choiceQuantity=0;
 bool movementStandEnd=true,movementRequestActive=false;
@@ -320,9 +322,13 @@ void playAdventureSounds(){
     // from opening the encounter modal before its sound has actually started.
     struct RestoreChoice {bool previous;~RestoreChoice(){choosing=previous;}} restore{choosing};
     choosing=true;
-    char name[81];while(EM_ASM_INT({return window.homm3Authority.takeAdventureSound(HEAPU8.subarray($0,$0+81),81);},name)){
+    char name[81];int presentation;
+    while((presentation=EM_ASM_INT({return window.homm3Authority.takeAdventureSound(HEAPU8.subarray($0,$0+81),81);},name))){
         if(movementRequestActive)finishMovementPresentation();
-        launchSample(name,-1,3);
+        if(presentation==2&&adventureFizzleSource){
+            adventureFizzleSource=false;
+            Port::showAdventureFizzle(name,true);
+        }else launchSample(name,-1,3);
     }
 #endif
 }
@@ -427,6 +433,10 @@ void tick(){
     const type_point previousLocation=previousHero>=0?g_game->m_heroes[previousHero].getLocation():type_point(-1,-1,-1);
     applying=true;
     if(length){
+        if(HD::adventureVisible()&&g_completeDrawEnabled&&EM_ASM_INT({return window.homm3Authority.pendingAdventureFizzle;})){
+            g_windowManager->saveFizzleSourceX(0xc0,0xa0,0xe0,0xe0);
+            adventureFizzleSource=true;
+        }
         pending.resize(length);
         EM_ASM({window.homm3Authority.copyPending(HEAP32,$0>>2);},pending.data());
         if(viewInstalled&&HD::adventureVisible()&&length>=6&&previousTurn==actor&&pending[2]!=actor){

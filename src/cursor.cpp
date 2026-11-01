@@ -406,9 +406,13 @@ void advManager::updateMovementSounds(hero* curr)
 {
     type_point point = getMapCenter();
     int ground = getCell(point)->m_groundSet;
+    // A remote move can be replayed outside this listener's visible area.
+    // Keep the waiting player's own terrain music, as on context selection.
     if (ground != m_lastTerrain) {
-        m_lastTerrain = ground;
-        g_soundManager->switchAmbientMusic(g_terrainMusicIds[m_lastTerrain]);
+        if (!g_remoteOn || g_currentPlayer->isLocalHuman()) {
+            m_lastTerrain = ground;
+            g_soundManager->switchAmbientMusic(g_terrainMusicIds[m_lastTerrain]);
+        }
 
 #ifndef HOMM3_SERVER
         sample* walkSample = cursorSamples[

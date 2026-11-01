@@ -5,6 +5,22 @@ against the native authoritative worker. Both load the **same original GM2
 file**, with a separate RNG continuation and exact object animation phases. No screenshots, image recognition or
 changes to normal production clocks are required.
 
+Manual PvP fixtures support `fixture.py --pvp attacker` and `--pvp defender`.
+Replay the corresponding `scenarios/pvp-attacker.json` or `pvp-defender.json`,
+then run `pvp_checks.py OUTPUT --winner attacker|defender`. Both players must
+reach their native result windows; the winner dismisses loot and chooses a
+level-up skill, and then actually moves on the correct adventure turn.
+The original waiting defender temporarily restores its old local cache before
+handoff; the report retains that intermediate difference and checks canonical
+rewards again on its next turn.
+
+`feedback_checks.py` compares exact morale/luck pauses and the complete ordered
+turn-animation frames. `lifecycle_checks.py` checks the positive-feedback
+fixture's result audio cleanup, original map fade and waiting-seat terrain
+music. Both inject faults to verify that missing presentation is detected.
+For calendar diagnosis, set `traceRngFromLoad: true` in a private fixture manifest;
+the runner retains bounded RNG draw/reseed traces with browser call stacks.
+
 ## Run
 
 Prerequisites: the repository's original game assets (`.local/game.json` and

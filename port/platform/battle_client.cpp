@@ -1,4 +1,6 @@
 #include "soundmgr.h"
+#include "mousemgr.h"
+#include "bitmap16.h"
 #include "advmgr.h"
 #include "battle_client.h"
 #include "authority_client.h"
@@ -245,6 +247,13 @@ struct AuthorityBattleAccess {
                 c.removeArmyFromGrid(*a);a->m_gridIndex=e[4];a->m_facing=e[5];if(a->m_numTroops>0)c.placeArmyInGrid(*a,e[4]);
             }
             switch(e[1]){
+            case VisualPause:
+                Port::pauseCombat(a,e[6]);break;
+            case VisualTurn:
+                if(e[6])a->setupAnimation();
+                a->turn(e[6]!=0);break;
+            case VisualFlightEnd:
+                a->playAnimation(cs_wait,1,0);break;
             case VisualCycleTimers:{
                 finishCast();
                 const auto now=GameTime::get();
@@ -336,6 +345,11 @@ struct AuthorityBattleAccess {
                 else if(e[10]==2){bool effected[2][20]={};for(int side=0;side<2;++side)for(int slot=0;slot<20;++slot)effected[side][slot]=(e[7+side]&(1<<slot))!=0;c.showMassSpell(effected,e[6],e[9]!=0);}
                 break;
             case VisualAction:{
+                // The original main loop polls the frame clock before every
+                // action, including after a long morale cue. A packet can hold
+                // several AI actions; each must cross the same clock boundary.
+                c.doAnimations();
+                Port::feedbackMarker("action-start",a);
                 finishCast();finishAction();action=e[6];c.m_currentSide=e[10];c.m_combatWindow->clearCombatMessages();
                 // Each resolved AI action passed through getControl on the
                 // worker. Reproduce its selector transition even when several
@@ -388,7 +402,16 @@ struct AuthorityBattleAccess {
         std::vector<type_artifact> loot;int count=next(0,128);for(int i=0;i<count;++i){int id=next(0,200),extra=next(INT32_MIN,INT32_MAX);type_artifact item(static_cast<TArtifact>(id));item.m_extra=extra;loot.push_back(item);}
         for(auto& spells:c.m_eagleEyeData)spells.clear();count=next(0,81);for(int i=0;i<count;++i)c.m_eagleEyeData[mine].insert(SpellID(next(0,80)));
         int raisedType=next(-1,200),raisedCount=next(0,INT32_MAX);if(index!=words.size())throw std::runtime_error("Trailing combat result");
-        c.m_battleOver=1;c.m_combatWindow->combatMessage("",0,0);
+        c.m_battleOver=1;
+        // Original doVictory stops battle samples before opening results.
+        // Waiting until the combat manager closes leaves a live battle sound
+        // underneath the result theme and skips the original dimmed backdrop.
+        c.freeArmies();c.m_combatWindow->combatMessage("",0,0);
+        g_mouseManager->m_noChangePointer=0;
+        g_mouseManager->setPointer(6,mouseManager::COMBAT_SET);
+        g_mouseManager->showPointer(false);g_mouseManager->enable();
+        g_windowManager->m_screenBitmap->Darken(0,0,800,600);
+        g_windowManager->updateScreen();
         TCombatResultsWindow window(c.m_heroes[0],c.m_heroes[1],mine,winner,siege,experience);
         g_soundManager->startMP3(g_combatResultMusic[g_combatResult],1,1);
         window.doModal();

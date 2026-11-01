@@ -33,7 +33,7 @@ class Services:
     async def start(self):
         relay_port,site_port=free_port(),free_port();out=self.args.out/self.mode;out.mkdir(parents=True,exist_ok=True)
         env={'LOBBY_BIND':f'127.0.0.1:{relay_port}','HOMM3_METRICS_PORT':'0','HOMM3_WEB_ROOT':str(self.args.site_root/'web'),'HOMM3_HISTORY_DIR':str(out/'history')}
-        if self.mode=='authority':env.update(HOMM3_AUTHORITY_ENGINE=str(ROOT/'scripts/parity/worker.py'),HOMM3_HARNESS_ENGINE_BINARY=str(self.args.worker),HOMM3_AUTHORITY_RUNTIME=str(self.args.runtime),HOMM3_HARNESS_SAVE=str(self.args.fixture/'start.gm2'),HOMM3_HARNESS_RNG=str(self.fixture['rng']),HOMM3_HARNESS_SEED=str(self.fixture['seed']),HOMM3_HARNESS_OUTPUT=str(out),HOMM3_HARNESS_COMBAT_RNG=self.fixture.get('combatRng',''))
+        if self.mode=='authority':env.update(HOMM3_AUTHORITY_ENGINE=str(ROOT/'scripts/parity/worker.py'),HOMM3_HARNESS_ENGINE_BINARY=str(self.args.worker),HOMM3_AUTHORITY_RUNTIME=str(self.args.runtime),HOMM3_HARNESS_SAVE=str(self.args.fixture/'start.gm2'),HOMM3_HARNESS_RNG=str(self.fixture['rng']),HOMM3_HARNESS_SEED=str(self.fixture['seed']),HOMM3_HARNESS_OUTPUT=str(out),HOMM3_HARNESS_COMBAT_RNG=self.fixture.get('combatRng',''),HOMM3_HARNESS_TRACE_RNG='1' if self.fixture.get('traceRngFromLoad') else '')
         else:
             # No inherited authority configuration may turn the reference into a candidate.
             for key in ['HOMM3_AUTHORITY_ENGINE','HOMM3_AUTHORITY_RUNTIME','HOMM3_HARNESS_SAVE']:env[key]=''
@@ -226,7 +226,7 @@ async def mode_run(args,mode,manifest,browser):
                 ui_window=state.get('window')
                 if ui_window:
                     for item in ui_window['widgets']:item['status']&=1|2|4|8|16|32|8192
-                stable={'window':ui_window,'world':{'heroes':[h for h in world['heroes'] if h['owner']==i],'towns':[t for t in world['towns'] if t['owner']==i],'resources':world['players'][i]['resources']},'adventure':adventure,'combat':state.get('combat'),'game':{k:state.get('game',{}).get(k) for k in ['day','week','month','player','combat','round']},'video':state.get('video'),'screen':state.get('screen'),'layers':state.get('hd',{}).get('layers')}
+                stable={'window':ui_window,'world':{'heroes':[h for h in world['heroes'] if h['owner']==i],'towns':[t for t in world['towns'] if t['owner']==i],'resources':world['players'][i]['resources'],'recruits':world['players'][i].get('recruits'),'recruitArmies':world['players'][i].get('recruitArmies')},'adventure':adventure,'combat':state.get('combat'),'game':{k:state.get('game',{}).get(k) for k in ['day','week','month','player','combat','round']},'video':state.get('video'),'screen':state.get('screen'),'layers':state.get('hd',{}).get('layers')}
                 audio=[{'t':e['t']-starts[i],'kind':e['kind'],'data':e['data']} for e in chunk['events'] if e['kind'].startswith(('homm3Music.','homm3Sfx.'))]
                 # Quantized PCM hash detects waveform changes even at equal RMS/peak.
                 # Compare runs from the same pinned browser/decoder.
@@ -282,6 +282,10 @@ async def mode_run(args,mode,manifest,browser):
             try:(out/f'failure-p{i}.json').write_text(await asyncio.wait_for(p.evaluate('JSON.stringify({harness:window.homm3Harness?.drain(),room:window.homm3Room,diagnostics:window.homm3PortDiagnostics,authority:window.homm3AuthorityStatus})'),timeout=5))
             except Exception:pass
       finally:
+        if manifest.get('traceRngFromLoad'):
+            for i,p in enumerate(pages):
+                try:(out/f'rng-trace-p{i}.json').write_text(await asyncio.wait_for(p.evaluate('JSON.stringify(window.homm3Harness.rngTrace||[])'),timeout=5))
+                except Exception as error:trace['rngTraceError']=repr(error)
         (out/'trace.json').write_text(json.dumps(trace,separators=(',',':')));(out/'console.json').write_text(json.dumps(console,ensure_ascii=False));(out/'errors.json').write_text(json.dumps(errors))
         scheduler.close()
         for c in contexts:await asyncio.wait_for(c.close(),timeout=5)

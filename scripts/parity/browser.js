@@ -126,9 +126,11 @@
   const awaitingWorld=new Map(), acceptedAnswers=new Map();
   Object.defineProperty(window,'homm3Authority',{configurable:true,get:()=>authority,set:next=>{
     authority=next;
+    let battleObservation=null,decisionStatus=null;
     const start=next.start,receive=next.receive;
     next.start=function(send){return start.call(this,message=>{
       if(['authority_command','authority_answer'].includes(message.type)){
+        battleObservation=null;decisionStatus=null;
         transportPending.set(String(message.id),performance.now());h.event('transport-send',{id:message.id,type:message.type});
       }
       return send(message);
@@ -158,6 +160,16 @@
       // End-turn can suspend on the NEXT player's human dialog. The initiating
       // client cannot wait for command completion before that player may answer.
       if(message.type==='authority_status' && message.phase==='choice' && message.activeActor!==next.actor)ids.push(...pendingAtArrival);
+      // In PvP the adventure owner need not own the current battle decision.
+      // Pair a same-revision battle observation with the choice status before
+      // releasing its command: neither an opening image nor status alone is
+      // execution completion. This works in either packet delivery order.
+      if(message.type==='authority_combat_state')battleObservation=message.state||message;
+      if(message.type==='authority_status')decisionStatus=message;
+      if(decisionStatus?.phase==='choice' && battleObservation?.revision===decisionStatus.revision){
+        const battle=battleObservation.data,owner=battle?.players?.[battle.side];
+        if(Number.isInteger(owner)&&owner>=0&&owner!==next.actor)ids.push(...pendingAtArrival);
+      }
       for(const [id,revision] of awaitingWorld)if(revision<=latestWorldRevision)ids.push(id);
       for(const id of ids){awaitingWorld.delete(id);acceptedAnswers.delete(id);}
       for(const id of ids)if(transportPending.has(id)){

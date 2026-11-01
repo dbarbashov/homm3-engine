@@ -101,3 +101,28 @@ const resumed=h.yield();context.homm3Authority.receive({type:'authority_result',
 await resumed;assert.equal(h.t,quantumStart+8,'resume executes the suspended tick exactly once');
 h.tick(8,100);await quantum;
 console.log('PASS: asynchronous readiness cannot remove a presentation tick');
+
+for(const observationFirst of [true,false]){
+  context.homm3Authority={actor:0,revision:4,start(fn){send=fn;},receive(msg){return msg.valid!==false;}};
+  const api=context.homm3Authority;api.start(()=>{});
+  const done=h.advance(16);send({type:'authority_command',id:'pvp-defender-'+observationFirst});
+  const start=h.t;
+  const view={type:'authority_combat_state',actor:0,revision:4,data:{side:1,players:[0,1],canAct:false}};
+  const status={type:'authority_status',phase:'choice',activeActor:0,revision:4};
+  api.receive(observationFirst?view:status);
+  assert.equal(h.tick(8,100),start,'PvP opening/status alone cannot release transport');
+  api.receive({...view,valid:false});
+  assert.equal(h.tick(8,100),start,'rejected view cannot release transport');
+  api.receive(observationFirst?status:view);
+  h.tick(8,100);h.tick(8,100);await done;
+  assert.equal(h.t,start+16,'defender can act without waiting for attacker command completion');
+}
+console.log('PASS: PvP remote decision releases both packet orderings');
+
+const ownDecision=h.advance(16);send({type:'authority_answer',id:'own-decision-after-pvp'});
+const ownTime=h.t;
+context.homm3Authority.receive({type:'authority_answer_result',id:'own-decision-after-pvp',ok:true,revision:4});
+assert.equal(h.tick(8,100),ownTime,'cached remote decision must not release a new own answer');
+context.homm3Authority.receive({type:'authority_choice',token:7});
+h.tick(8,100);h.tick(8,100);await ownDecision;
+console.log('PASS: old PvP observations cannot satisfy a later command');

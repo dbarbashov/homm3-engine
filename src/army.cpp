@@ -954,6 +954,7 @@ void army::walk(int direction, bool endWalk, bool initialWalk)
 {
 #ifdef HOMM3_SERVER
     Port::Authority::recordCombatVisual(Port::Authority::VisualWalk,this,direction,endWalk,initialWalk);
+    Port::Authority::CompoundTurnScope turns;
 #endif
     if (initialWalk)
         setupAnimation();
@@ -1897,8 +1898,7 @@ void army::doAttack(int direction)
     m_joustBonus = 0;
     if (armyToAttack->m_numTroops > 0
         && armyToAttack->canRetaliate(*this) && !killed) {
-        GameTime::delay(static_cast<int>(
-            combatManager::s_combatSpeedMod[g_config.m_combatSpeed] * 150.0f));
+        Port::pauseCombat(this,150);
         g_combatManager->m_currentSide = 1 - g_combatManager->m_currentSide;
         armyToAttack->doAttack(this, counterDirection);
         g_combatManager->m_currentSide = 1 - g_combatManager->m_currentSide;
@@ -1908,8 +1908,7 @@ void army::doAttack(int direction)
     armyToAttack->m_residualParalyze = 0;
     if (is(creatureTwoAttacks) && armyToAttack->m_numTroops > 0 && !is(creatureShootingArmy)
         && !isIncapacitated() && m_numTroops > 0) {
-        GameTime::delay(static_cast<int>(
-            combatManager::s_combatSpeedMod[g_config.m_combatSpeed] * 150.0f));
+        Port::pauseCombat(this,150);
         doAttack(armyToAttack, direction);
     }
     if (!armyToAttack->is(creatureImmobilized)) {
@@ -3929,6 +3928,10 @@ DC_ADDRESS(0x04b454, 0x104)
 MAC_ADDRESS(0x052938, 0x174)  // anchor-global
 void army::turn(bool animateTurn)
 {
+#ifdef HOMM3_SERVER
+    if(!Port::Authority::compoundTurnDepth)
+        Port::Authority::recordCombatVisual(Port::Authority::VisualTurn,this,animateTurn);
+#endif
     if (m_facing == FACING_ATTACKER) {
         if (animateTurn)
             playAnimation(9, -1, 0);

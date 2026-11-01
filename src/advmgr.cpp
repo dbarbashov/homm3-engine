@@ -823,8 +823,11 @@ int advManager::open(int newPriority)
         m_netMsgHandler = new CAdvMgrNetMsgHandler();
         g_dPlay->setNetMsgHandler(m_netMsgHandler);
     }
+    // During network startup the current hero can belong to a remote seat.
+    // The draw-message bypass would otherwise install that hero's ambient
+    // context and mobile cursor over the local waiting player's map.
     if (g_currentPlayer->m_heroes[0] != -1
-        && (!Port::AuthorityClient::enabled() || g_currentPlayer->isLocalHuman()))
+        && ((!g_remoteOn && !Port::AuthorityClient::enabled()) || g_currentPlayer->isLocalHuman()))
         setHeroContext(g_currentPlayer->m_heroes[0], 0, 0, 1);
     return 0;
 }
@@ -7688,12 +7691,16 @@ void advManager::setHeroContext(int heroId, int inMove, bool waitingPlayer, bool
                                       Port::HD::height());
     }
 
-    type_point viewCentre = getMapCenter();
-    setEnvironmentOrigin(viewCentre, 1);
-
-    if (cell->m_groundSet != m_lastTerrain && drawChanges) {
-        m_lastTerrain = cell->m_groundSet;
-        g_soundManager->switchAmbientMusic(g_terrainMusicIds[m_lastTerrain]);
+    // Event-record replay temporarily selects the other player's hero even
+    // outside the local fog-of-war view. That bookkeeping must not replace
+    // the waiting listener's terrain theme with the hidden hero's terrain.
+    if (!g_remoteOn || player->isLocalHuman() || waitingPlayer) {
+        type_point viewCentre = getMapCenter();
+        setEnvironmentOrigin(viewCentre, 1);
+        if (cell->m_groundSet != m_lastTerrain && drawChanges) {
+            m_lastTerrain = cell->m_groundSet;
+            g_soundManager->switchAmbientMusic(g_terrainMusicIds[m_lastTerrain]);
+        }
     }
 
     if (!m_heroMoving && drawChanges) {

@@ -125,7 +125,9 @@ uint64_t storedBuildings(const town& t){uint64_t mask=0;for(int id=0;id<44;++id)
 std::string world(bool initial) {
     std::ostringstream s;
     s<<"{\"date\":["<<g_game->m_month<<','<<g_game->m_week<<','<<g_game->m_day<<"],\"size\":["<<g_mapWidth<<','<<g_mapHeight<<','<<g_game->getNumMapLevels()<<"],\"players\":[";
-    for(int i=0;i<8;++i){const auto& p=g_game->m_players[i];s<<(i?",":"")<<"{\"human\":"<<int(p.m_isHuman)<<",\"disabled\":"<<int(g_game->m_playerDisabled[i])<<",\"resources\":[";for(int j=0;j<7;++j)s<<(j?",":"")<<p.m_resources[j];s<<"]}";}
+    for(int i=0;i<8;++i){const auto& p=g_game->m_players[i];s<<(i?",":"")<<"{\"human\":"<<int(p.m_isHuman)<<",\"disabled\":"<<int(g_game->m_playerDisabled[i])<<",\"resources\":[";for(int j=0;j<7;++j)s<<(j?",":"")<<p.m_resources[j];
+        s<<"],\"recruits\":["<<int(p.m_recruits[0])<<','<<int(p.m_recruits[1])<<"],\"recruitArmies\":[";
+        for(int offer=0;offer<2;++offer){s<<(offer?",":"")<<'[';const int id=p.m_recruits[offer];if(id>=0&&id<game::HERO_COUNT)for(int slot=0;slot<7;++slot)s<<(slot?",":"")<<'['<<int(g_game->m_heroes[id].m_army.m_armies[slot])<<','<<g_game->m_heroes[id].m_army.m_numTroops[slot]<<']';s<<']';}s<<"]}";}
     if(initial){
         s<<"],\"rosters\":[";
         for(int i=0;i<8;++i){const auto& p=g_game->m_players[i];
@@ -214,7 +216,9 @@ void decision(const char* kind,int side,int slot){
 #endif
 #ifdef __EMSCRIPTEN__
     exactRng=std::to_string(browserCombatRng?BrowserRng::state():uint64_t(rng));
-    EM_ASM({window.homm3Harness.event('decision',({kind:UTF8ToString($0),side:$1,slot:$2,rng:UTF8ToString($3),algorithm:$4?'browser-libc':'msvc-lcg32'}));},kind,side,slot,exactRng.c_str(),browserCombatRng);
+    EM_ASM({const h=window.homm3Harness;const record=({kind:UTF8ToString($0),side:$1,slot:$2,rng:UTF8ToString($3),algorithm:$4?'browser-libc':'msvc-lcg32'});h.event('decision',record);if(record.kind.endsWith('-start')||record.kind.endsWith('-end'))h.event('feedback-clock',({...record,deadline:$5}));
+        if(h.fixture.traceRngFromLoad&&record.kind.startsWith('rng-')){const trace=h.rngTrace||(h.rngTrace=[]);if(trace.length>=200000)throw new Error('RNG trace overflow');trace.push({...record,t:h.t,stack:new Error().stack});}
+    },kind,side,slot,exactRng.c_str(),browserCombatRng,g_timers[0]);
 #else
     if(const char* dir=std::getenv("HOMM3_HARNESS_OUTPUT")){
         std::ofstream file(std::string(dir)+"/decisions.jsonl",std::ios::app);
@@ -261,6 +265,26 @@ void exportFixture(const char* path){
         if(guard.m_type!=MONSTER)throw std::runtime_error("Feedback fixture requires Arrogance guard at 5,8");
         guard.m_extraInfo=(guard.m_extraInfo&~4095u)|300u;
         if(guard.m_objectIndex>=0)g_game->m_worldMap.m_objects[guard.m_objectIndex].m_extraInfo=guard.m_extraInfo;
+    }
+#endif
+#ifndef __EMSCRIPTEN__
+    if(const char* winner=std::getenv("HOMM3_HARNESS_PVP")){
+        const int winning=std::strcmp(winner,"defender")==0?1:0;
+        auto& attacker=g_game->m_heroes[g_game->m_players[0].m_heroes[0]];
+        auto& defender=g_game->m_heroes[g_game->m_players[1].m_heroes[0]];
+        for(auto& t:g_game->m_towns){if(t.m_visitingHeroId==defender.m_id)t.m_visitingHeroId=-1;if(t.m_garrisonHeroId==defender.m_id)t.m_garrisonHeroId=-1;}
+        defender.restoreCell();
+        const type_point target(5,8,0);auto* guard=g_game->getCell(target);
+        g_advManager->m_fullMap=&g_game->m_worldMap;
+        if(guard->m_type==MONSTER)g_advManager->eraseObj(guard,target,false);
+        defender.m_x=target.m_x;defender.m_y=target.m_y;defender.m_z=target.m_z;defender.obscureCell();
+        for(int seat=0;seat<2;++seat){auto& h=seat?defender:attacker;
+            h.m_army.initialize();h.m_army.add(seat==winning?CREATURE_TITAN:CREATURE_PIKEMAN,seat==winning?20:1,-1);
+            h.m_experience=999;h.m_level=1;h.m_mana=0;h.m_movePoints=h.m_maxMovePoints=h.getMobility();
+            g_game->setVisibility(5,8,0,seat,10,false);
+        }
+        (winning?attacker:defender).giveArtifact(type_artifact(ARTIFACT_SWORD_OF_HELLFIRE),false,false);
+        g_game->setupAdjacentMons();
     }
 #endif
 #ifndef __EMSCRIPTEN__
@@ -381,9 +405,10 @@ bool loadFixture(){
     g_playerTurn=g_netLocalGamePos;g_currentPlayer=&g_game->m_players[g_netLocalGamePos];
 #ifdef __EMSCRIPTEN__
     rng=EM_ASM_INT({return window.homm3Harness.fixture.rng;});
+    traceRandom=EM_ASM_INT({return !!window.homm3Harness.fixture.traceRngFromLoad;});
 #else
     const char* state=std::getenv("HOMM3_HARNESS_RNG");if(!state)throw std::runtime_error("Save requires RNG sidecar");rng=std::stoul(state);
-    if(std::getenv("HOMM3_HARNESS_TRACE_RNG"))traceRandom=true;
+    if(const char* trace=std::getenv("HOMM3_HARNESS_TRACE_RNG");trace&&*trace)traceRandom=true;
 #endif
 #ifdef __EMSCRIPTEN__
     int setup[41];

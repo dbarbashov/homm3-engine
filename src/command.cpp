@@ -2401,6 +2401,9 @@ DC_ADDRESS(0x06f984, 0x82a)
 MAC_ADDRESS(0x0871d0, 0xb3c)  // anchor-callee exhaustive + single-fn gap
 int combatManager::processNextAction(message& msg, bool automaticTurn)
 {
+#ifdef HOMM3_HARNESS
+    Port::Harness::decision("action-start",m_actingSide,m_actingSlot);
+#endif
     if (!suppressCombatPresentation()) {
         m_combatWindow->clearCombatMessages();
         m_combatWindow->m_heroSubWindows[0]->unShow();
