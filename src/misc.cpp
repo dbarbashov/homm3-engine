@@ -1,4 +1,5 @@
 #include "host_path.h"
+#include "authority_client.h"
 #include "va.h"
 
 #include <stdarg.h>
@@ -22,7 +23,10 @@ DC_ADDRESS(0x0fd81c, 0x4c)
 MAC_ADDRESS(0x130c68, 0x8c)
 int safeRandom(int min, int max)
 {
-    if (!g_remoteOn)
+    // The authoritative renderer has no DirectPlay transport, but it is still
+    // a network presentation. Keep cosmetic cycles on the original clock path
+    // instead of consuming the single-player RNG on every animation frame.
+    if (!g_remoteOn && !Port::AuthorityClient::enabled())
         return random(min, max);
     if (max == min)
         return max;

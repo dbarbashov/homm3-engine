@@ -3,6 +3,7 @@
 #include "server_authority.h"
 #endif
 #include "battle_client.h"
+#include "combat_presentation.h"
 // Both DC command routines below retain army::GetName as the source boundary,
 // while the original CreatureType.h body supplies its nested GetArmyName
 // expansion.  Omitting that header-inline body loses 16 retail CFG blocks.
@@ -1200,6 +1201,9 @@ void combatManager::resetRound()
         }
     }
 
+#ifdef HOMM3_SERVER
+    Port::Authority::recordCombatVisual(Port::Authority::VisualRound,getCurrentArmy(),m_turnNumber,m_creaturePlacement);
+#endif
     if (!m_creaturePlacement
             && !suppressCombatPresentation()) {
         m_combatWindow->combatMessage(
@@ -2679,6 +2683,20 @@ void combatManager::resetCycleTimers()
             }
         }
     }
+#ifdef HOMM3_SERVER
+    // Publish resolved cosmetic delays, never the rules RNG state. Packing
+    // five slots per record keeps long AI turns within the bounded journal.
+    for(int first=0;first<42;first+=5){
+        int delays[5]={INT_MIN,INT_MIN,INT_MIN,INT_MIN,INT_MIN};bool any=false;
+        for(int i=0;i<5&&first+i<42;++i){
+            const int side=(first+i)/21,slot=(first+i)%21;
+            if(slot<m_numArmies[side]&&m_armies[side][slot].m_monFrameInfo.m_fidgetFrequency>51){
+                delays[i]=static_cast<int32_t>(m_armies[side][slot].m_lastFidgetTime-now);any=true;
+            }
+        }
+        if(any)Port::Authority::recordCombatVisual(Port::Authority::VisualCycleTimers,getCurrentArmy(),first,delays[0],delays[1],delays[2],delays[3],delays[4]);
+    }
+#endif
 }
 
 // Original: combatManager::SetCombatViewArmy; command.cpp:3819

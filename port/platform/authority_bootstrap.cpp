@@ -75,9 +75,10 @@ void run(){
         throw std::runtime_error("Restore projection does not match selected map");
     EM_ASM({window.homm3Authority.applied();});
     g_localGamePos=actor;g_netLocalGamePos=actor;g_playerTurn=words[2];g_currentPlayer=&g_game->m_players[actor];g_curPlayerBit=1<<actor;g_curWatchPlayer=actor;g_mapVisibilityBit=1<<actor;
-    g_currentPlayer->m_isLocal=1;g_currentPlayer->m_isHuman=1;g_thisNetGotAdventureControl=1;
-    g_currentPlayer->m_currHeroId=g_currentPlayer->m_numHeroes?g_currentPlayer->m_heroes[0]:static_cast<HeroId>(-1);
-    g_currentPlayer->m_currTownId=g_currentPlayer->m_numTowns?g_currentPlayer->m_townIds[0]:-1;
+    const bool localTurn=g_playerTurn==actor;
+    g_currentPlayer->m_isLocal=localTurn;g_currentPlayer->m_isHuman=1;g_thisNetGotAdventureControl=localTurn;
+    g_currentPlayer->m_currHeroId=localTurn&&g_currentPlayer->m_numHeroes?g_currentPlayer->m_heroes[0]:static_cast<HeroId>(-1);
+    g_currentPlayer->m_currTownId=localTurn&&g_currentPlayer->m_numTowns?g_currentPlayer->m_townIds[0]:-1;
     Fast::state().ready=g_playerTurn!=actor;
     g_gameCommand=-1;g_gameOver=0;
     portableAdventureLoop(false);

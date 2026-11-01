@@ -9451,7 +9451,7 @@ void game::showNewWeek()
     if(Port::Authority::active()){
         // Keep original week/month wording and acknowledgement, but the
         // headless worker has no adventure window or sound presentation.
-        normalDialog(g_text,1,-1,-1,-1,0,-1,0,-1,0,-1,0);
+        Port::Authority::calendarChoice(g_text);
         return;
     }
 #endif

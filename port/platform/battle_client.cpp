@@ -232,7 +232,7 @@ struct AuthorityBattleAccess {
         // actions and spells. Replaying only movement/effects left unrelated
         // stacks stranded in the middle of their previous fidget sequence.
         auto finishAction=[&](){
-            if(action==1||action==2||action==4||action==5||action==6||action==7||action==9||action==10)c.resetCycleTimers();
+            if(snapshot.presentationVersion<3&&(action==1||action==2||action==4||action==5||action==6||action==7||action==9||action==10))c.resetCycleTimers();
             action=0;
         };
         auto finishCast=[&](){if(castingSide<0)return;auto* sprite=c.cmbtHero[castingSide];for(int frame=c.cmbtHeroFrameIndex[castingSide]+1;frame<sprite->GetNumFrames(4);++frame){c.cmbtHeroFrameIndex[castingSide]=frame;c.drawFrame(1,0,0,100,1,1);}c.cmbtHeroFrameType[castingSide]=0;c.cmbtHeroFrameIndex[castingSide]=0;castingSide=-1;};
@@ -245,6 +245,20 @@ struct AuthorityBattleAccess {
                 c.removeArmyFromGrid(*a);a->m_gridIndex=e[4];a->m_facing=e[5];if(a->m_numTroops>0)c.placeArmyInGrid(*a,e[4]);
             }
             switch(e[1]){
+            case VisualCycleTimers:{
+                finishCast();
+                const auto now=GameTime::get();
+                c.cmbtHeroLastFidgetTime[0]=c.cmbtHeroLastFidgetTime[1]=now;
+                for(int i=0;i<5&&e[6]+i<42;++i)if(e[7+i]!=INT_MIN){
+                    if(auto* target=stack((e[6]+i)/21,(e[6]+i)%21))target->m_lastFidgetTime=now+e[7+i];
+                }
+                break;
+            }
+            case VisualRound:
+                finishCast();finishAction();c.m_turnNumber=e[6];
+                c.turnOffHighlighter(1);c.m_lastMovedArmy=nullptr;
+                if(!e[7])c.m_combatWindow->combatMessage((*g_generalText)[GENERAL_TEXT_COMBAT_ROUND],1,0);
+                break;
             case VisualWalk:
                 if(e[6]>=0&&e[6]<6&&a->m_gridIndex>=0&&a->m_gridIndex<187)a->walk(e[6],e[7]!=0,e[8]!=0);
                 break;
@@ -323,6 +337,11 @@ struct AuthorityBattleAccess {
                 break;
             case VisualAction:{
                 finishCast();finishAction();action=e[6];c.m_currentSide=e[10];c.m_combatWindow->clearCombatMessages();
+                // Each resolved AI action passed through getControl on the
+                // worker. Reproduce its selector transition even when several
+                // actions arrive together; selecting only the final stack
+                // leaves intermediate actors in their idle/fidget animation.
+                c.checkChangeSelector();
                 if(action==1||action==2||action==6||action==7||action==9||action==10)c.resetCyclingCreatures();
                 if(e[6]==3||e[6]==8){
                     const int text=e[6]==8?(a->m_numTroops==1?GENERAL_TEXT_COMBAT_WAIT_ONE_FORMAT:GENERAL_TEXT_COMBAT_WAIT_MANY_FORMAT):(a->m_numTroops==1?GENERAL_TEXT_COMBAT_DEFEND_ONE_FORMAT:GENERAL_TEXT_COMBAT_DEFEND_MANY_FORMAT);
@@ -369,7 +388,10 @@ struct AuthorityBattleAccess {
         std::vector<type_artifact> loot;int count=next(0,128);for(int i=0;i<count;++i){int id=next(0,200),extra=next(INT32_MIN,INT32_MAX);type_artifact item(static_cast<TArtifact>(id));item.m_extra=extra;loot.push_back(item);}
         for(auto& spells:c.m_eagleEyeData)spells.clear();count=next(0,81);for(int i=0;i<count;++i)c.m_eagleEyeData[mine].insert(SpellID(next(0,80)));
         int raisedType=next(-1,200),raisedCount=next(0,INT32_MAX);if(index!=words.size())throw std::runtime_error("Trailing combat result");
-        TCombatResultsWindow window(c.m_heroes[0],c.m_heroes[1],mine,winner,siege,experience);window.doModal();
+        c.m_battleOver=1;c.m_combatWindow->combatMessage("",0,0);
+        TCombatResultsWindow window(c.m_heroes[0],c.m_heroes[1],mine,winner,siege,experience);
+        g_soundManager->startMP3(g_combatResultMusic[g_combatResult],1,1);
+        window.doModal();
         if(mine==winner){
             c.showEagleEye(mine,0);c.showLootedArtifacts(loot,0);
             if(raisedType>=0&&raisedCount>0){

@@ -334,22 +334,28 @@ void tick(){
     if(pendingTurnPopup&&!Fast::state().waiting&&HD::adventureVisible()){
         pendingTurnPopup=false;pendingNewDay=true;choosing=true;
         popupPlayerTurnInfo();
+        // startLocalPlayerTurn keeps ambient loops off while time/town events
+        // are acknowledged. Reproduce that continuation before opening the
+        // worker's choices, rather than leaving popupPlayerTurnInfo's sound
+        // enablement active throughout them.
+        if(g_game->m_day!=1||(g_game->m_week==1&&g_game->m_month==1)){
+            g_soundManager->m_playSounds=1;startAITheme();
+            g_soundManager->m_playSounds=0;g_forceSwitchMusic=GameTime::get();
+        }
         choosing=false;
     }
     if(pendingNewDay&&!Fast::state().waiting&&HD::adventureVisible()&&
-       EM_ASM_INT({return !window.homm3Authority.pendingChoice&&!window.homm3Authority.pendingLength()&&window.homm3AuthorityStatus?.phase==='adventure';})){
+       EM_ASM_INT({const api=window.homm3Authority;const choice=api.pendingChoice;return !api.pendingLength()&&((!choice&&window.homm3AuthorityStatus?.phase==='adventure')||choice?.kind==='calendar');})){
         pendingNewDay=false;choosing=true;
         // The notification stops the music. In the original startLocalPlayerTurn,
         // doNewTurn then restores the terrain theme and ambient sounds. Rules run
         // on the worker here, so their presentation continuation must run locally.
         g_soundManager->m_playSounds=1;
-        const auto center=g_advManager->getMapCenter();
-        g_advManager->m_lastTerrain=g_advManager->getCell(center)->m_groundSet;
-        g_soundManager->switchAmbientMusic(g_terrainMusicIds[g_advManager->m_lastTerrain]);
-        g_advManager->setEnvironmentOrigin(center,1);
+        g_advManager->setInitialMapOrigin();
         g_advManager->overrideBottomView(advManager::BOTTOM_VIEW_1,-1);
         g_advManager->updBottomView(1,1,1);
-        // Original doNewTurn selects the next hero only after calendar dialogs.
+        // Original doNewTurn selects the next hero after time/town event dialogs
+        // and before the week/month announcement.
         // Selecting during projection receipt paints a live hero cursor behind
         // the turn notification and can start ambient loops under the dialog.
         g_advManager->deactivateCurrHero(false);
@@ -379,7 +385,13 @@ void tick(){
             if(kind==15){AuthorityPuzzleClient::showPending(choice[1],choice[4]);choosing=false;return;}
             if(AuthorityExchangeClient::present(choice)){choosing=false;return;}
             if(presentExtendedChoice(choice,text)){choosing=false;return;}
-            if(kind==1){normalDialog(text,choice[1],choice[9],choice[10],choice[3],choice[4],choice[5],choice[6],choice[2],0,choice[7],choice[8]);answer=g_windowManager->m_dialogReturn;}
+            if(kind==1||kind==17){
+                // showNewWeek runs after doNewTurn's map/selection/card setup,
+                // unlike the time and town events that precede that setup.
+                if(kind==17){g_game->turnOffAIMusic();launchSample(g_game->m_week==1?"newmonth.wav":"newweek.wav",30000,3);g_advManager->m_advWindow->setBackgroundAnimation(1);}
+                normalDialog(text,choice[1],choice[9],choice[10],choice[3],choice[4],choice[5],choice[6],choice[2],0,choice[7],choice[8]);answer=g_windowManager->m_dialogReturn;
+                if(kind==17)g_advManager->m_advWindow->setBackgroundAnimation(0);
+            }
             else if(kind==2&&choice[1]>=0&&choice[1]<game::HERO_COUNT){
                 auto& h=g_game->m_heroes[choice[1]];
                 const int first=choice[3],second=choice[4];
@@ -465,7 +477,9 @@ void tick(){
         p.m_currHeroId=!startingTurn&&turn==actor&&(!viewInstalled||previousTurn!=actor)&&p.m_numHeroes?p.m_heroes[0]:static_cast<HeroId>(-1);
     }
     if(p.m_currHeroId>=0)p.m_currTownId=-1;
-    else if(p.m_currTownId<0||p.m_currTownId>=int(g_game->m_towns.size())||g_game->m_towns[p.m_currTownId].m_owner!=actor)p.m_currTownId=!startingTurn&&turn==actor&&p.m_numTowns?p.m_townIds[0]:-1;
+    // Garrison transfer clears the adventure hero selection. The town modal
+    // owns its own portraits; do not select an unrelated adventure town under it.
+    else if(p.m_currTownId<0||p.m_currTownId>=int(g_game->m_towns.size())||g_game->m_towns[p.m_currTownId].m_owner!=actor)p.m_currTownId=HD::adventureVisible()&&!startingTurn&&turn==actor&&p.m_numTowns?p.m_townIds[0]:-1;
     // The original misleadingly named all-cells flag is the AI blackout
     // screen: it paints opaque shroud and removes all locator portraits.
     g_completeDrawAllCells=0;g_completeDrawEnabled=1;g_blackoutPlayer=0;

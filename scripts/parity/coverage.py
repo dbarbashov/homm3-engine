@@ -22,6 +22,8 @@ def adventure_regressions(reference, candidate):
             return {h['id']:h['target'] for h in trace['actions'][name+'/p0']['state']['adventure']['heroes']}
         checks.append({'name':name+': original hero destinations',
                        'passed':targets(reference)==targets(candidate)})
+        checks.append({'name':name+': original adventure selection beneath town',
+                       'passed':all(reference['actions'][name+'/p0']['state']['adventure'][key]==candidate['actions'][name+'/p0']['state']['adventure'][key] for key in ['hero','town','mobile','cursor'])})
     for name in ['waiting-town','waiting-hero']:
         e=reference['actions'][name+'/p1'];a=candidate['actions'][name+'/p1']
         def effects(action):return [v for v in action['audioEvents'] if v['kind'].startswith('homm3Sfx.')]
@@ -67,6 +69,12 @@ def combat_regressions(reference, candidate):
     for trace in [reference,candidate]:
         up=log(trace,'log-up')[0]['start'];again=log(trace,'log-up-again')[0]['start'];down=log(trace,'log-down')[0]['start']
         record(trace['mode']+': clicks scroll history in both directions',again==up-1 and down==again+1)
+    record('round messages retained through the complete battle',
+           action(reference,'battle-auto')['state']['combat']['log']==action(candidate,'battle-auto')['state']['combat']['log'])
+    def result_music(trace):
+        return [e['data'] for e in action(trace,'battle-auto')['audioEvents'] if e['kind']=='homm3Music.play' and e['data'][0]=='win battle']
+    record('victory music requested exactly once with original playback parameters',
+           len(result_music(reference))==1 and result_music(reference)==result_music(candidate))
     for name in ['battle-dismiss','post-battle-move']:
         e=action(reference,name)['state'];a=action(candidate,name)['state']
         record(name+': restored hero cursor, route and ambient context',

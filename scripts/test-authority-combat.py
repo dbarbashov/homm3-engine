@@ -55,7 +55,8 @@ for case, name in cases:
         events=frame['presentation']
         assert len(events)<=256 and all(len(e)==12 and all(isinstance(n,int) for n in e) for e in events), name+': bounded visual records'
         assert all(e[0]>0 and (i==0 or e[0]==events[i-1][0]+1) for i,e in enumerate(events)), name+': ordered visual sequence'
-        assert all(1<=e[1]<=12 and 0<=e[2]<2 and 0<=e[3]<21 for e in events), name+': visual stack identity'
+        assert all(1<=e[1]<=14 and 0<=e[2]<2 and 0<=e[3]<21 for e in events), name+': visual stack identity'
+        assert all(e[1]!=14 or (0<=e[6]<=40 and e[6]%5==0) for e in events), name+': cosmetic timer range'
         assert all(0<=e[6]<81 for e in events if e[1]==9), name+': successful spell sound identity'
         assert all(e[6]>=0 and e[7]>=0 and e[8]>=0 for e in events if e[1]==5), name+': resolved damage facts'
         assert all(len(stack['modifiers'])==25 and len(stack['effectOrder'])<=81 for stack in frame['stacks']), name+': spell presentation modifiers'

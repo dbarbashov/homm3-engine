@@ -20,7 +20,10 @@ def check(trace):
         record(name+': original dialog opened',state(name)['layers']==1)
     for name in ['waiting-town-close','waiting-hero-close','waiting-move-blocked','host-move']:
         s=state(name);a=s['adventure']
-        record(name+': no local control or active cursor',s['layers']==0 and not a['motion']['local'] and not a['mobile'] and not a['cursor'])
+        # Legacy's global mobile flag can describe the remote acting hero;
+        # its local waiting hero must still occupy its map cell with no cursor.
+        # Authority has only the seat's presentation and must clear both flags.
+        record(name+': no local control or active cursor',s['layers']==0 and not a['motion']['local'] and not a['cursor'] and (trace['mode']=='legacy' or not a['mobile']))
         record(name+': hero remains in its canonical map cell',all(h['onMap'] for h in a['heroes']))
         record(name+': army, position, buildings and resources unchanged',gameplay(s['world'])==gameplay(original))
         record(name+': ambient effects stay disabled',not a['sound']['ambient'])
@@ -31,7 +34,7 @@ def check(trace):
     a=state('guest-town-close')['adventure']
     record('active town exit restores the mobile hero',state('guest-town-close')['layers']==0 and a['mobile'] and a['cursor'] and a['motion']['local'])
     return {'passed':all(c['passed'] for c in checks),'checks':checks,
-            'scope':'Authoritative waiting/active control lifecycle. Does not assert full audiovisual parity with legacy.'}
+            'scope':'Waiting/active control lifecycle. Legacy remote mobile state stays in the strict comparator; this gate checks local occupancy/control.'}
 
 
 def seeded_faults(trace):

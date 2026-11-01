@@ -41,6 +41,7 @@ void apply(int operation,int actor,int object,int a,int b,int c=0,int d=0,int e=
 void advanceTurn();
 void beginTurn();
 void shipyardChoice(int townType);
+void calendarChoice(const char* text);
 void normalChoice(const char* text,int mbType,int r1,int e1,int r2,int e2,int special,int r3,int e3,int x=-1,int y=-1);
 void levelChoice(int actor,int heroId,int primary,int skill1,int skill2);
 // Preserve the opt-in prototype and its tests independently of ordinary policy.

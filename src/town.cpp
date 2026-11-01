@@ -742,9 +742,10 @@ void town::view(int alreadyFaded)
     if (heroId != -1) {
         hero* visitingHero = g_game->getHero(heroId);
         if (visitingHero->m_owner == g_curWatchPlayer) {
-            // A read-only authoritative town does not grant adventure control.
+            // A read-only town does not grant adventure control in either
+            // network mode. Selecting a visitor must use the viewing seat.
             // Keep the visitor in its map cell while selecting its portrait.
-            const bool waiting = Port::AuthorityClient::enabled() && !g_currentPlayer->isLocalHuman();
+            const bool waiting = !g_currentPlayer->isLocalHuman();
             g_advManager->setHeroContext(visitingHero->m_id, 0, waiting, 1);
             g_adventureGraphicsPreserveMode = 0;
             g_townViewActive = 0;

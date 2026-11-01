@@ -823,7 +823,8 @@ int advManager::open(int newPriority)
         m_netMsgHandler = new CAdvMgrNetMsgHandler();
         g_dPlay->setNetMsgHandler(m_netMsgHandler);
     }
-    if (g_currentPlayer->m_heroes[0] != -1)
+    if (g_currentPlayer->m_heroes[0] != -1
+        && (!Port::AuthorityClient::enabled() || g_currentPlayer->isLocalHuman()))
         setHeroContext(g_currentPlayer->m_heroes[0], 0, 0, 1);
     return 0;
 }
