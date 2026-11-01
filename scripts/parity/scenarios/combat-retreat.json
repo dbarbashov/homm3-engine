@@ -1,0 +1,52 @@
+[
+  {
+    "name": "move-out",
+    "key": "ArrowDown",
+    "ms": 1024,
+    "expect": {
+      "game.y": 6
+    }
+  },
+  {
+    "name": "approach",
+    "key": "ArrowDown",
+    "ms": 1024,
+    "expect": {
+      "game.y": 7
+    }
+  },
+  {
+    "name": "encounter",
+    "key": "End",
+    "ms": 8192
+  },
+  {
+    "name": "encounter-confirm",
+    "key": "Enter",
+    "ms": 8192,
+    "expect": {
+      "game.combat": 1
+    }
+  },
+  {
+    "name": "retreat-question",
+    "widget": 2002,
+    "ms": 512
+  },
+  {
+    "name": "retreat-confirm",
+    "key": "Enter",
+    "ms": 4096,
+    "expect": {
+      "screen": "combat-results"
+    }
+  },
+  {
+    "name": "retreat-dismiss",
+    "key": "Enter",
+    "ms": 2048,
+    "expect": {
+      "game.combat": 0
+    }
+  }
+]

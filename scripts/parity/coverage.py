@@ -67,5 +67,38 @@ def combat_regressions(reference, candidate):
     for trace in [reference,candidate]:
         up=log(trace,'log-up')[0]['start'];again=log(trace,'log-up-again')[0]['start'];down=log(trace,'log-down')[0]['start']
         record(trace['mode']+': clicks scroll history in both directions',again==up-1 and down==again+1)
+    for name in ['battle-dismiss','post-battle-move']:
+        e=action(reference,name)['state'];a=action(candidate,name)['state']
+        record(name+': restored hero cursor, route and ambient context',
+               e['adventure']==a['adventure'] and a['adventure']['mobile'] and
+               a['adventure']['cursor'] and a['adventure']['sound']['ambient'])
+        record(name+': canonical position, army, experience and movement',e['world']==a['world'])
+        e=action(reference,name,1)['state'];a=action(candidate,name,1)['state']
+        record(name+': waiting player does not acquire a hero',
+               e['adventure']['hero']==a['adventure']['hero']==-1 and
+               not a['adventure']['cursor'] and not a['adventure']['sound']['ambient'])
     return {'passed':all(c['passed'] for c in checks),'checks':checks,
             'scope':'Targeted regressions only. Does not waive remaining frame, audio onset, combat or timing differences.'}
+
+
+def retreat_regressions(reference, candidate):
+    """Battle return must select the remaining town, not revive the lost hero."""
+    checks=[]
+    def record(name, passed):checks.append({'name':name,'passed':bool(passed)})
+    for name in ['retreat-question','retreat-confirm']:
+        e=reference['actions'][name+'/p0']['state'];a=candidate['actions'][name+'/p0']['state']
+        record(name+': original modal and static hero',e['window']==a['window'] and
+               e['adventure']==a['adventure'] and not a['adventure']['mobile'])
+    for seat in [0,1]:
+        e=reference['actions'][f'retreat-dismiss/p{seat}']['state']
+        a=candidate['actions'][f'retreat-dismiss/p{seat}']['state']
+        record(f'p{seat}: canonical post-retreat world',e['world']==a['world'])
+        record(f'p{seat}: original remaining selection',
+               all(e['adventure'][k]==a['adventure'][k] for k in ['hero','town','heroes','mobile','cursor','route']))
+        record(f'p{seat}: adventure restored without a stale hero cursor',
+               a['screen']=='adventure' and a['layers']==0 and
+               a['adventure']['hero']==-1 and not a['adventure']['mobile'] and not a['adventure']['cursor'])
+    a=candidate['actions']['retreat-dismiss/p0']['state']
+    record('lost hero removed and remaining town selected',not a['world']['heroes'] and a['adventure']['town']==0)
+    return {'passed':all(c['passed'] for c in checks),'checks':checks,
+            'scope':'Retreat lifecycle only. Full audiovisual parity is checked separately.'}

@@ -49,6 +49,7 @@ namespace {
 bool active=false,applying=false,failed=false,choosing=false,viewInstalled=false;
 int actor=-1,turn=-1;
 int shownTurn=-1;bool pendingTurnPopup=false,pendingNewDay=false;
+bool battleReturnPending=false;
 int transferStage=0;
 int choiceMode=0,choiceValue=-1,choiceQuantity=0;
 bool movementStandEnd=true,movementRequestActive=false;
@@ -325,6 +326,7 @@ void playAdventureSounds(){
     }
 #endif
 }
+void combatClosed(){battleReturnPending=true;}
 void tick(){
 #ifdef __EMSCRIPTEN__
     if(!active||applying||choosing||failed||BattleClient::active())return;
@@ -400,8 +402,10 @@ void tick(){
             EM_ASM({window.homm3Authority.answer($0,$1);},answer,quantity);choosing=false;
         }
     }
+    const bool resumeBattle=battleReturnPending&&HD::adventureVisible()&&
+        EM_ASM_INT({return !window.homm3Authority.pendingChoice&&window.homm3AuthorityStatus?.phase==='adventure';});
     int length=EM_ASM_INT({return window.homm3Authority.pendingLength();});
-    if(!length&&(viewInstalled||actor<0||!HD::adventureVisible())){if(!BattleClient::active())BattleClient::begin();presentDeferred();return;}
+    if(!length&&!resumeBattle&&(viewInstalled||actor<0||!HD::adventureVisible())){if(!BattleClient::active())BattleClient::begin();presentDeferred();return;}
     if(length<0||length>Authority::ProjectionMaxWords){failed=true;return;}
     type_point targets[game::HERO_COUNT];for(int id=0;id<game::HERO_COUNT;++id)targets[id]=g_game->m_heroes[id].getTarget();
     const int previousTurn=turn;
@@ -474,7 +478,13 @@ void tick(){
         // The mobile-cursor path removes it; original waiting-player town
         // selection deliberately does not demobilize that cursor again.
         const bool samePosition=sameHero&&g_game->m_heroes[p.m_currHeroId].getLocation()==previousLocation;
-        if(continuing&&(turn!=actor||previousMobile||samePosition)){
+        if(resumeBattle&&turn==actor&&!startingTurn){
+            // Original combatAdventure returns through mobilizeCurrHero after
+            // rewards and casualties. Reapply that presentation only once the
+            // authoritative world has returned to adventure, never under a
+            // level-up dialog or on the waiting opponent's client.
+            g_advManager->mobilizeCurrHero(0,0,1);
+        }else if(continuing&&(turn!=actor||previousMobile||samePosition)){
             // The projection restores canonical map cells. Keep an existing
             // mobile cursor without reselecting the hero (which restarts all
             // ambient loops and recentres the camera on every server update).
@@ -540,6 +550,7 @@ void tick(){
         if(!(movementRequestActive&&continuing&&samePosition&&previousMobile))
             g_advManager->updateScreen(1,0);
         viewInstalled=true;
+        if(resumeBattle)battleReturnPending=false;
         if(turn!=actor)g_mouseManager->setPointer(2,mouseManager::DEFAULT_SET);
     }
     pending.clear();applying=false;

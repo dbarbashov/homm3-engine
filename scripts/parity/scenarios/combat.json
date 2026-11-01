@@ -113,5 +113,14 @@
     "expect": {
       "game.combat": 0
     }
+  },
+  {
+    "name": "post-battle-move",
+    "key": "ArrowDown",
+    "ms": 1024,
+    "expect": {
+      "game.y": 9,
+      "game.combat": 0
+    }
   }
 ]

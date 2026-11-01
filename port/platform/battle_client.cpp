@@ -447,6 +447,7 @@ bool begin(){
 #ifdef __EMSCRIPTEN__
         EM_ASM({window.homm3Authority.combatWindowClosed();});
 #endif
+        AuthorityClient::combatClosed();
         return true;
     }catch(const std::exception& e){running=false;
 #ifdef __EMSCRIPTEN__

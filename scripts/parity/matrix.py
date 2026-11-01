@@ -9,7 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 from compare import compare, report
-from coverage import adventure, adventure_regressions, combat_regressions
+from coverage import adventure, adventure_regressions, combat_regressions, retreat_regressions
 from seeded_faults import check
 from transition_checks import check_run
 
@@ -22,7 +22,7 @@ p.add_argument('--site-root',type=Path,default=ROOT.parent/'homm3-web')
 p.add_argument('--relay',type=Path,default=ROOT.parent/'homm3-lobby/target/debug/homm3-lobby')
 p.add_argument('--worker',type=Path,default=ROOT/'build/cmake-parity-native/homm3-worker')
 p.add_argument('--web',type=Path,default=ROOT/'build/cmake-parity-web/web')
-p.add_argument('--quick',action='store_true',help='Combat + reference repeat + seeded faults; omit long town/week scenarios')
+p.add_argument('--quick',action='store_true',help='Combat/retreat + reference repeats + seeded faults; omit long town/week scenarios')
 args=p.parse_args();args.out=args.out.resolve();args.fixture=args.fixture.resolve()
 if args.out.exists() and any(args.out.iterdir()):raise SystemExit('Choose a new output directory to preserve prior evidence')
 args.out.mkdir(parents=True,exist_ok=True)
@@ -35,12 +35,12 @@ if not args.quick:
             cwd=ROOT,stdout=log,stderr=subprocess.STDOUT)
     summary['nativeFixturePassed']=native.returncode==0
     summary['harnessPassed'] &= native.returncode==0
-suites=['combat'] if args.quick else ['combat','adventure','turns']
+suites=['combat','combat-retreat'] if args.quick else ['combat','combat-retreat','adventure','turns']
 for suite in suites+['repeat-'+name for name in suites]:
     repeating=suite.startswith('repeat-');scenario=suite.removeprefix('repeat-')
     out=args.out/suite
     command=[sys.executable,str(ROOT/'scripts/parity/run.py'),'--fixture',str(args.fixture),'--out',str(out)]
-    command+=['--scenario',str(ROOT/'scripts/parity/scenarios/combat.json')] if scenario=='combat' else ['--suite',scenario,'--virtual-ms','512' if scenario=='turns' else '60000']
+    command+=['--scenario',str(ROOT/f'scripts/parity/scenarios/{scenario}.json')] if scenario.startswith('combat') else ['--suite',scenario,'--virtual-ms','512' if scenario=='turns' else '60000']
     for key in ['runtime','site_root','relay','worker','web']:command += ['--'+key.replace('_','-'),str(getattr(args,key).resolve())]
     run=subprocess.run(command,cwd=ROOT)
     traces={mode:json.loads((out/mode/'trace.json').read_text()) for mode in ['legacy','authority'] if (out/mode/'trace.json').exists()}
@@ -49,8 +49,8 @@ for suite in suites+['repeat-'+name for name in suites]:
     result=json.loads((out/'comparison.json').read_text()) if (out/'comparison.json').exists() else {'passed':False}
     summary['runs'][suite]={'complete':complete,'exitCode':run.returncode,'parity':result['passed'],'report':suite+'/index.html'}
     if not repeating:summary['parityPassed'] &= result['passed']
-    if scenario=='combat' and complete and not repeating:
-        regressions=combat_regressions(traces['legacy'],traces['authority'])
+    if scenario.startswith('combat') and complete and not repeating:
+        regressions=(retreat_regressions if scenario=='combat-retreat' else combat_regressions)(traces['legacy'],traces['authority'])
         (out/'regressions.json').write_text(json.dumps(regressions,indent=2))
         summary['runs'][suite]['regressionsPassed']=regressions['passed']
         summary['parityPassed'] &= regressions['passed']
