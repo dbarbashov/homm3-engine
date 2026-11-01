@@ -4875,6 +4875,10 @@ MAC_ADDRESS(0x19a1dc, 0x7f0)  // order-map+arity
 void combatManager::showSpellMessage(int isMonsterSpell, SpellID spellId,
                                      army* targetArmy)
 {
+#ifdef HOMM3_SERVER
+    Port::Authority::recordCombatVisual(Port::Authority::VisualSpellMessage,getCurrentArmy(),
+        spellId,isMonsterSpell,m_currentSide,targetArmy?targetArmy->group:-1,targetArmy?targetArmy->index:-1);
+#endif
     if (suppressCombatPresentation())
         return;
 

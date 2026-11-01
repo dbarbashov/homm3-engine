@@ -320,7 +320,7 @@ struct AuthorityBattleAccess {
                 const auto spell=static_cast<SpellID>(e[6]);c.m_currentSide=e[10];
                 source=akSpellTraits[spell].m_name;sourceCount=1;
                 army* target=e[7]>=0&&e[7]<187?c.m_cells[e[7]].getArmy():nullptr;
-                c.showSpellMessage(e[8],spell,target);
+                if(snapshot.presentationVersion<5)c.showSpellMessage(e[8],spell,target);
                 finishCast();int castX=a->midX(),castY=a->midY();
                 hero* caster=c.m_heroes[c.m_currentSide];
                 if(caster&&(e[8]==0||e[8]==combatManager::SPELL_CASTER_ARTIFACT)){
@@ -337,6 +337,10 @@ struct AuthorityBattleAccess {
                 }else if(e[7]>=0&&e[7]<187)c.spellEffect(akSpellTraits[spell].m_effect,e[7],80,false);
                 break;
             }
+            case VisualSpellMessage:
+                c.m_currentSide=e[8];
+                c.showSpellMessage(e[7],static_cast<SpellID>(e[6]),stack(e[9],e[10]));
+                break;
             case VisualMorale:
                 finishCast();finishAction();Port::showMorale(a,e[6]!=0);break;
             case VisualLuck:

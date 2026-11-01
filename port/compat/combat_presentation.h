@@ -6,7 +6,7 @@ class army;
 namespace Port { namespace Authority {
 enum CombatVisual { VisualWalk=1, VisualFly, VisualStrike, VisualShot,
                     VisualDamage, VisualSpell, VisualAction, VisualEffect, VisualSpellSound,
-                    VisualMorale, VisualLuck, VisualImpact, VisualRound, VisualCycleTimers, VisualPause, VisualTurn, VisualFlightEnd };
+                    VisualMorale, VisualLuck, VisualImpact, VisualRound, VisualCycleTimers, VisualPause, VisualTurn, VisualFlightEnd, VisualSpellMessage };
 constexpr int CombatVisualWords=12;
 constexpr int CombatVisualLimit=256;
 using CombatVisualRecord=std::array<int,CombatVisualWords>;

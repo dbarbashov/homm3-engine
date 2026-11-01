@@ -10,6 +10,8 @@
 #include "server_combat.h"
 #include "cmbtmgr.h"
 #include "town.h"
+#include "findpath.h"
+#include <array>
 #include <unistd.h>
 #include <iostream>
 #include <regex>
@@ -26,6 +28,27 @@ void gridConsistent(){
   const auto& stack=g_combatManager->m_armies[cell.m_armySide][cell.m_armySlot];
   if(hex!=stack.m_gridIndex && (!stack.is(creatureDoubleWide) || hex!=stack.getSecondGridIndex()))throw std::runtime_error("ghost grid occupant");
  }
+}
+// Follow a real obstacle-aware path to an enemy. Greedy board-center or
+// straight-line heuristics can oscillate forever behind two-hex obstacles.
+std::array<int, COMBAT_GRID_CELLS> approachScores(){
+ std::array<int, COMBAT_GRID_CELLS> scores;scores.fill(10000);
+ auto& c=*g_combatManager;auto* stack=c.getCurrentArmy();
+ const int oldGroup=stack->groupToAttack,oldIndex=stack->indexToAttack;
+ for(int side=0;side<2;++side)for(int slot=0;slot<c.m_numArmies[side];++slot){
+  const auto& target=c.m_armies[side][slot];
+  if(target.m_numTroops<=0 || !stack->isEnemy(&target))continue;
+  stack->groupToAttack=side;stack->indexToAttack=slot;
+  if(stack->findPath(target.m_gridIndex,99,1,0))
+   for(int i=0;i<g_searchArray->getPathSteps();++i){
+    const int hex=g_searchArray->getStepCell(i)->m_point.m_x;
+    if(combatManager::validHex(hex))scores[hex]=std::min(scores[hex],i);
+   }
+ }
+ stack->groupToAttack=oldGroup;stack->indexToAttack=oldIndex;
+ // Restore the scratch reachability map used by the original command executor.
+ g_searchArray->seedCombatPosition(stack,c.m_currentSide,stack->getSpeed(),c.m_creaturePlacement,-1);
+ return scores;
 }
 Reply answer(const Choice& c){
  static uint64_t token=0;
@@ -50,6 +73,7 @@ Reply answer(const Choice& c){
  if(c.metadata.find("\"tactics\":true")!=std::string::npos)tacticsSeen=true;
  std::regex r("\\{\\\"id\\\":([0-9]+),\\\"action\\\":([0-9]+),\\\"hex\\\":(-?[0-9]+),\\\"extra\\\":(-?[0-9]+),\\\"hex2\\\":(-?[0-9]+)\\}");
  if(getenv("SPELL")&&!castChosen){for(std::sregex_iterator i(c.metadata.begin(),c.metadata.end(),r),end;i!=end;++i)if(std::stoi((*i)[2])==101){castChosen=true;return Reply{std::stoi((*i)[1]),0,0};}}
+ const auto approach=approachScores();
  int selected=-1,best=10000;
  for(std::sregex_iterator i(c.metadata.begin(),c.metadata.end(),r),end;i!=end;++i){
   int id=std::stoi((*i)[1]),action=std::stoi((*i)[2]),hex=std::stoi((*i)[3]);
@@ -64,7 +88,10 @@ Reply answer(const Choice& c){
   if(action==101 && !castChosen){castChosen=true;selected=id;break;}
   if(action==1){selected=id;break;}
   if(action==6||action==7){selected=id;break;}
-  if(action==2){int score=abs(hex%17-8)+abs(hex/17-5);if(score<best){best=score;selected=id;}}
+  if(action==2){
+   const int score=combatManager::validHex(hex)?approach[hex]:10000;
+   if(score<best){best=score;selected=id;}
+  }
  }
  if(selected<0)selected=0;
  if(getenv("INVALID"))return Reply{999999,0,0};

@@ -24,7 +24,7 @@ def check(trace):
         candidate=copy.deepcopy(trace);mutate(candidate['actions'][action]);result=compare(trace,candidate)
         detected=not result['passed'] and channel in [f['channel'] for f in result['failures']]
         results.append({'fault':name,'passed':detected,'action':action,'expectedChannel':channel,'firstDivergence':result.get('firstDivergence')})
-    candidate=copy.deepcopy(trace);candidate['rng']^=1;result=compare(trace,candidate)
+    candidate=copy.deepcopy(trace);candidate['rng']=str(int(candidate['rng'])^1) if isinstance(candidate['rng'],str) else candidate['rng']^1;result=compare(trace,candidate)
     results.append({'fault':'different-RNG','passed':result.get('blocked') is True})
     return {'passed':all(r['passed'] for r in results),'checks':results}
 

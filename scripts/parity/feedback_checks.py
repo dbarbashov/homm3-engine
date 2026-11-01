@@ -78,7 +78,15 @@ def check_chunks(chunks, profile):
 
 def check_run(directory,profile):
     directory=Path(directory)
-    chunks={m:json.loads((directory/m/'battle-auto-p0.json').read_text()) for m in ['legacy','authority']}
+    chunks={}
+    for mode in ['legacy','authority']:
+        opening=[json.loads((directory/mode/(action+'-p0.json')).read_text())
+                 for action in ['encounter','encounter-confirm','battle-auto']]
+        # Fast enemies and low morale can resolve before the first controllable
+        # stack. Observe the whole battle, including that opening continuation.
+        chunks[mode]={**opening[-1], 'frames':[f for c in opening for f in c['frames']],
+                      'events':[e for c in opening for e in c['events']]}
+
     result=check_chunks(chunks,profile);rules=combat_checks(directory)
     result['rules']=rules;result['passed'] &= rules['passed'];result['strictParityPassed']=rules.get('strictParityPassed',False)
     # Seed faults into real observed traces. These are assertions about what

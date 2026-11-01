@@ -549,7 +549,7 @@ python3 scripts/parity/run.py --fixture test-results/feedback/fixture --scenario
 python3 scripts/parity/feedback_checks.py test-results/feedback/positive --profile positive
 ```
 
-Repeat for negative (three actual bad-morale procs with the pinned seed), zero
+Repeat for negative (actual bad-morale procs, including the opening), zero
 and unlucky; use `run.py --browser webkit` for the second renderer. The focused
 checker requires matching RNG, AI and gameplay, real proc targets/order,
 original effect frames and sample requests, pause durations within one original
@@ -584,3 +584,9 @@ older “hero present” invariant while still presenting control on the wrong
 turn. The legacy town-return path has its own selection defect in this fixture;
 its failed reference must not be counted as parity or silently filtered out.
 Use the regular paired adventure suite to compare unaffected town actions.
+
+Presentation version 5 records the original `showSpellMessage` calls separately
+from spell animations. The full combat scenario checks the complete history
+through Auto Combat, including damage-only spells that have no cast announcement.
+The native combat probe also verifies Magic Arrow has no invented announcement
+and Haste retains exactly one. Older journals keep their original replay path.
