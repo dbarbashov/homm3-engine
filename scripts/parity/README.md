@@ -521,3 +521,22 @@ uses original `powEffect` animation, but its client death settlement must not
 call `processDeath`: that consumes RNG and changes aura/spell/gameplay state.
 The server still owns those operations. Do not claim full AV parity from these
 focused passes; comparison.json retains strict frame/PCM/timing differences.
+
+### Waiting-player town inspection
+
+The authoritative-only `waiting-town.json` scenario opens and closes the
+waiting player's town and hero, attempts a blocked move, hands over the turn,
+and then performs a real move and town visit. It requires the combat fixture's
+blue Castle visitor at (4,29). Run it with `run.py --modes authority --scenario
+scripts/parity/scenarios/waiting-town.json`, then validate the output directory
+with `python3 scripts/parity/waiting_town_checks.py DIRECTORY`. Repeat with
+`--faults` to prove detection of a waiting cursor, missing hero, wrong-turn
+movement and missing control on the next turn. The full matrix runs this
+authority scenario twice; `--quick` remains combat-focused.
+
+The generic authority invariant also rejects an active hero cursor on the
+waiting player's adventure screen. A selected mobile hero can satisfy the
+older “hero present” invariant while still presenting control on the wrong
+turn. The legacy town-return path has its own selection defect in this fixture;
+its failed reference must not be counted as parity or silently filtered out.
+Use the regular paired adventure suite to compare unaffected town actions.

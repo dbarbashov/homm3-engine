@@ -12,6 +12,7 @@ from compare import compare, report
 from coverage import adventure, adventure_regressions, combat_regressions, retreat_regressions
 from seeded_faults import check
 from transition_checks import check_run
+from waiting_town_checks import check as check_waiting_town
 
 ROOT=Path(__file__).resolve().parents[2]
 p=argparse.ArgumentParser(description=__doc__)
@@ -76,6 +77,27 @@ try:
             (args.out/(suite+'-'+mode+'-repeatability.json')).write_text(json.dumps(repeat,indent=2))
             summary['repeatability'][suite][mode]={'passed':repeat['passed'],'unstableChannels':sorted({f['channel'] for f in repeat['failures']})}
             summary['harnessPassed'] &= repeat['passed']
+    if not args.quick:
+        waiting=[]
+        for name in ['waiting-town','repeat-waiting-town']:
+            out=args.out/name
+            command=[sys.executable,str(ROOT/'scripts/parity/run.py'),'--fixture',str(args.fixture),
+                     '--out',str(out),'--modes','authority','--scenario',str(ROOT/'scripts/parity/scenarios/waiting-town.json')]
+            for key in ['runtime','site_root','relay','worker','web']:command += ['--'+key.replace('_','-'),str(getattr(args,key).resolve())]
+            run=subprocess.run(command,cwd=ROOT)
+            trace=json.loads((out/'authority/trace.json').read_text());waiting.append(trace)
+            complete=not trace.get('failure') and not trace.get('overflow')
+            checks=check_waiting_town(trace) if complete else {'passed':False,'checks':[]}
+            (out/'waiting-town-checks.json').write_text(json.dumps(checks,indent=2))
+            summary['runs'][name]={'complete':complete,'exitCode':run.returncode,
+                                  'regressionsPassed':checks['passed'],'scope':'authority-only control lifecycle','report':name+'/index.html'}
+            summary['harnessPassed'] &= complete
+            summary['parityPassed'] &= checks['passed']
+        repeat=compare(*waiting)
+        (args.out/'waiting-town-authority-repeatability.json').write_text(json.dumps(repeat,indent=2))
+        summary['repeatability']['waiting-town']={'authority':{'passed':repeat['passed'],
+            'unstableChannels':sorted({f['channel'] for f in repeat['failures']})}}
+        summary['harnessPassed'] &= repeat['passed']
     faults=check(json.loads((args.out/'combat/legacy/trace.json').read_text()))
     (args.out/'seeded-faults.json').write_text(json.dumps(faults,indent=2))
     summary['seededFaults']=faults['passed'];summary['harnessPassed'] &= faults['passed']
