@@ -590,6 +590,12 @@ void advManager::teleportTo(hero* who, type_point destination,
                             bool drawChanges,
                             bool isReplay)
 {
+    const bool playSample = drawChanges;
+#ifdef HOMM3_SERVER
+    // Preserve the teleport sound/event, but a rules worker has no map window
+    // or fizzle framebuffer. Visibility changes must not enable drawing there.
+    drawChanges = false;
+#endif
     int oldShowIt = g_completeDrawEnabled;
     if (!drawChanges)
         g_completeDrawEnabled = 0;
@@ -608,7 +614,7 @@ void advManager::teleportTo(hero* who, type_point destination,
 
     SAMPLE2 teleportSample;
     teleportSample.m_playSample = 0;
-    if (drawChanges || g_currentPlayer->isLocalHuman()) {
+    if (playSample || g_currentPlayer->isLocalHuman()) {
         teleportSample = loadPlaySample(sampleName);
         completeDraw(0);
         if (drawChanges && !g_currentPlayer->isLocalHuman()) {

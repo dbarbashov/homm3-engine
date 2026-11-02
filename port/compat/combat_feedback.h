@@ -8,7 +8,16 @@
 #include "kb.h"
 #include "textresource.h"
 #include "parity_harness.h"
+#include "combat_presentation.h"
+#include "prefs.h"
 namespace Port {
+inline void pauseCombat(army* stack,int baseMilliseconds){
+#ifdef HOMM3_SERVER
+    Authority::recordCombatVisual(Authority::VisualPause,stack,baseMilliseconds);
+#endif
+    if(!g_combatManager->suppressCombatPresentation())
+        GameTime::delay(static_cast<int>(combatManager::s_combatSpeedMod[g_config.m_combatSpeed]*baseMilliseconds));
+}
 inline void feedbackMarker(const char* name,army* stack){
 #ifdef HOMM3_HARNESS
     Harness::decision(name,stack->group,stack->index);

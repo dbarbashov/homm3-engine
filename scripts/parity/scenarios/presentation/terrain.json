@@ -1,0 +1,7 @@
+[
+  {"name":"plan-terrain-route","map":[9,15],"ms":128},
+  {"name":"walk-terrain-route","map":[9,15],"ms":4096,"expect":{"game.x":9}},
+  {"name":"return-snow","key":"ArrowLeft","ms":1024,"expect":{"game.x":8}},
+  {"name":"return-snow-edge","key":"ArrowLeft","ms":1024,"expect":{"game.x":7}},
+  {"name":"return-dirt","key":"ArrowLeft","ms":1024,"expect":{"game.x":6}}
+]

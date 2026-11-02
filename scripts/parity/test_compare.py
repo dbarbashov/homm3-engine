@@ -14,6 +14,18 @@ class Comparator(unittest.TestCase):
         for name,mutate,channel in mutations:
             with self.subTest(name=name):
                 b=self.trace();mutate(b['actions']['move']);result=compare(self.trace(),b);self.assertFalse(result['passed']);self.assertIn(channel,[f['channel'] for f in result['failures']])
+    def test_fault_detector_accepts_both_rng_encodings(self):
+        from seeded_faults import check
+        for rng in [7,'18446744073709551615']:
+            with self.subTest(rng=rng):
+                trace=self.trace();trace['rng']=rng
+                action=trace['actions']['move']
+                action['state']['adventure']={'heroes':[{'id':1}]}
+                action['frames'].append({'t':132,'tiles':[5,6]})
+                action['pcm'][0]['hash']=123
+                result=check(trace)
+                self.assertTrue(result['passed'],result)
+                self.assertEqual(len(result['checks']),6)
     def test_empty_dropped_and_unrun_never_pass(self):
         for trace in [{},{'schema':1,'actions':{}},{**self.trace(),'overflow':True}]:self.assertFalse(compare(self.trace(),trace)['passed'])
 

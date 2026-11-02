@@ -1371,6 +1371,7 @@ public:
     // Keep the source call and let VC6 make that per-build inline decision.
     void startCursor(int direction);
     void stopCursor(bool standEnd);
+    void updateMovementSounds(hero* curr);
     void drawCursor(int cellX, int cellY);
     void drawCursorShadow(int cellX, int cellY);
     void drawCursorAlpha();

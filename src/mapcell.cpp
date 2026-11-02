@@ -1,3 +1,4 @@
+#include "browser_rng.h"
 
 #include "text.h"
 #include "va.h"
@@ -4105,7 +4106,7 @@ int NewfullMap::readMapObjects(TAbstractFile* infile, int mapVersion)
             }
         }
 
-        m_objects[x].m_animationOffset = static_cast<unsigned char>(random(0, 255));
+        m_objects[x].m_animationOffset = static_cast<unsigned char>(Port::CosmeticRng::range(0, 255));
     }
 
     incProgressBar(1);
@@ -4203,7 +4204,7 @@ int NewfullMap::loadMapObjects(TAbstractFile* infile)
         count = loadObject(infile, &m_objects[x]);
         if (count < 0)
             return -1;
-        m_objects[x].m_animationOffset = static_cast<unsigned char>(random(0, 255));
+        m_objects[x].m_animationOffset = static_cast<unsigned char>(Port::CosmeticRng::range(0, 255));
     }
 
     incProgressBar(1);

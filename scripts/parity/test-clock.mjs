@@ -36,7 +36,7 @@ async function transportBoundary(id, response) {
 }
 await transportBoundary('one', {type: 'authority_result', id: 'one'});
 await transportBoundary('two', {type: 'authority_choice', token: 2});
-await transportBoundary('three', {type: 'authority_status', activeActor: 1});
+await transportBoundary('three', {type: 'authority_result', id: 'three', ok: false});
 assert.equal(h.events.filter(e => e.kind === 'transport-ready').length, 3);
 h.world('rng', {}, -987567403);
 assert.equal(h.worlds[0].rng, 3307399893, 'uint32 RNG survives EM_ASM signed words');
@@ -52,3 +52,77 @@ a.receive({type:'authority_state',state:{revision:3}});
 h.tick(8,100);h.tick(8,100);await delayed;
 assert.equal(h.t,beforeWorld+16);
 console.log('PASS: result-before-world packet ordering');
+
+const answered=h.advance(16);send({type:'authority_answer',id:'answer'});
+const beforeAnswer=h.t;
+a.receive({type:'authority_answer_result',id:'answer',ok:true,revision:3});
+a.receive({type:'authority_status',activeActor:1});
+for(let i=0;i<100;++i)assert.equal(h.tick(8,100),beforeAnswer,'accepted answer / turn announcement is not execution completion');
+a.receive({type:'authority_choice',token:4});
+h.tick(8,100);h.tick(8,100);await answered;
+assert.equal(h.t,beforeAnswer+16);
+console.log('PASS: answer execution and turn transfer do not consume transport wall time');
+
+const completed=h.advance(16);send({type:'authority_answer',id:'final-answer'});
+const finalTime=h.t;
+a.receive({type:'authority_answer_result',id:'final-answer',ok:true,revision:3});
+a.receive({type:'authority_result',id:'parent-command',ok:true,revision:4});
+assert.equal(h.tick(8,100),finalTime);
+a.receive({type:'authority_state',state:{revision:4}});
+h.tick(8,100);h.tick(8,100);await completed;
+assert.equal(h.t,finalTime+16);
+console.log('PASS: parent result and world release a completed final answer');
+
+const nested=h.advance(16);send({type:'authority_answer',id:'outer'});
+context.homm3Authority={actor:0,revision:4,start(fn){send=fn;},receive(msg){if(msg.type==='authority_choice')send({type:'authority_answer',id:'inner'});return true;}};
+context.homm3Authority.start(()=>{});
+context.homm3Authority.receive({type:'authority_choice',token:5});
+const nestedTime=h.t;assert.equal(h.tick(8,100),nestedTime,'automatic follow-up answer must remain pending');
+context.homm3Authority.receive({type:'authority_answer_result',id:'inner',ok:false});
+h.tick(8,100);h.tick(8,100);await nested;
+console.log('PASS: reentrant decision replies retain their transport barrier');
+
+context.homm3Authority={actor:1,revision:4,start(fn){send=fn;},receive(){return true;}};
+context.homm3Authority.start(()=>{});
+const remote=h.advance(16);send({type:'authority_answer',id:'next-player-dialog'});
+const remoteTime=h.t;
+context.homm3Authority.receive({type:'authority_answer_result',id:'next-player-dialog',ok:true,revision:4});
+context.homm3Authority.receive({type:'authority_status',phase:'adventure',activeActor:1,revision:5});
+assert.equal(h.tick(8,100),remoteTime,'wait for world even when parent command belongs to another seat');
+context.homm3Authority.receive({type:'authority_state',state:{revision:5}});
+h.tick(8,100);h.tick(8,100);await remote;
+assert.equal(h.t,remoteTime+16);
+console.log('PASS: next player answer completes through shared status/world');
+
+// Whether IPC finishes before or after the poll must not erase one virtual tick.
+const quantum=h.advance(16);send({type:'authority_command',id:'quantum'});
+const quantumStart=h.t;assert.equal(h.tick(8,100),quantumStart);
+const resumed=h.yield();context.homm3Authority.receive({type:'authority_result',id:'quantum',ok:false});
+await resumed;assert.equal(h.t,quantumStart+8,'resume executes the suspended tick exactly once');
+h.tick(8,100);await quantum;
+console.log('PASS: asynchronous readiness cannot remove a presentation tick');
+
+for(const observationFirst of [true,false]){
+  context.homm3Authority={actor:0,revision:4,start(fn){send=fn;},receive(msg){return msg.valid!==false;}};
+  const api=context.homm3Authority;api.start(()=>{});
+  const done=h.advance(16);send({type:'authority_command',id:'pvp-defender-'+observationFirst});
+  const start=h.t;
+  const view={type:'authority_combat_state',actor:0,revision:4,data:{side:1,players:[0,1],canAct:false}};
+  const status={type:'authority_status',phase:'choice',activeActor:0,revision:4};
+  api.receive(observationFirst?view:status);
+  assert.equal(h.tick(8,100),start,'PvP opening/status alone cannot release transport');
+  api.receive({...view,valid:false});
+  assert.equal(h.tick(8,100),start,'rejected view cannot release transport');
+  api.receive(observationFirst?status:view);
+  h.tick(8,100);h.tick(8,100);await done;
+  assert.equal(h.t,start+16,'defender can act without waiting for attacker command completion');
+}
+console.log('PASS: PvP remote decision releases both packet orderings');
+
+const ownDecision=h.advance(16);send({type:'authority_answer',id:'own-decision-after-pvp'});
+const ownTime=h.t;
+context.homm3Authority.receive({type:'authority_answer_result',id:'own-decision-after-pvp',ok:true,revision:4});
+assert.equal(h.tick(8,100),ownTime,'cached remote decision must not release a new own answer');
+context.homm3Authority.receive({type:'authority_choice',token:7});
+h.tick(8,100);h.tick(8,100);await ownDecision;
+console.log('PASS: old PvP observations cannot satisfy a later command');

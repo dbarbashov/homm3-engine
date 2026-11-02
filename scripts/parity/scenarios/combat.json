@@ -81,6 +81,21 @@
     }
   },
   {
+    "name": "log-up",
+    "widget": 2006,
+    "ms": 128
+  },
+  {
+    "name": "log-up-again",
+    "widget": 2006,
+    "ms": 128
+  },
+  {
+    "name": "log-down",
+    "widget": 2007,
+    "ms": 128
+  },
+  {
     "name": "battle-auto",
     "click": [
       178,
@@ -96,6 +111,15 @@
     "key": "Enter",
     "ms": 2048,
     "expect": {
+      "game.combat": 0
+    }
+  },
+  {
+    "name": "post-battle-move",
+    "key": "ArrowDown",
+    "ms": 1024,
+    "expect": {
+      "game.y": 9,
       "game.combat": 0
     }
   }

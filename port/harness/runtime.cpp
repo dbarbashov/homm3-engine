@@ -11,6 +11,7 @@
 #include "townmgr.h"
 #include "advmgr.h"
 #include "cmbtmgr.h"
+#include "combatwindow.h"
 #include "kb.h"
 #include "gzfile.h"
 #include "remote.h"
@@ -52,8 +53,11 @@ std::string quoteBytes(const std::string& value){
 void interfaceSnapshot(){
 #ifdef __EMSCRIPTEN__
     if(g_game&&g_advManager&&g_game->getLocalPlayer()){
+        EM_ASM({window.homm3Harness.presentationClock=({adventureFrame:$0,adventureTimer:$1});},g_advManager->m_animCtr,g_timers[GLOBAL_ADVENTURE_ANIMATION_TIMER_SLOT]);
         auto* local=g_game->getLocalPlayer();
         EM_ASM({window.homm3AdventureState=({hero:$0,town:$1,mobile:!!$2,cursor:!!$3,heroes:[]});},int(local->m_currHeroId),local->m_currTownId,g_advManager->m_curHeroMobile,g_advManager->m_drawCursor);
+        const auto center=g_advManager->getMapCenter();
+        EM_ASM({window.homm3AdventureState.sound=({ambient:!!$0,terrain:$1,music:$2,center:[$3,$4,$5]});},g_soundManager->m_playSounds,g_advManager->m_lastTerrain,g_soundManager->m_currentTerrainMusic,center.m_x,center.m_y,center.m_z);
         EM_ASM({window.homm3AdventureState.bottom=({type:$0,resource:$1,quantity:$2,text:new TextDecoder('windows-1251').decode(HEAPU8.subarray($3,$3+$4))});},g_advManager->m_bottomViewType,g_advManager->m_bottomViewResourceType,g_advManager->m_bottomViewResourceQuantity,g_advManager->m_bottomViewMessage.data(),g_advManager->m_bottomViewMessage.size());
         EM_ASM({window.homm3AdventureState.obelisks=[];window.homm3AdventureState.motion=({moving:!!$0,sequence:$1,frame:$2,scroll:[$3,$4],speed:$5,local:!!$6,pointerVisible:!!$7,showRoute:!!$8});window.homm3AdventureState.route=[];},g_advManager->m_heroMoving,g_advManager->m_cursorSequence,g_advManager->m_cursorFrameCount,g_advManager->m_scrollX,g_advManager->m_scrollY,g_config.m_walkSpeed[1],g_currentPlayer->isLocalHuman(),g_mouseManager->isVis(),g_advManager->m_showRoute);
         if(g_advManager->m_routeArray)for(int z=0;z<g_game->getNumMapLevels();++z)for(int y=0;y<g_mapHeight;++y)for(int x=0;x<g_mapWidth;++x){const int value=*g_advManager->getRouteArrayPtr(x,y,z);if(value)EM_ASM({window.homm3AdventureState.route.push([$0,$1,$2,$3]);},x,y,z,value);}
@@ -64,12 +68,15 @@ void interfaceSnapshot(){
             // exposing diagnostic arrays to JS typed-array views.
             int army[7],counts[7];for(int i=0;i<7;++i){army[i]=own.m_army.m_armies[i];counts[i]=own.m_army.m_numTroops[i];}
             EM_ASM({window.homm3AdventureState.heroes.push({id:$0,x:$1,y:$2,z:$3,onMap:!!$4,army:Array.from(HEAP32.subarray($5>>2,($5>>2)+7)),counts:Array.from(HEAP32.subarray($6>>2,($6>>2)+7))});},int(own.m_id),int(own.m_x),int(own.m_y),int(own.m_z),cell->m_type==HERO&&cell->m_extraInfo==own.m_id,army,counts);
-            EM_ASM({window.homm3AdventureState.heroes.at(-1).target=([$0,$1,$2]);},own.m_pathTargetX,own.m_pathTargetY,own.m_pathTargetZ);
+            // With no X/Y destination, the retained plane byte is not a route.
+            const bool target=own.m_pathTargetX>=0&&own.m_pathTargetY>=0;
+            EM_ASM({window.homm3AdventureState.heroes.at(-1).target=([$0,$1,$2]);},target?own.m_pathTargetX:-1,target?own.m_pathTargetY:-1,target?own.m_pathTargetZ:-1);
         }
     }
     if(g_combatActive&&g_combatManager){
       auto& c=*g_combatManager;
       EM_ASM({window.homm3Harness.exactCombat=({side:$0,slot:$1,round:$2,processing:!!$3,control:!!$4,mana:[$5,$6],stacks:[]});},c.m_actingSide,c.m_actingSlot,c.m_turnNumber,g_processingCombatAction,c.m_thisNetHasControl,c.m_heroes[0]?c.m_heroes[0]->m_mana:0,c.m_heroes[1]?c.m_heroes[1]->m_mana:0);
+      if(c.m_combatWindow)EM_ASM({window.homm3Harness.exactCombat.log=({start:$0,count:$1});},c.m_combatWindow->m_combatMessageStart,c.m_combatWindow->m_combatMessages.size());
       EM_ASM({window.homm3Harness.exactCombat.secondPhase=!!$0;},c.isInSecondPhase());
       EM_ASM({window.homm3Harness.exactCombat.grid=({shade:Array.from(HEAPU8.subarray($0,$0+187)),drawn:Array.from(HEAPU8.subarray($1,$1+187)),hover:[],showGrid:!!$2,shadeLevel:$3,showMouse:!!$4,selector:$5,highlight:$6});},c.m_curDrawGridShade,c.m_lastDrawGridShade,g_config.m_showCombatGrid,g_config.m_combatShadeLevel,g_config.m_showCombatMouseHex,c.m_lastMovedArmy?c.m_lastMovedArmy->m_gridIndex:-1,c.m_highlighterOn?c.m_highlighterIndex:-1);
       EM_ASM({window.homm3Harness.exactCombat.corpses=[];window.homm3Harness.exactCombat.pow=({frame:$0,active:[]});},c.m_powFrameIndex);
@@ -118,7 +125,9 @@ uint64_t storedBuildings(const town& t){uint64_t mask=0;for(int id=0;id<44;++id)
 std::string world(bool initial) {
     std::ostringstream s;
     s<<"{\"date\":["<<g_game->m_month<<','<<g_game->m_week<<','<<g_game->m_day<<"],\"size\":["<<g_mapWidth<<','<<g_mapHeight<<','<<g_game->getNumMapLevels()<<"],\"players\":[";
-    for(int i=0;i<8;++i){const auto& p=g_game->m_players[i];s<<(i?",":"")<<"{\"human\":"<<int(p.m_isHuman)<<",\"disabled\":"<<int(g_game->m_playerDisabled[i])<<",\"resources\":[";for(int j=0;j<7;++j)s<<(j?",":"")<<p.m_resources[j];s<<"]}";}
+    for(int i=0;i<8;++i){const auto& p=g_game->m_players[i];s<<(i?",":"")<<"{\"human\":"<<int(p.m_isHuman)<<",\"disabled\":"<<int(g_game->m_playerDisabled[i])<<",\"resources\":[";for(int j=0;j<7;++j)s<<(j?",":"")<<p.m_resources[j];
+        s<<"],\"recruits\":["<<int(p.m_recruits[0])<<','<<int(p.m_recruits[1])<<"],\"recruitArmies\":[";
+        for(int offer=0;offer<2;++offer){s<<(offer?",":"")<<'[';const int id=p.m_recruits[offer];if(id>=0&&id<game::HERO_COUNT)for(int slot=0;slot<7;++slot)s<<(slot?",":"")<<'['<<int(g_game->m_heroes[id].m_army.m_armies[slot])<<','<<g_game->m_heroes[id].m_army.m_numTroops[slot]<<']';s<<']';}s<<"]}";}
     if(initial){
         s<<"],\"rosters\":[";
         for(int i=0;i<8;++i){const auto& p=g_game->m_players[i];
@@ -127,6 +136,10 @@ std::string world(bool initial) {
             s<<"]}";
         }
     }
+    if(initial){s<<"],\"heroAggressionBits\":[";bool separator=false;for(const auto& h:g_game->m_heroes){uint32_t bits;std::memcpy(&bits,&h.m_aggression,sizeof(bits));s<<(separator?",":"")<<bits;separator=true;}}
+    if(initial){s<<"],\"objectAnimations\":[";bool separator=false;for(const auto& object:g_game->m_worldMap.m_objects){s<<(separator?",":"")<<int(object.m_animationOffset);separator=true;}}
+    if(initial){s<<"],\"objects\":[";bool separator=false;for(const auto& o:g_game->m_worldMap.m_objects){s<<(separator?",":"")<<'['<<int(o.m_x)<<','<<int(o.m_y)<<','<<int(o.m_z)<<','<<o.m_typeIndex<<']';separator=true;}}
+    if(initial){s<<"],\"objectTypes\":[";bool separator=false;for(const auto& o:g_game->m_worldMap.m_objectTypes){s<<(separator?",":"")<<quoteBytes(o.m_imageName);separator=true;}}
     if(initial){s<<"],\"buildingRules\":[";for(int faction=0;faction<9;++faction)for(int id=0;id<44;++id)s<<(faction||id?",":"")<<town::s_includedBuildings[faction][id];}
     s<<"],\"heroes\":[";bool comma=false;
     for(int i=0;i<game::HERO_COUNT;++i){const auto& h=g_game->m_heroes[i];if(h.m_owner<0||h.m_owner>=8)continue;
@@ -146,7 +159,7 @@ std::string world(bool initial) {
     for(auto& t:g_game->m_towns){s<<(comma?",":"")<<"{\"id\":"<<int(t.m_id)<<",\"type\":"<<int(t.m_type)<<",\"storedBuildings\":\""<<storedBuildings(t)<<"\",\"owner\":"<<int(t.m_owner)<<",\"visitor\":"<<t.m_visitingHeroId<<",\"garrisonHero\":"<<t.m_garrisonHeroId<<",\"builtToday\":"<<int(t.m_builtThisTurn)<<",\"population\":[";for(int j=0;j<14;++j)s<<(j?",":"")<<t.m_population[j];
       s<<"],\"buildings\":\""<<t.getBuildingMask()<<"\",\"army\":[";
       for(int j=0;j<7;++j)s<<(j?",":"")<<'['<<t.m_garrison.m_armies[j]<<','<<t.m_garrison.m_numTroops[j]<<']';
-      s<<"],\"guild\":[";for(int level=0;level<5;++level)for(int j=0;j<6;++j)s<<(level||j?",":"")<<int(t.m_mageGuildSpells[level][j]);
+      s<<"],\"guild\":[";for(int level=0;level<5;++level)for(int j=0;j<6;++j)s<<(level||j?",":"")<<int(j<6-level?t.m_mageGuildSpells[level][j]:SPELL_NONE);
       s<<"]}";comma=true;}
     s<<"],\"cells\":[";comma=false;
     for(int z=0;z<g_game->getNumMapLevels();++z)for(int y=0;y<g_mapHeight;++y)for(int x=0;x<g_mapWidth;++x){
@@ -177,7 +190,12 @@ void pump(unsigned milliseconds){
     clockMs=EM_ASM_INT({return window.homm3Harness.tick($0,$1);},milliseconds,SDL_GetTicks());
     controlled=EM_ASM_INT({return !!window.homm3Harness.controlled;});
     if(!controlled)emscripten_sleep(8);
-    else if(EM_ASM_INT({return window.homm3Harness.shouldYield();}))parityYield();
+    else if(EM_ASM_INT({return window.homm3Harness.shouldYield();})){
+        parityYield();
+        // An asset/transport wait can finish the suspended quantum in JS.
+        // The resumed C++ continuation must observe that same instant.
+        clockMs=EM_ASM_INT({return window.homm3Harness.t;});
+    }
 #else
     clockMs+=milliseconds;
 #endif
@@ -199,7 +217,9 @@ void decision(const char* kind,int side,int slot){
 #endif
 #ifdef __EMSCRIPTEN__
     exactRng=std::to_string(browserCombatRng?BrowserRng::state():uint64_t(rng));
-    EM_ASM({window.homm3Harness.event('decision',({kind:UTF8ToString($0),side:$1,slot:$2,rng:UTF8ToString($3),algorithm:$4?'browser-libc':'msvc-lcg32'}));},kind,side,slot,exactRng.c_str(),browserCombatRng);
+    EM_ASM({const h=window.homm3Harness;const record=({kind:UTF8ToString($0),side:$1,slot:$2,rng:UTF8ToString($3),algorithm:$4?'browser-libc':'msvc-lcg32'});h.event('decision',record);if(record.kind.endsWith('-start')||record.kind.endsWith('-end'))h.event('feedback-clock',({...record,deadline:$5}));
+        if(h.fixture.traceRngFromLoad&&record.kind.startsWith('rng-')){const trace=h.rngTrace||(h.rngTrace=[]);if(trace.length>=200000)throw new Error('RNG trace overflow');trace.push({...record,t:h.t,stack:new Error().stack});}
+    },kind,side,slot,exactRng.c_str(),browserCombatRng,g_timers[0]);
 #else
     if(const char* dir=std::getenv("HOMM3_HARNESS_OUTPUT")){
         std::ofstream file(std::string(dir)+"/decisions.jsonl",std::ios::app);
@@ -208,7 +228,22 @@ void decision(const char* kind,int side,int slot){
 #endif
 }
 int random(int lower,int upper){if(traceRandom)decision("rng-draw",lower,upper);if(browserCombatRng)return BrowserRng::next();rng=rng*214013u+2531011u;return (rng>>16)&0x7fff;}
-void seed(unsigned value){if(browserCombatRng)BrowserRng::seed(value);else rng=value;if(traceRandom)decision("rng-seed",0,0);}
+void seed(unsigned value){
+#ifndef __EMSCRIPTEN__
+    if(!loaded){const char* mode=std::getenv("HOMM3_HARNESS_RULES_RNG");browserCombatRng=mode&&std::strcmp(mode,"browser-libc")==0;}
+#endif
+    if(browserCombatRng)BrowserRng::seed(value);else rng=value;if(traceRandom)decision("rng-seed",0,0);
+}
+unsigned rngAlgorithm(){return browserCombatRng?1:2;}
+uint64_t rngState(){return browserCombatRng?BrowserRng::state():uint64_t(rng);}
+bool restoreRng(unsigned algorithm,uint64_t value){
+    if(algorithm!=1&&algorithm!=2)return false;
+    if(algorithm==2&&value>UINT32_MAX)return false;
+    browserCombatRng=algorithm==1;
+    if(browserCombatRng)BrowserRng::state()=value;else rng=uint32_t(value);
+    if(traceRandom)decision("rng-restore",0,0);
+    return true;
+}
 void arm(){
     clockMs=1000000;
 #ifdef __EMSCRIPTEN__
@@ -216,6 +251,10 @@ void arm(){
 #endif
     for(auto& timer:g_timers)timer=clockMs;
     g_advManager->m_animFrame=0;g_advManager->m_animCtr=0;
+    // pollSound can cycle these mutable palettes during real asset startup.
+    // Reset their epoch alongside timers; subsequent original cycles run normally.
+    for(int index:{7,8})if(auto* sprite=g_advManager->m_groundTileset[index])sprite->ResetPalette();
+    for(int index:{1,3,4})if(auto* sprite=g_advManager->m_riverTileset[index])sprite->ResetPalette();
     g_soundManager->stopAllSamples(1);
 }
 void checkpoint(const char* label){
@@ -240,8 +279,36 @@ void exportFixture(const char* path){
         h.m_movePoints=h.m_maxMovePoints=h.getMobility();h.m_mana=0;
         auto& guard=*g_game->getCell(type_point(5,8,0));
         if(guard.m_type!=MONSTER)throw std::runtime_error("Feedback fixture requires Arrogance guard at 5,8");
+        // Pin the actual opponent, not just its quantity. Random map setup
+        // can otherwise produce earth elementals and an automatic-retreat
+        // question instead of this fixture's morale/luck victory chain.
+        guard.m_objectIndex=CREATURE_PIXIE;
+        g_game->m_worldMap.m_objectTypes[guard.m_objectTypeIndex].m_extra=CREATURE_PIXIE;
         guard.m_extraInfo=(guard.m_extraInfo&~4095u)|300u;
-        if(guard.m_objectIndex>=0)g_game->m_worldMap.m_objects[guard.m_objectIndex].m_extraInfo=guard.m_extraInfo;
+        for(auto& object:g_game->m_worldMap.m_objects)
+            if(object.m_x==5&&object.m_y==8&&object.m_z==0&&
+               g_game->m_worldMap.m_objectTypes[object.m_typeIndex].m_objectType==MONSTER)
+                object.m_extraInfo=guard.m_extraInfo;
+    }
+#endif
+#ifndef __EMSCRIPTEN__
+    if(const char* winner=std::getenv("HOMM3_HARNESS_PVP")){
+        const int winning=std::strcmp(winner,"defender")==0?1:0;
+        auto& attacker=g_game->m_heroes[g_game->m_players[0].m_heroes[0]];
+        auto& defender=g_game->m_heroes[g_game->m_players[1].m_heroes[0]];
+        for(auto& t:g_game->m_towns){if(t.m_visitingHeroId==defender.m_id)t.m_visitingHeroId=-1;if(t.m_garrisonHeroId==defender.m_id)t.m_garrisonHeroId=-1;}
+        defender.restoreCell();
+        const type_point target(5,8,0);auto* guard=g_game->getCell(target);
+        g_advManager->m_fullMap=&g_game->m_worldMap;
+        if(guard->m_type==MONSTER)g_advManager->eraseObj(guard,target,false);
+        defender.m_x=target.m_x;defender.m_y=target.m_y;defender.m_z=target.m_z;defender.obscureCell();
+        for(int seat=0;seat<2;++seat){auto& h=seat?defender:attacker;
+            h.m_army.initialize();h.m_army.add(seat==winning?CREATURE_TITAN:CREATURE_PIKEMAN,seat==winning?20:1,-1);
+            h.m_experience=999;h.m_level=1;h.m_mana=0;h.m_movePoints=h.m_maxMovePoints=h.getMobility();
+            g_game->setVisibility(5,8,0,seat,10,false);
+        }
+        (winning?attacker:defender).giveArtifact(type_artifact(ARTIFACT_SWORD_OF_HELLFIRE),false,false);
+        g_game->setupAdjacentMons();
     }
 #endif
 #ifndef __EMSCRIPTEN__
@@ -302,6 +369,7 @@ void exportFixture(const char* path){
         for(int y=13;y<=17;++y)for(int x=2;x<=33;++x){auto& c=*g_game->getCell(type_point(x,y,0));
             c.m_type=NOTHING;c.m_extraInfo=0;c.m_objectIndex=-1;c.m_objectTypeIndex=-1;c.m_objects.clear();
             c.m_cellFlags=0;c.m_passable=1;c.m_groundSet=eTerrainGrass;c.m_roadSet=0;c.m_riverSet=0;
+            if(std::getenv("HOMM3_HARNESS_TERRAIN")){c.m_groundSet=x<5?eTerrainGrass:x<7?eTerrainDirt:eTerrainSnow;c.m_groundIndex=0;}
             *getMapExtraPtr(x,y,0)=1;
         }
         h.m_x=3;h.m_y=15;h.m_z=0;h.obscureCell();g_game->setupAdjacentMons();
@@ -332,6 +400,11 @@ void exportFixture(const char* path){
     }
 #endif
     TGzFile output(path,"wb6");if(g_game->save(&output)<0)throw std::runtime_error("Cannot export fixture");
+    // GM2 deliberately regenerates cosmetic phases on load. The reference
+    // fixture must retain them, without consuming gameplay RNG to recreate them.
+    std::ofstream animations(std::string(path)+".animation",std::ios::binary);
+    for(const auto& object:g_game->m_worldMap.m_objects)animations.put(char(object.m_animationOffset));
+    if(!animations)throw std::runtime_error("Cannot export animation fixture");
 }
 bool loadFixture(){
     if(loaded)return false;
@@ -344,13 +417,29 @@ bool loadFixture(){
     const int local=g_localGamePos,watch=g_curWatchPlayer;
     unsigned dpids[8];int locals[8];for(int i=0;i<8;++i){dpids[i]=g_game->m_players[i].m_dpid;locals[i]=g_game->m_players[i].m_isLocal;}
     {TGzFile input(path,"rb");if(g_game->load(&input)<0)throw std::runtime_error("Harness save failed to load");}
+    std::ifstream animations(std::string(path)+".animation",std::ios::binary);
+    for(auto& object:g_game->m_worldMap.m_objects){
+        const int value=animations.get();
+        if(value==std::char_traits<char>::eof())throw std::runtime_error("Missing/truncated animation fixture; regenerate it");
+        object.m_animationOffset=static_cast<unsigned char>(value);
+    }
+    if(animations.get()!=std::char_traits<char>::eof())throw std::runtime_error("Animation fixture object count differs");
     for(int i=0;i<8;++i){g_game->m_players[i].m_dpid=dpids[i];g_game->m_players[i].m_isLocal=locals[i];}
     g_localGamePos=local;g_curWatchPlayer=watch;g_mapVisibilityBit=1<<watch;
     g_playerTurn=g_netLocalGamePos;g_currentPlayer=&g_game->m_players[g_netLocalGamePos];
 #ifdef __EMSCRIPTEN__
-    rng=EM_ASM_INT({return window.homm3Harness.fixture.rng;});
+    browserCombatRng=EM_ASM_INT({return window.homm3Harness.fixture.rngAlgorithm==='browser-libc';});
+    if(browserCombatRng){
+        const uint32_t lo=EM_ASM_INT({return Number(BigInt(window.homm3Harness.fixture.rng)&0xffffffffn);});
+        const uint32_t hi=EM_ASM_INT({return Number(BigInt(window.homm3Harness.fixture.rng)>>32n);});
+        BrowserRng::state()=(uint64_t(hi)<<32)|lo;
+    }else rng=EM_ASM_INT({return window.homm3Harness.fixture.rng;});
+    traceRandom=EM_ASM_INT({return !!window.homm3Harness.fixture.traceRngFromLoad;});
 #else
-    const char* state=std::getenv("HOMM3_HARNESS_RNG");if(!state)throw std::runtime_error("Save requires RNG sidecar");rng=std::stoul(state);
+    const char* state=std::getenv("HOMM3_HARNESS_RNG");if(!state)throw std::runtime_error("Save requires RNG sidecar");
+    const char* algorithm=std::getenv("HOMM3_HARNESS_RULES_RNG");browserCombatRng=algorithm&&std::strcmp(algorithm,"browser-libc")==0;
+    if(browserCombatRng)BrowserRng::state()=std::stoull(state);else rng=std::stoul(state);
+    if(const char* trace=std::getenv("HOMM3_HARNESS_TRACE_RNG");trace&&*trace)traceRandom=true;
 #endif
 #ifdef __EMSCRIPTEN__
     int setup[41];

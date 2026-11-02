@@ -1016,6 +1016,7 @@ extern playerData* g_currentPlayer;
 // armyGroup and the map record at once, and two headers cannot each
 // define the class.)
 class game {
+    friend struct AuthorityCheckpointAccess;
 #ifdef HOMM3_HARNESS
     friend bool Port::Harness::loadFixture();
     friend void Port::Harness::exportFixture(const char*);

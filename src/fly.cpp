@@ -111,6 +111,9 @@ int army::flyTo(int destIndex, bool restoreFacing)
         addAura();
         if (m_facing != oldFacing && restoreFacing)
             this->turn(1);
+#ifdef HOMM3_SERVER
+        Port::Authority::recordCombatVisual(Port::Authority::VisualFlightEnd,this);
+#endif
         playAnimation(2, 1, 0);
         checkObstacleAttacks(0);
         g_combatManager->testRaiseDoor();
@@ -136,6 +139,7 @@ int army::fly(int destIndex)
 {
 #ifdef HOMM3_SERVER
     Port::Authority::recordCombatVisual(Port::Authority::VisualFly,this,destIndex);
+    Port::Authority::CompoundTurnScope turns;
 #endif
     unsigned char turn;
     int sourceX = combatManager::gridX(m_gridIndex);

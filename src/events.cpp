@@ -1,3 +1,4 @@
+#include "browser_rng.h"
 #ifdef HOMM3_SERVER
 #include "server_authority.h"
 #include "server_exchange.h"
@@ -18,6 +19,7 @@
 #include "events.h"
 
 #include "advmgr.h"
+#include "adventure_fizzle.h"
 #include "advmgr_objects.h"
 #include "cmbtmgr.h"
 #include "command.h"
@@ -5815,8 +5817,8 @@ void advManager::fizzleCenter(int whichSound)
 #ifdef HOMM3_SERVER
     if (Port::Authority::active()) {
         if(g_currentPlayer && g_currentPlayer->isHuman()){
-            if(whichSound==FIZZLE_SOUND_KILL_FADE)Port::Authority::adventureSound("killfade.82M");
-            else if(whichSound==FIZZLE_SOUND_PICKUP){char name[32];std::snprintf(name,sizeof(name),"pickup%02d.82M",random(1,7));Port::Authority::adventureSound(name);}
+            if(whichSound==FIZZLE_SOUND_KILL_FADE)Port::Authority::adventureSound("killfade.82M",true);
+            else if(whichSound==FIZZLE_SOUND_PICKUP){char name[32];std::snprintf(name,sizeof(name),"pickup%02d.82M",Port::CosmeticRng::range(1,7));Port::Authority::adventureSound(name,true);}
         }
         return;
     }
@@ -5830,18 +5832,13 @@ void advManager::fizzleCenter(int whichSound)
     case FIZZLE_SOUND_PICKUP:
         sprintf(g_text,
                 DATA_COMPGEN(0x00670268, pickupSampleFormat, "pickup%02d.82M"),
-                random(1, 7));
+                Port::CosmeticRng::range(1, 7));
         break;
     default:
         return;
     }
     // Mac uses channel 2 here; Windows retail passes 3.
-    launchSample(g_text, -1, 3);
-    g_mouseManager->hidePointer();
-    g_windowManager->saveFizzleSourceX(0xc0, 0xa0, 0xe0, 0xe0);
-    completeDraw(false);
-    g_windowManager->fizzleForwardX(0xc0, 0xa0, 0xe0, 0xe0, 0x41);
-    g_mouseManager->showPointer(false);
+    Port::showAdventureFizzle(g_text);
 }
 
 VA(0x004acca0, 0xC3)
@@ -6344,7 +6341,7 @@ combatFinished:
 
     if (g_combatManager->m_raisedCreatureCount > 0 && winner == 0
         && g_game->isLocalHuman(leftPlayer)) {
-        sprintf(g_text, "pickup%02d.82M", sRandom(1, 7));
+        sprintf(g_text, "pickup%02d.82M", Port::CosmeticRng::range(1, 7));
         SAMPLE2 sample = loadPlaySample(g_text);
         if (g_combatManager->m_raisedCreatureCount == 1) {
             sprintf(g_text, g_generalText->GetText(GENERAL_TEXT_NECROMANCY_RAISE_ONE_FORMAT),

@@ -1,0 +1,160 @@
+[
+  {
+    "name": "idle",
+    "ms": 1024
+  },
+  {
+    "name": "waiting-town",
+    "seat": 1,
+    "click": [
+      770,
+      230
+    ]
+  },
+  {
+    "name": "waiting-town-open",
+    "seat": 1,
+    "click": [
+      770,
+      230
+    ],
+    "ms": 1024,
+    "expect": {
+      "hd.layers": 1
+    }
+  },
+  {
+    "name": "waiting-town-close",
+    "seat": 1,
+    "key": "Escape",
+    "expect": {
+      "hd.layers": 0,
+      "adventure.mobile": false,
+      "adventure.cursor": false
+    }
+  },
+  {
+    "name": "waiting-hero-open",
+    "seat": 1,
+    "click": [
+      640,
+      230
+    ],
+    "ms": 1024,
+    "expect": {
+      "hd.layers": 1
+    }
+  },
+  {
+    "name": "waiting-hero-close",
+    "seat": 1,
+    "key": "Escape",
+    "expect": {
+      "hd.layers": 0,
+      "adventure.mobile": false,
+      "adventure.cursor": false
+    }
+  },
+  {
+    "name": "waiting-move-blocked",
+    "seat": 1,
+    "key": "ArrowDown",
+    "ms": 1024,
+    "expect": {
+      "game.player": 0,
+      "adventure.heroes.0.y": 29
+    }
+  },
+  {
+    "name": "host-move",
+    "key": "ArrowDown",
+    "ms": 1024,
+    "expect": {
+      "game.y": 6
+    }
+  },
+  {
+    "name": "handoff",
+    "key": "e",
+    "ms": 256
+  },
+  {
+    "name": "confirm",
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1,
+      "game.player": 0
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-1",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-2",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-3",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096
+  },
+  {
+    "name": "accept-4",
+    "seat": 1,
+    "key": "Enter",
+    "when": {
+      "hd.layers": 1
+    },
+    "ms": 4096,
+    "expect_both": {
+      "game.player": 1
+    }
+  },
+  {
+    "name": "guest-move",
+    "seat": 1,
+    "key": "ArrowDown",
+    "ms": 1024,
+    "expect": {
+      "game.y": 30,
+      "adventure.mobile": true,
+      "adventure.cursor": true
+    }
+  },
+  {
+    "name": "guest-town-entry",
+    "seat": 1,
+    "key": "ArrowUp",
+    "ms": 1024,
+    "expect": {
+      "hd.layers": 1
+    }
+  },
+  {
+    "name": "guest-town-close",
+    "seat": 1,
+    "key": "Escape",
+    "ms": 1024,
+    "expect": {
+      "hd.layers": 0,
+      "adventure.mobile": true,
+      "adventure.cursor": true
+    }
+  }
+]

@@ -13,6 +13,12 @@ unsigned long GameTime::get()
 // Original body extracted from kbwin.cpp
 void GameTime::delayTil(unsigned long time)
 {
+#ifdef HOMM3_SERVER
+    // Presentation pacing belongs to the client; the authority has no frames
+    // or audio device to wait for. This also keeps AI batches independent of CPU load.
+    (void)time;
+    return;
+#endif
     while (!GameTime::isPast(time)) {
         process1WindowsMessage();
         pollSound();

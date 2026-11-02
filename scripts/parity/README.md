@@ -2,8 +2,52 @@
 
 Private, silent, accelerated two-browser testing of the legacy network game
 against the native authoritative worker. Both load the **same original GM2
-file**, with a separate RNG continuation. No screenshots, image recognition or
+file**, including exact RNG continuation, AI hero aggression and object animation phases. No screenshots, image recognition or
 changes to normal production clocks are required.
+
+Manual PvP fixtures support `fixture.py --pvp attacker` and `--pvp defender`.
+Replay the corresponding `scenarios/pvp-attacker.json` or `pvp-defender.json`,
+then run `pvp_checks.py OUTPUT --winner attacker|defender`. Both players must
+reach their native result windows; the winner dismisses loot and chooses a
+level-up skill, and then actually moves on the correct adventure turn.
+The original waiting defender temporarily restores its old local cache before
+handoff; the report retains that intermediate difference and checks canonical
+rewards again on its next turn.
+
+`feedback_checks.py` compares exact morale/luck pauses and the complete ordered
+turn-animation frames. `lifecycle_checks.py` checks the positive-feedback
+fixture's result audio cleanup, original map fade and waiting-seat terrain
+music. Both inject faults to verify that missing presentation is detected.
+For calendar diagnosis, set `traceRngFromLoad: true` in a private fixture manifest;
+the runner retains bounded RNG draw/reseed traces with browser call stacks.
+
+## RNG and saves
+
+For production-equivalent rules throughout the game, generate fixtures with
+`--rng-algorithm browser-libc --combat-rng browser-libc`. The explicit 64-bit
+musl generator is identical in browser and native builds; the manifest stores
+its state as a decimal string to avoid JavaScript number rounding. The original
+32-bit harness mode remains available for existing regression fixtures.
+
+New GM2 saves append a bounded, little-endian `H3RNG003` trailer with rules RNG,
+object animation offsets and exact hero aggression bits. Retail saves still
+load; their omitted aggression gets a deterministic fallback based on hero
+identity and level seed. Deserialization and cosmetic UI must not advance the
+rules continuation. `scripts/test-game-rng.py` checks independent musl vectors,
+rollback, malformed/truncated trailers and exact save continuation without assets.
+
+`test-native-fixture.py` loads one fixture under three genuinely different
+constructor seeds and compares fourteen handoffs, complete frames and RNG.
+This is a fast rules gate; it does not replace the browser/audio matrix.
+`calendar_checks.py` additionally checks every day/week RNG boundary, actual
+tavern offers/armies, weekly growth and settled waiting music. Raw transport,
+intermediate track restarts, pixel and PCM differences remain separately visible.
+
+Manual network combat now continues the saved RNG instead of reseeding from
+the clock per action. New command headers use seed `-1` for continuation;
+older seeded headers remain readable. Peers in a new game must use the same
+engine version. `pvp_checks.py` compares actual damage draws on both seats to
+the worker, as well as rewards and continuation.
 
 ## Run
 
@@ -29,7 +73,7 @@ python3 scripts/parity/matrix.py --quick --fixture test-results/parity/fixture-c
   --out test-results/parity/matrix
 ```
 
-Omit `--quick` to add adventure/week scenarios and repeat **each** reference.
+Omit `--quick` to add adventure/week scenarios and repeat both modes for **each** scenario.
 `summary.json` separates `harnessPassed` from `parityPassed`, and lists unstable
 channels if A/A fails. Such a run is blocked evidence, not an automatic gameplay
 bug. Choose a new output directory for each matrix run.
@@ -94,6 +138,19 @@ The canonical world observer covers map cells/fog, date/resources, owned heroes
 and their armies/items/spells/skills, towns/buildings/garrisons/population/guild.
 It is not a byte dump of every internal C++ field or a full engine save comparer.
 
+## Fixture schema 2
+
+Regenerate schema-1 fixtures. GM2 loads randomize each map object's animation
+phase, so the same save/RNG alone was insufficient to reproduce pixels.
+`start.gm2.animation` records the original phases byte-for-byte; its checksum
+is part of the manifest. Native reload and both browser lanes validate the
+object count and initial phases. Gameplay RNG continuation is unchanged.
+
+The matrix requires A/A repeatability in **both** modes before treating their
+comparison as valid evidence. An unstable candidate is a harness failure too.
+Each runner owns a separate history directory; `--site-root` identifies the
+browser checkout and no development preview history is reused.
+
 ## Two clocks
 
 Default `--clock virtual` advances the original game timer at pump/poll points.
@@ -129,8 +186,9 @@ supported. The browser scenario starts with two humans on Arrogance; the
 combat fixture pins Conflux/Brissa and Haste. A new map requires its own replay
 and setup. Original assets and generated saves stay outside Git.
 
-Network transport remains real WebSockets/Rust IPC. Long transfer/AI episodes
-can retain scheduling variation; run A/A on a new scenario before using its
+Network transport remains real WebSockets/Rust IPC. The paired combat, adventure
+and fourteen-handoff week scenarios pass A/A in both modes with the coordinated
+clock and transport barrier. Run A/A on each new scenario before using its
 strict frame/timing diff as a regression gate. A timing failure alone is not
 proof of a gameplay bug. No claim of complete feature coverage, mobile parity,
 all spells/campaigns or Internet reconnect is made by these scenarios.
@@ -401,18 +459,29 @@ Virtual transport pausing now includes success-result-before-world ordering;
 receiving the result alone cannot charge a later socket task as gameplay time.
 State receipt releases the clock before presentation so real animations still
 execute. `test-clock.mjs` covers the delayed packet and stale-packet cases.
-Real socket/IPC latency remains recorded separately. Repeated legacy waiting
-seat audio onset may still vary; report it as unstable evidence, not a server
+Real socket/IPC latency remains recorded separately. The repeated legacy waiting-seat audio gate now passes with the coordinated
+clock. If a new scenario is unstable, report that as unstable evidence, not a server
 regression. World/route/pose checks remain independently inspectable.
 
 Protocol notes: the existing visible-cell word is 0 (hidden), 1 (visible), or
 257 (visible plus original MAP_EXTRA_MONSTER guard flag), or 2 (render-only
-fragments of already-known objects at a hidden shroud edge). Edge records have
-only refCount and object references; they carry no gameplay fields. No other player's
+fragments visible through the translucent shroud edge). Edge records have
+only refCount and object references; they carry no gameplay fields. An object
+visible only through this fringe has its extraInfo cleared; objects entirely
+outside the visible area and its fringe remain absent. No other player's
 visibility mask is sent. Optional `adventureSounds` is a bounded actor-private
 journal of serial IDs and original resource names; initial restore suppresses
 historical playback and later projections deduplicate it. Use paired current
 client/worker builds and a fresh preview room when testing these changes.
+
+Native fixture startup also pins the constructor seed to `manifest.seed` before
+loading GM2 and restoring its RNG sidecar. Restoring only the serialized world
+left seed-dependent pre-load map/AI initialization outside the fixture: different
+lobby seeds could change the week announcement after fourteen handoffs. The
+native `test-native-fixture.py` regression varies three lobby seeds and requires
+identical complete worker frames, initial state and RNG decision traces through
+the second week. `HOMM3_HARNESS_TRACE_RNG=1` records native adventure RNG decisions
+for this diagnostic; it is absent from normal builds.
 
 ## Interaction lifecycle
 
@@ -480,7 +549,7 @@ python3 scripts/parity/run.py --fixture test-results/feedback/fixture --scenario
 python3 scripts/parity/feedback_checks.py test-results/feedback/positive --profile positive
 ```
 
-Repeat for negative (three actual bad-morale procs with the pinned seed), zero
+Repeat for negative (actual bad-morale procs, including the opening), zero
 and unlucky; use `run.py --browser webkit` for the second renderer. The focused
 checker requires matching RNG, AI and gameplay, real proc targets/order,
 original effect frames and sample requests, pause durations within one original
@@ -496,3 +565,28 @@ uses original `powEffect` animation, but its client death settlement must not
 call `processDeath`: that consumes RNG and changes aura/spell/gameplay state.
 The server still owns those operations. Do not claim full AV parity from these
 focused passes; comparison.json retains strict frame/PCM/timing differences.
+
+### Waiting-player town inspection
+
+The authoritative-only `waiting-town.json` scenario opens and closes the
+waiting player's town and hero, attempts a blocked move, hands over the turn,
+and then performs a real move and town visit. It requires the combat fixture's
+blue Castle visitor at (4,29). Run it with `run.py --modes authority --scenario
+scripts/parity/scenarios/waiting-town.json`, then validate the output directory
+with `python3 scripts/parity/waiting_town_checks.py DIRECTORY`. Repeat with
+`--faults` to prove detection of a waiting cursor, missing hero, wrong-turn
+movement and missing control on the next turn. The full matrix runs this
+authority scenario twice; `--quick` remains combat-focused.
+
+The generic authority invariant also rejects an active hero cursor on the
+waiting player's adventure screen. A selected mobile hero can satisfy the
+older “hero present” invariant while still presenting control on the wrong
+turn. The legacy town-return path has its own selection defect in this fixture;
+its failed reference must not be counted as parity or silently filtered out.
+Use the regular paired adventure suite to compare unaffected town actions.
+
+Presentation version 5 records the original `showSpellMessage` calls separately
+from spell animations. The full combat scenario checks the complete history
+through Auto Combat, including damage-only spells that have no cast announcement.
+The native combat probe also verifies Magic Arrow has no invented announcement
+and Haste retains exactly one. Older journals keep their original replay path.

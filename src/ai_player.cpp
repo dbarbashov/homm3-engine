@@ -3709,8 +3709,20 @@ bool attemptStep(hero* currentHero, pathCell& currentPathCell,
         if (!(cell->m_type == BOAT && cell->m_isTrigger)) {
             g_advManager->stopCursor(1);
             if (currentHero->canSummonBoat()) {
-                if (firstStep)
+                if (firstStep) {
+#ifdef HOMM3_SERVER
+                    const int previousMana = currentHero->m_mana;
+#endif
                     g_advManager->castSpell(SPELL_SUMMON_BOAT);
+#ifdef HOMM3_SERVER
+                    // Availability does not guarantee a free adjacent water
+                    // cell. A refused cast spends no mana and leaves the AI
+                    // choosing this same impossible embarkation indefinitely.
+                    if (currentHero->m_mana == previousMana
+                        && !(cell->m_type == BOAT && cell->m_isTrigger))
+                        currentHero->m_movePoints = 0;
+#endif
+                }
                 return 0;
             }
             // can_build_ship is bit 11 of the proven cellFlags word (the
@@ -4307,7 +4319,7 @@ bool type_AI_player::hireHeroes()
         secondValue = totalArtifactValue(second, m_team);
     }
 
-    if (first && secondValue <= firstValue) {
+    if (first && (!second || secondValue <= firstValue)) {
         if (!second || secondValue < firstValue)
             return considerHiring(m_team, first);
         if (second->getPrimarySkillTotal()
@@ -4429,7 +4441,9 @@ static long valueOfHiring(town* currentTown, hero* candidate,
 
     candidate->m_turnExperienceToRvRatio = 0;
     candidate->m_owner = static_cast<char>(playerId);
-    int resources[NUM_RESOURCES];
+    // Keep the complete native resource array while valuing a hypothetical
+    // purchase. int and long have different widths on LP64 hosts.
+    long resources[NUM_RESOURCES];
     memcpy(resources, player->m_resources, sizeof(resources));
     short population[14];
     memcpy(population, currentTown->m_population, sizeof(population));
@@ -4441,6 +4455,12 @@ static long valueOfHiring(town* currentTown, hero* candidate,
     purchaser.doSwap(candidate, &townArmy, 0, hasAlliance);
     purchaser.doPurchase(&candidate->m_army, candidate->getMorale(0, 0, 1),
                           &townArmy, player->m_resources, 0, hasAlliance);
+
+    // A tavern candidate is outside getTurnAIVars' active-hero sweep. Price
+    // stat/mana rewards from this hypothetical army, not stale/uninitialized
+    // caches left from an earlier owner or absent from a loaded save.
+    aiSetHeroBonuses(candidate);
+    candidate->m_turnExperienceToRvRatio = 0;
 
     std::vector<HeroDestination> destinations;
     candidate->m_x = currentTown->m_mapX;

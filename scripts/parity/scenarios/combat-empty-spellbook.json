@@ -1,0 +1,57 @@
+[
+  {
+    "name": "move-out",
+    "key": "ArrowDown",
+    "ms": 1024,
+    "expect": {
+      "game.y": 6
+    }
+  },
+  {
+    "name": "approach",
+    "key": "ArrowDown",
+    "ms": 1024,
+    "expect": {
+      "game.y": 7
+    }
+  },
+  {
+    "name": "encounter",
+    "key": "End",
+    "ms": 20000,
+    "until": {
+      "game.combat": 1,
+      "combat.control": true,
+      "combat.processing": false
+    }
+  },
+  {
+    "name": "encounter-confirm",
+    "ms": 512,
+    "expect": {
+      "game.combat": 1
+    },
+    "until": {
+      "game.combat": 1,
+      "combat.control": true,
+      "combat.processing": false
+    }
+  },
+  {
+    "name": "empty-spellbook",
+    "widget": 2008,
+    "ms": 512,
+    "expect": {
+      "hd.layers": 2
+    }
+  },
+  {
+    "name": "close-book",
+    "key": "Escape",
+    "ms": 512,
+    "expect": {
+      "hd.layers": 1,
+      "combat.control": true
+    }
+  }
+]

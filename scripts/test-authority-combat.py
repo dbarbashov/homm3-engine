@@ -55,8 +55,17 @@ for case, name in cases:
         events=frame['presentation']
         assert len(events)<=256 and all(len(e)==12 and all(isinstance(n,int) for n in e) for e in events), name+': bounded visual records'
         assert all(e[0]>0 and (i==0 or e[0]==events[i-1][0]+1) for i,e in enumerate(events)), name+': ordered visual sequence'
-        assert all(1<=e[1]<=12 and 0<=e[2]<2 and 0<=e[3]<21 for e in events), name+': visual stack identity'
+        assert frame['presentationVersion']==5, name+': presentation schema'
+        assert all(1<=e[1]<=18 and 0<=e[2]<2 and 0<=e[3]<21 for e in events), name+': visual stack identity'
+        assert all(e[6]>=0 for e in events if e[1]==15), name+': original pause duration'
+        assert all(e[6] in (0,1) for e in events if e[1]==16), name+': turn preparation flag'
+        assert all(e[1]!=14 or (0<=e[6]<=40 and e[6]%5==0) for e in events), name+': cosmetic timer range'
         assert all(0<=e[6]<81 for e in events if e[1]==9), name+': successful spell sound identity'
+        assert all(0<=e[6]<81 and 0<=e[7]<=2 and 0<=e[8]<=1 and ((e[9]==-1 and e[10]==-1) or (0<=e[9]<=1 and 0<=e[10]<21)) for e in events if e[1]==18), name+': original spell message target'
+        if name=='spell_15':
+            assert any(e[1]==6 and e[6]==15 for e in events) and not any(e[1]==18 and e[6]==15 for e in events), name+': damage-only spell must not invent an announcement'
+        if name=='spell_53':
+            assert sum(e[1]==18 and e[6]==53 for e in events)==1, name+': haste announcement is retained once'
         assert all(e[6]>=0 and e[7]>=0 and e[8]>=0 for e in events if e[1]==5), name+': resolved damage facts'
         assert all(len(stack['modifiers'])==25 and len(stack['effectOrder'])<=81 for stack in frame['stacks']), name+': spell presentation modifiers'
         assert frame['actions'] == [] and frame['canAct'] is False, name + ': result action authority'

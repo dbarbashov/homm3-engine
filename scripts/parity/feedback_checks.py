@@ -22,6 +22,8 @@ def check_chunks(chunks, profile):
     def cues(c):
         return [(e['data']['kind'],e['data']['side'],e['data']['slot']) for e in c['events'] if e['kind']=='decision' and e['data']['kind'].endswith('-start') and e['data']['kind'][:-6] in CUES]
     check('same original proc order and targets',cues(chunks['legacy'])==cues(chunks['authority']))
+    durations={m:c['t']-c['frames'][0]['t'] for m,c in chunks.items()}
+    check('same input-to-results duration',durations['legacy']==durations['authority'],durations)
     for mode,c in chunks.items():
         fs=frames(c);metrics[mode]={}
         for cue,sample in CUES.items():
@@ -36,9 +38,11 @@ def check_chunks(chunks, profile):
             metrics[mode][cue]=durations
         # Every rendered shot must leave its shooting pose before the next
         # impact completes. A final authoritative snapshot alone cannot pass.
-        shots={};recovered=0;dead=set();bodies=set()
+        shots={};recovered=0;dead=set();bodies=set();turns=[]
         for f in fs:
             b=f['ui']['combat'];bodies.update(tuple(x) for x in b['corpses'])
+            turning=[(s['side'],s['slot'],s['sequence'],s['frame']) for s in b['stacks'] if s['sequence'] in [7,8,9,10]]
+            if turning and (not turns or turning!=turns[-1]):turns.append(turning)
             for s in b['stacks']:
                 key=(s['side'],s['slot'])
                 if s['count']<=0:dead.add(key)
@@ -49,10 +53,11 @@ def check_chunks(chunks, profile):
         check(mode+': real shooting evidence',recovered>=2)
         check(mode+': no stranded shooter',not shots)
         check(mode+': corpses observed during action',bool(bodies))
-        metrics[mode].update(recoveries=recovered,corpses=sorted(bodies))
+        metrics[mode].update(recoveries=recovered,corpses=sorted(bodies),turnFrames=turns)
+    check('original turn animation frames and direction order',bool(metrics['legacy']['turnFrames']) and metrics['legacy']['turnFrames']==metrics['authority']['turnFrames'])
     for cue in CUES:
         a,b=metrics['legacy'][cue],metrics['authority'][cue]
-        check(cue+': original pause duration',len(a)==len(b) and all(abs(x-y)<=100 for x,y in zip(a,b)),{'legacy':a,'authority':b})
+        check(cue+': original pause duration',a==b,{'legacy':a,'authority':b})
     required={'positive':['morale-good','luck-good'],'negative':['morale-bad'],'zero':[],'unlucky':[]}[profile]
     for cue in required:check(cue+': non-vacuous original and replay evidence',all(metrics[m][cue] for m in metrics))
     if profile in ['zero','unlucky','negative']:check('no invented negative luck proc',all(not metrics[m]['luck-good'] for m in metrics))
@@ -73,16 +78,28 @@ def check_chunks(chunks, profile):
 
 def check_run(directory,profile):
     directory=Path(directory)
-    chunks={m:json.loads((directory/m/'battle-auto-p0.json').read_text()) for m in ['legacy','authority']}
+    chunks={}
+    for mode in ['legacy','authority']:
+        opening=[json.loads((directory/mode/(action+'-p0.json')).read_text())
+                 for action in ['encounter','encounter-confirm','battle-auto']]
+        # Fast enemies and low morale can resolve before the first controllable
+        # stack. Observe the whole battle, including that opening continuation.
+        chunks[mode]={**opening[-1], 'frames':[f for c in opening for f in c['frames']],
+                      'events':[e for c in opening for e in c['events']]}
+
     result=check_chunks(chunks,profile);rules=combat_checks(directory)
     result['rules']=rules;result['passed'] &= rules['passed'];result['strictParityPassed']=rules.get('strictParityPassed',False)
     # Seed faults into real observed traces. These are assertions about what
     # the checker catches, not synthetic evidence that the game is correct.
     faults={}
-    for fault in ['missing-cues','stuck-shot','deferred-corpses']:
+    for fault in ['missing-cues','stuck-shot','deferred-corpses','shifted-pause','instant-turn']:
         broken=copy.deepcopy(chunks);c=broken['authority']
         if fault=='missing-cues':
             c['events']=[e for e in c['events'] if not(e['kind']=='decision' and any(e['data']['kind'].startswith(k) for k in CUES))]
+        if fault=='shifted-pause':
+            for event in c['events']:
+                if event['kind']=='decision' and event['data']['kind'] in [k+'-end' for k in CUES]:
+                    event['t']+=64;break
         for f in c['frames']:
             b=f['ui'].get('combat')
             if not b:continue
@@ -90,6 +107,9 @@ def check_run(directory,profile):
                 for s in b['stacks']:
                     if s['creature'] in [2,3] and s['count']>0:s['sequence']=16
             elif fault=='deferred-corpses':b['corpses']=[]
+            elif fault=='instant-turn':
+                for s in b['stacks']:
+                    if s['sequence'] in [7,8,9,10]:s['sequence']=2
         faults[fault]=not check_chunks(broken,profile)['passed']
     result['faultsDetected']=faults
     if profile in ['positive','negative']:result['passed'] &= all(faults.values())

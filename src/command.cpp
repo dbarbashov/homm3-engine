@@ -1,8 +1,10 @@
+#include "browser_rng.h"
 #ifdef HOMM3_SERVER
 #include "server_combat.h"
 #include "server_authority.h"
 #endif
 #include "battle_client.h"
+#include "combat_presentation.h"
 // Both DC command routines below retain army::GetName as the source boundary,
 // while the original CreatureType.h body supplies its nested GetArmyName
 // expansion.  Omitting that header-inline body loses 16 retail CFG blocks.
@@ -322,7 +324,9 @@ int combatManager::main(message& msg)
                     DATA_COMPGEN(0x00670218, receivedCombatActionLog,
                                  "Received action [%d]--> [%d,%d,%d]"),
                     m_nextAction, m_nextActionExtra, m_nextActionGridIndex, m_nextActionGridIndex2);
-                sRand(combatMsg->m_seed);
+                // New peers continue the serialized rules stream. Retain the
+                // original seed field for recordings made by older peers.
+                if(combatMsg->m_seed!=-1)sRand(combatMsg->m_seed);
                 goto process_action;
             }
 
@@ -1200,6 +1204,9 @@ void combatManager::resetRound()
         }
     }
 
+#ifdef HOMM3_SERVER
+    Port::Authority::recordCombatVisual(Port::Authority::VisualRound,getCurrentArmy(),m_turnNumber,m_creaturePlacement);
+#endif
     if (!m_creaturePlacement
             && !suppressCombatPresentation()) {
         m_combatWindow->combatMessage(
@@ -1665,7 +1672,7 @@ void combatManager::showEagleEye(int winningGroup, int dialogTimeout)
             launchSample(
                 formatString(DATA_COMPGEN(0x00670268, pickupSampleFormat,
                                            "pickup%02d.82M"),
-                              sRandom(1, 7))
+                              Port::CosmeticRng::range(1, 7))
                     .c_str(),
                 -1, 3);
             extendedDialog(msg.c_str(), rewards, -1, -1, dialogTimeout);
@@ -1697,7 +1704,7 @@ void combatManager::showLootedArtifacts(
             launchSample(
                 formatString(DATA_COMPGEN(0x00670268, pickupSampleFormat,
                                            "pickup%02d.82M"),
-                              sRandom(1, 7))
+                              Port::CosmeticRng::range(1, 7))
                     .c_str(),
                 -1, 3);
             extendedDialog(g_generalText->GetText(GENERAL_TEXT_COMBAT_CAPTURED_ARTIFACT), rewards, -1, -1,
@@ -2397,6 +2404,9 @@ DC_ADDRESS(0x06f984, 0x82a)
 MAC_ADDRESS(0x0871d0, 0xb3c)  // anchor-callee exhaustive + single-fn gap
 int combatManager::processNextAction(message& msg, bool automaticTurn)
 {
+#ifdef HOMM3_HARNESS
+    Port::Harness::decision("action-start",m_actingSide,m_actingSlot);
+#endif
     if (!suppressCombatPresentation()) {
         m_combatWindow->clearCombatMessages();
         m_combatWindow->m_heroSubWindows[0]->unShow();
@@ -2421,8 +2431,9 @@ int combatManager::processNextAction(message& msg, bool automaticTurn)
             && m_playerIds[0] >= 0 && m_playerIds[1] >= 0
             && g_game->isHuman(m_playerIds[1])
             && g_game->isHuman(m_playerIds[0])) {
-        int seed = GameTime::get();
-        sRand(seed);
+        // Wall-clock reseeding makes the same PvP action resolve differently
+        // after reconnect or on a headless authority. -1 means continuation.
+        const int seed = -1;
         CCombatMainMsg combatMsg(m_nextAction, m_nextActionExtra, m_nextActionGridIndex, m_nextActionGridIndex2,
                                  seed);
         g_logFile.log(
@@ -2666,6 +2677,7 @@ MAC_ADDRESS(0x087e70, 0xa4)
 void combatManager::resetCycleTimers()
 {
     unsigned long now = GameTime::get();
+    Port::CosmeticRng::clockEpoch()=static_cast<std::uint32_t>(now);
     cmbtHeroLastFidgetTime[0] = now;
     cmbtHeroLastFidgetTime[1] = now;
 
@@ -2674,11 +2686,28 @@ void combatManager::resetCycleTimers()
             army* stack = &m_armies[side][slot];
             if (stack->m_monFrameInfo.m_fidgetFrequency > 51) {
                 stack->m_lastFidgetTime =
-                    now + 2 * random(50, stack->m_monFrameInfo.m_fidgetFrequency)
+                    now + 2 * Port::CosmeticRng::range(50, stack->m_monFrameInfo.m_fidgetFrequency)
                         - stack->m_monFrameInfo.m_fidgetFrequency;
+#ifdef HOMM3_HARNESS
+                Port::Harness::decision("cycle-delay",side*21+slot,static_cast<int32_t>(stack->m_lastFidgetTime-now));
+#endif
             }
         }
     }
+#ifdef HOMM3_SERVER
+    // Publish resolved cosmetic delays, never the rules RNG state. Packing
+    // five slots per record keeps long AI turns within the bounded journal.
+    for(int first=0;first<42;first+=5){
+        int delays[5]={INT_MIN,INT_MIN,INT_MIN,INT_MIN,INT_MIN};bool any=false;
+        for(int i=0;i<5&&first+i<42;++i){
+            const int side=(first+i)/21,slot=(first+i)%21;
+            if(slot<m_numArmies[side]&&m_armies[side][slot].m_monFrameInfo.m_fidgetFrequency>51){
+                delays[i]=static_cast<int32_t>(m_armies[side][slot].m_lastFidgetTime-now);any=true;
+            }
+        }
+        if(any)Port::Authority::recordCombatVisual(Port::Authority::VisualCycleTimers,getCurrentArmy(),first,delays[0],delays[1],delays[2],delays[3],delays[4]);
+    }
+#endif
 }
 
 // Original: combatManager::SetCombatViewArmy; command.cpp:3819

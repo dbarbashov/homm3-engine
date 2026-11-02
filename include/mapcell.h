@@ -1,5 +1,6 @@
 #ifndef HOMM3_MAPCELL_H
 #define HOMM3_MAPCELL_H
+#include "browser_rng.h"
 
 #include "va.h"
 #include "objectmask.h"
@@ -847,7 +848,7 @@ public:
     CObject() : m_x(0xff), m_y(0xff), m_z(0xff), m_typeIndex(0xffff)
     {
         m_extraInfo = 0xffffffff;
-        m_animationOffset = static_cast<unsigned char>(random(0, 255));
+        m_animationOffset = static_cast<unsigned char>(Port::CosmeticRng::range(0, 255));
     }
 
     // Original: CObject::CObject; MapCell.h:595
@@ -861,7 +862,7 @@ public:
         m_z = newZ;
         m_typeIndex = newType;
         m_extraInfo = newExtraInfo;
-        m_animationOffset = static_cast<unsigned char>(random(0, 255));
+        m_animationOffset = static_cast<unsigned char>(Port::CosmeticRng::range(0, 255));
     }
 };
 SIZE(CObject, 0xc);
@@ -1002,7 +1003,10 @@ public:
     // first cast into an enum.
     union {
         TAdventureObjectType m_type;  // +0x1e
-        unsigned long m_typeValue;
+        // This overlay is a DWORD even on LP64 hosts. An eight-byte long
+        // leaves its upper half undefined whenever m_type is assigned, so
+        // empty-water checks can depend on allocator contents.
+        unsigned int m_typeValue;
     };
     short m_objectIndex;  // +0x22
     short m_objectTypeIndex;  // +0x24

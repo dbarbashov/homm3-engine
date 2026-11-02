@@ -20,7 +20,22 @@ def check_run(directory, suite):
         left,right=traces.values()
         check('same GM2, RNG, initial world and observer',all(left[k]==right[k] for k in ['fixtureSha256','rng','initial','wasmSha256','observerSha256','viewport','settings','buildConfig']))
         def state(mode,name,seat=0):return traces[mode]['actions'][f'{name}/p{seat}']['state']
-        if suite=='week':
+        if suite=='turns':
+            for seat in range(2):
+                frames=[t['actions'][f'idle/p{seat}']['frames'] for t in traces.values()]
+                check(f'p{seat}: original initial pixels including fog fringe',
+                      [f['tiles'] for f in frames[0]]==[f['tiles'] for f in frames[1]])
+            for n in range(1,15):
+                for seat in range(2):
+                    name=f'accept-{n:02}-4';a,b=[state(m,name,seat) for m in traces]
+                    check(name+f'/p{seat}: calendar and active player',a['game']==b['game'])
+                    for key in ['hero','town','mobile','cursor','bottom']:
+                        check(name+f'/p{seat}: original {key}',a['adventure'][key]==b['adventure'][key],
+                              {'legacy':a['adventure'][key],'authority':b['adventure'][key]})
+            for mode in traces:
+                game=state(mode,'accept-14-4')['game']
+                check(mode+': second week reached',(game['month'],game['week'],game['day'])==(1,2,1))
+        elif suite=='week':
             for n in range(1,15):
                 next_seat=n%2;popup=f'turn-popup-{n:02}';settled=f'settled-{n:02}'
                 a,b=[state(m,popup,next_seat) for m in traces]
@@ -60,6 +75,6 @@ def check_run(directory, suite):
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('directory',type=Path);p.add_argument('--suite',choices=['week','combat'],required=True);a=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('directory',type=Path);p.add_argument('--suite',choices=['week','turns','combat'],required=True);a=p.parse_args()
     result=check_run(a.directory,a.suite);(a.directory/'transition-checks.json').write_text(json.dumps(result,indent=2)+'\n')
     print(json.dumps(result));raise SystemExit(0 if result['passed'] else 1)

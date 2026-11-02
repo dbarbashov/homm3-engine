@@ -1,4 +1,6 @@
+#include "authority_remote_move.h"
 #include "parity_wait.h"
+#include "adventure_fizzle.h"
 #include "presentation_pointer.h"
 #include "authority_puzzle_client.h"
 #include "authority_client.h"
@@ -32,6 +34,7 @@
 #include "font.h"
 #include "mousemgr.h"
 #include "soundmgr.h"
+#include "sdl_backend.h"
 void popupPlayerTurnInfo();
 #include <vector>
 #include <stdexcept>
@@ -47,7 +50,9 @@ struct AuthorityTurnViewAccess {
 namespace {
 bool active=false,applying=false,failed=false,choosing=false,viewInstalled=false;
 int actor=-1,turn=-1;
-int shownTurn=-1;bool pendingTurnPopup=false;
+int shownTurn=-1;bool pendingTurnPopup=false,pendingNewDay=false;
+bool battleReturnPending=false;
+bool adventureFizzleSource=false;
 int transferStage=0;
 int choiceMode=0,choiceValue=-1,choiceQuantity=0;
 bool movementStandEnd=true,movementRequestActive=false;
@@ -208,6 +213,8 @@ bool turnView(bool force,bool draw,bool update){
 #endif
     const int current=presentationActor();
     if(transfer){
+        TurnViewContext context(current>=0?current:actor);
+        AuthorityTurnViewAccess::enemy(true);
         // The original panel, without its save-file byte percentage: this
         // protocol sends commands/projections rather than a peer's save file.
         auto* panel=AuthorityTurnViewAccess::panel(win);
@@ -223,6 +230,9 @@ bool turnView(bool force,bool draw,bool update){
 #endif
         return true;
     }
+    // Original turn notifications and calendar events keep the transfer/wait
+    // panel behind their modals. The new-day card starts after those choices.
+    if(pendingTurnPopup||pendingNewDay)return true;
     if(current<0||current==actor)return false;
     TurnViewContext context(current);
     if(shownTurn!=current||force){g_advManager->clearBottomView();shownTurn=current;}
@@ -236,7 +246,7 @@ bool turnView(bool force,bool draw,bool update){
 bool animateTurnView(bool background){
     if(!active||actor<0||!viewInstalled)return false;
     const int current=presentationActor();
-    if(transferStage)return true;
+    if(transferStage||pendingTurnPopup||pendingNewDay)return true;
     if(current<0||current==actor)return false;
     auto* win=g_advManager->m_advWindow;
     if(shownTurn!=current){turnView(true,true,true);return true;}
@@ -249,20 +259,22 @@ bool recruitChoiceActive(){return choiceMode==3;}
 void chooseRecruit(int creature,int count){if(choiceMode==3){choiceValue=creature;choiceQuantity=count;}}
 bool universityChoiceActive(){return choiceMode==4;}
 void chooseUniversity(int skill){if(choiceMode==4)choiceValue=skill;}
-void finishMovementPresentation(){
+void finishMovementPresentation(bool removeTarget){
     if(!active||!HD::adventureVisible())return;
     // Original MoveHero stops before dispatching an encounter. The route
     // continuation must not resume through a modal or keep a walking sample.
     g_advManager->stopCursor(true);
     if(movementRequestActive){movementStandEnd=true;g_heroMoveTriggeredEvent=1;}
-    g_advManager->hideRoute(1,1,1);
+    g_advManager->hideRoute(1,removeTarget,1);
 }
 void presentDeferred(){
 #ifdef __EMSCRIPTEN__
     if(Fast::state().waiting||choosing||BattleClient::active()||!HD::adventureVisible())return;
     int event[3]={};char text[65537]={};if(EM_ASM_INT({return window.homm3Authority.takeUIEvent(HEAP32,$0>>2,HEAPU8.subarray($1,$1+65537),65537);},event,text)){
         choosing=true;
-        finishMovementPresentation();
+        // Opening a town stops the walk and hides arrows, but the original
+        // retains the hero's destination while visiting the town window.
+        finishMovementPresentation(event[0]!=1);
         ScopedPresentationPointer pointer;
         if(event[0]==3)g_advManager->bvResMsg(text,event[1],event[2]);
         else AuthorityActionsClient::present(event[0]==1?"open_town":"hero_exchange",event[1],event[2]);
@@ -311,21 +323,54 @@ void playAdventureSounds(){
     // from opening the encounter modal before its sound has actually started.
     struct RestoreChoice {bool previous;~RestoreChoice(){choosing=previous;}} restore{choosing};
     choosing=true;
-    char name[81];while(EM_ASM_INT({return window.homm3Authority.takeAdventureSound(HEAPU8.subarray($0,$0+81),81);},name)){
+    char name[81];int presentation;
+    while((presentation=EM_ASM_INT({return window.homm3Authority.takeAdventureSound(HEAPU8.subarray($0,$0+81),81);},name))){
         if(movementRequestActive)finishMovementPresentation();
-        launchSample(name,-1,3);
+        if(presentation==2&&adventureFizzleSource){
+            adventureFizzleSource=false;
+            Port::showAdventureFizzle(name,true);
+        }else launchSample(name,-1,3);
     }
 #endif
 }
+void combatClosed(){battleReturnPending=true;}
 void tick(){
 #ifdef __EMSCRIPTEN__
     if(!active||applying||choosing||failed||BattleClient::active())return;
     playAdventureSounds();
     if(pendingTurnPopup&&!Fast::state().waiting&&HD::adventureVisible()){
-        pendingTurnPopup=false;choosing=true;
+        pendingTurnPopup=false;pendingNewDay=true;choosing=true;
         popupPlayerTurnInfo();
+        // startLocalPlayerTurn keeps ambient loops off while time/town events
+        // are acknowledged. Reproduce that continuation before opening the
+        // worker's choices, rather than leaving popupPlayerTurnInfo's sound
+        // enablement active throughout them.
+        if(g_game->m_day!=1||(g_game->m_week==1&&g_game->m_month==1)){
+            g_soundManager->m_playSounds=1;startAITheme();
+            g_soundManager->m_playSounds=0;g_forceSwitchMusic=GameTime::get();
+        }
+        choosing=false;
+    }
+    if(pendingNewDay&&!Fast::state().waiting&&HD::adventureVisible()&&
+       EM_ASM_INT({const api=window.homm3Authority;const choice=api.pendingChoice;return !api.pendingLength()&&((!choice&&window.homm3AuthorityStatus?.phase==='adventure')||choice?.kind==='calendar');})){
+        pendingNewDay=false;choosing=true;
+        // The notification stops the music. In the original startLocalPlayerTurn,
+        // doNewTurn then restores the terrain theme and ambient sounds. Rules run
+        // on the worker here, so their presentation continuation must run locally.
+        g_soundManager->m_playSounds=1;
+        g_advManager->setInitialMapOrigin();
         g_advManager->overrideBottomView(advManager::BOTTOM_VIEW_1,-1);
-        g_advManager->updBottomView(1,1,1);choosing=false;
+        g_advManager->updBottomView(1,1,1);
+        // Original doNewTurn selects the next hero after time/town event dialogs
+        // and before the week/month announcement.
+        // Selecting during projection receipt paints a live hero cursor behind
+        // the turn notification and can start ambient loops under the dialog.
+        g_advManager->deactivateCurrHero(false);
+        const int nextHero=g_currentPlayer->nextHero();
+        if(nextHero>=0)g_advManager->setHeroContext(nextHero,0,0,1);
+        else if(g_currentPlayer->m_numTowns>0)g_advManager->setTownContext(g_currentPlayer->m_townIds[0],0,1);
+        g_advManager->checkDimNextHeroBut();
+        choosing=false;
 #ifdef __EMSCRIPTEN__
         EM_ASM({window.homm3TurnPresentation=({mode:'new_turn',actor:$0});},actor);
 #endif
@@ -347,7 +392,13 @@ void tick(){
             if(kind==15){AuthorityPuzzleClient::showPending(choice[1],choice[4]);choosing=false;return;}
             if(AuthorityExchangeClient::present(choice)){choosing=false;return;}
             if(presentExtendedChoice(choice,text)){choosing=false;return;}
-            if(kind==1){normalDialog(text,choice[1],choice[9],choice[10],choice[3],choice[4],choice[5],choice[6],choice[2],0,choice[7],choice[8]);answer=g_windowManager->m_dialogReturn;}
+            if(kind==1||kind==17){
+                // showNewWeek runs after doNewTurn's map/selection/card setup,
+                // unlike the time and town events that precede that setup.
+                if(kind==17){g_game->turnOffAIMusic();launchSample(g_game->m_week==1?"newmonth.wav":"newweek.wav",30000,3);g_advManager->m_advWindow->setBackgroundAnimation(1);}
+                normalDialog(text,choice[1],choice[9],choice[10],choice[3],choice[4],choice[5],choice[6],choice[2],0,choice[7],choice[8]);answer=g_windowManager->m_dialogReturn;
+                if(kind==17)g_advManager->m_advWindow->setBackgroundAnimation(0);
+            }
             else if(kind==2&&choice[1]>=0&&choice[1]<game::HERO_COUNT){
                 auto& h=g_game->m_heroes[choice[1]];
                 const int first=choice[3],second=choice[4];
@@ -370,8 +421,10 @@ void tick(){
             EM_ASM({window.homm3Authority.answer($0,$1);},answer,quantity);choosing=false;
         }
     }
+    const bool resumeBattle=battleReturnPending&&HD::adventureVisible()&&
+        EM_ASM_INT({return !window.homm3Authority.pendingChoice&&window.homm3AuthorityStatus?.phase==='adventure';});
     int length=EM_ASM_INT({return window.homm3Authority.pendingLength();});
-    if(!length&&(viewInstalled||actor<0||!HD::adventureVisible())){if(!BattleClient::active())BattleClient::begin();presentDeferred();return;}
+    if(!length&&!resumeBattle&&(viewInstalled||actor<0||!HD::adventureVisible())){if(!BattleClient::active())BattleClient::begin();presentDeferred();return;}
     if(length<0||length>Authority::ProjectionMaxWords){failed=true;return;}
     type_point targets[game::HERO_COUNT];for(int id=0;id<game::HERO_COUNT;++id)targets[id]=g_game->m_heroes[id].getTarget();
     const int previousTurn=turn;
@@ -380,9 +433,20 @@ void tick(){
     const bool previousMobile=g_advManager->m_curHeroMobile;
     const type_point previousLocation=previousHero>=0?g_game->m_heroes[previousHero].getLocation():type_point(-1,-1,-1);
     applying=true;
+    if(length&&viewInstalled&&HD::adventureVisible())AuthorityRemoteMove::capture(actor);
     if(length){
+        if(HD::adventureVisible()&&g_completeDrawEnabled&&EM_ASM_INT({return window.homm3Authority.pendingAdventureFizzle;})){
+            g_windowManager->saveFizzleSourceX(0xc0,0xa0,0xe0,0xe0);
+            adventureFizzleSource=true;
+        }
         pending.resize(length);
         EM_ASM({window.homm3Authority.copyPending(HEAP32,$0>>2);},pending.data());
+        if(viewInstalled&&HD::adventureVisible()&&length>=6&&previousTurn==actor&&pending[2]!=actor){
+            // Finish the old local presentation before installing canonical map
+            // cells. Demobilizing afterwards would write the old hero over them.
+            g_advManager->deactivateCurrTown(false);
+            g_advManager->deactivateCurrHero(false);
+        }
         if(viewInstalled&&HD::adventureVisible()&&length>=6&&pending[2]==actor&&(previousTurn!=actor||previousDate!=pending[5]*28+pending[4]*7+pending[3])){
             transferStage=2;turnView(false,true,true);Port::Harness::wait(16);transferStage=0;
         }
@@ -394,16 +458,27 @@ void tick(){
     g_localGamePos=actor;g_netLocalGamePos=actor;g_playerTurn=turn;g_currentPlayer=&g_game->m_players[actor];g_curPlayerBit=1<<actor;g_curWatchPlayer=actor;g_mapVisibilityBit=1<<actor;
     g_currentPlayer->m_isLocal=turn==actor;g_thisNetGotAdventureControl=turn==actor;g_remoteOn=0;
     Fast::state().ready=turn!=actor;
+    const bool newTurn=turn==actor&&viewInstalled&&(previousTurn!=actor||previousDate!=g_game->m_month*28+g_game->m_week*7+g_game->m_day);
+    if(newTurn)pendingTurnPopup=true;
+    if(turn!=actor)pendingNewDay=false;
     auto& p=*g_currentPlayer;
+    const bool startingTurn=pendingTurnPopup||pendingNewDay;
+    if(newTurn){p.m_currHeroId=static_cast<HeroId>(-1);p.m_currTownId=-1;}
     if(!viewInstalled&&turn!=actor){
+        // Adventure startup renders our local view before the first authority
+        // boundary. Restore the original waiting-seat sound policy too: no
+        // ambient loops, and selecting a different terrain can change music.
+        g_game->turnOnAIMusic();
         // Adventure startup can have mobilized the local hero after the first
         // projection. With no fresh map packet, restore that cell before
         // dropping selection; otherwise the waiting hero disappears until
         // the next server update.
         if(!length)g_advManager->demobilizeCurrHero(false,false);
         p.m_currHeroId=static_cast<HeroId>(-1);p.m_currTownId=-1;
+        g_advManager->setInitialMapOrigin();
     }
     if(viewInstalled&&previousTurn==actor&&turn!=actor){
+        g_game->turnOnAIMusic();
         // Original turn handoff clears selection before entering wait mode.
         // Keep the projected hero in its map cell; do not turn it into a cursor.
         p.m_currHeroId=static_cast<HeroId>(-1);p.m_currTownId=-1;
@@ -411,10 +486,12 @@ void tick(){
     if(std::find(p.m_heroes,p.m_heroes+p.m_numHeroes,p.m_currHeroId)==p.m_heroes+p.m_numHeroes){
         // No hero selected is intentional when viewing a town or waiting.
         // Only start a fresh active turn with the first available hero.
-        p.m_currHeroId=turn==actor&&(!viewInstalled||previousTurn!=actor)&&p.m_numHeroes?p.m_heroes[0]:static_cast<HeroId>(-1);
+        p.m_currHeroId=!startingTurn&&turn==actor&&(!viewInstalled||previousTurn!=actor)&&p.m_numHeroes?p.m_heroes[0]:static_cast<HeroId>(-1);
     }
     if(p.m_currHeroId>=0)p.m_currTownId=-1;
-    else if(p.m_currTownId<0||p.m_currTownId>=int(g_game->m_towns.size())||g_game->m_towns[p.m_currTownId].m_owner!=actor)p.m_currTownId=turn==actor&&p.m_numTowns?p.m_townIds[0]:-1;
+    // Garrison transfer clears the adventure hero selection. The town modal
+    // owns its own portraits; do not select an unrelated adventure town under it.
+    else if(p.m_currTownId<0||p.m_currTownId>=int(g_game->m_towns.size())||g_game->m_towns[p.m_currTownId].m_owner!=actor)p.m_currTownId=HD::adventureVisible()&&!startingTurn&&turn==actor&&p.m_numTowns?p.m_townIds[0]:-1;
     // The original misleadingly named all-cells flag is the AI blackout
     // screen: it paints opaque shroud and removes all locator portraits.
     g_completeDrawAllCells=0;g_completeDrawEnabled=1;g_blackoutPlayer=0;
@@ -427,7 +504,13 @@ void tick(){
         // The mobile-cursor path removes it; original waiting-player town
         // selection deliberately does not demobilize that cursor again.
         const bool samePosition=sameHero&&g_game->m_heroes[p.m_currHeroId].getLocation()==previousLocation;
-        if(continuing&&(turn!=actor||previousMobile||samePosition)){
+        if(resumeBattle&&turn==actor&&!startingTurn){
+            // Original combatAdventure returns through mobilizeCurrHero after
+            // rewards and casualties. Reapply that presentation only once the
+            // authoritative world has returned to adventure, never under a
+            // level-up dialog or on the waiting opponent's client.
+            g_advManager->mobilizeCurrHero(0,0,1);
+        }else if(continuing&&(turn!=actor||previousMobile||samePosition)){
             // The projection restores canonical map cells. Keep an existing
             // mobile cursor without reselecting the hero (which restarts all
             // ambient loops and recentres the camera on every server update).
@@ -435,7 +518,7 @@ void tick(){
             // acknowledgement must preserve that original selection state.
             if(turn==actor&&previousMobile){g_game->m_heroes[p.m_currHeroId].restoreCell();g_advManager->m_curHeroMobile=1;}
         }else if(p.m_currHeroId>=0)g_advManager->setHeroContext(p.m_currHeroId,0,turn!=actor,false);
-        if(turn!=actor)g_advManager->m_drawCursor=0;
+        if(turn!=actor||startingTurn)g_advManager->m_drawCursor=0;
         hero* selected=p.m_currHeroId>=0?&g_game->m_heroes[p.m_currHeroId]:nullptr;
         const int dx=selected?int(selected->m_x)-int(previousLocation.m_x):0;
         const int dy=selected?int(selected->m_y)-int(previousLocation.m_y):0;
@@ -451,6 +534,7 @@ void tick(){
                 g_advManager->turnTo(direction);
                 g_advManager->animateMove(selected,direction,dx,dy);
                 g_advManager->stopCursor(!Fast::state().waiting||movementStandEnd);
+                g_advManager->updateMovementSounds(selected);
                 g_advManager->setEnvironmentOrigin(g_advManager->getMapCenter(),0);
             }
         }
@@ -467,11 +551,15 @@ void tick(){
         if(turn!=actor)g_game->showComputerScreen();
         auto* win=g_advManager->m_advWindow;
         win->getWidget(TAdventureMapWindow::END_TURN_ID)->enable(turn==actor&&!EM_ASM_INT({return window.homm3Authority.eliminated||window.homm3Authority.finished;}));
-        win->updateSpellButton(p.m_currHeroId>=0?&g_game->m_heroes[p.m_currHeroId]:nullptr);
-        win->updateSleepButton(p.m_currHeroId>=0?&g_game->m_heroes[p.m_currHeroId]:nullptr);
+        // showComputerScreen disables commands while retaining their existing
+        // artwork. A waiting seat must not recompute dimming from its cleared
+        // selection (read-only hero/town clicks update their own buttons).
+        if(turn==actor){
+            win->updateSpellButton(p.m_currHeroId>=0?&g_game->m_heroes[p.m_currHeroId]:nullptr);
+            win->updateSleepButton(p.m_currHeroId>=0?&g_game->m_heroes[p.m_currHeroId]:nullptr);
+            g_advManager->checkDimNextHeroBut();
+        }else if(!viewInstalled)g_advManager->checkDimNextHeroBut();
         win->updateHeroLocators(-1,1,1);win->updateTownLocators(-1,1,1);win->updateResourceDisplay(1,1);
-        const bool newTurn=turn==actor&&viewInstalled&&(previousTurn!=actor||previousDate!=g_game->m_month*28+g_game->m_week*7+g_game->m_day);
-        if(newTurn)pendingTurnPopup=true;
         if(viewInstalled&&turn!=previousTurn&&turn!=actor&&turn>=0&&g_game->m_players[turn].isHuman())
             g_chatMan.systemMsg((*g_generalText)[GENERAL_TEXT_PLAYER_TURN_ITS_FORMAT],g_game->m_players[turn].m_name);
         if(turn!=previousTurn)g_advManager->overrideBottomView(advManager::BOTTOM_VIEW_DEFAULT,0);
@@ -480,8 +568,16 @@ void tick(){
         for(int id=0;id<game::HERO_COUNT;++id)if(viewInstalled&&g_game->m_heroes[id].m_owner==actor){auto& h=g_game->m_heroes[id];h.m_pathTargetX=targets[id].m_x;h.m_pathTargetY=targets[id].m_y;h.m_pathTargetZ=targets[id].m_z;}
         g_advManager->reseed(0,0);
         if(turn==actor&&selected&&selected->m_pathTargetX>=0&&selected->getTarget()!=selected->getLocation()){g_advManager->seedTo(selected->getTarget());g_advManager->showRoute(0,0,1);}
+        if(length&&viewInstalled&&turn==previousTurn&&turn!=actor)AuthorityRemoteMove::replay(actor);
         g_advManager->forceNewHover();g_advManager->updateRadar(1,1,0,0,0);
-        g_advManager->redrawAdvScreen(1,0);g_advManager->updateScreen(1,0);viewInstalled=true;
+        g_advManager->redrawAdvScreen(1,0);
+        // redrawAdvScreen already commits the framebuffer. When a predicted
+        // step agrees with the projection, its animation has also pumped the
+        // clock; a second update adds an artificial frame to every route end.
+        if(!(movementRequestActive&&continuing&&samePosition&&previousMobile))
+            g_advManager->updateScreen(1,0);
+        viewInstalled=true;
+        if(resumeBattle)battleReturnPending=false;
         if(turn!=actor)g_mouseManager->setPointer(2,mouseManager::DEFAULT_SET);
     }
     pending.clear();applying=false;
@@ -494,7 +590,7 @@ void discardPendingActions(){
     // Discard queued commands while retaining button releases for the original
     // widget that initiated this synchronous request. Dropping its release
     // leaves WIDGET_SELECTED stuck after an army transfer.
-    process1WindowsMessage();
+    Port::pollInput();
     message releases[2];int count=0;
     for(int i=g_inputManager->m_head;i!=g_inputManager->m_tail;i=(i+1)%64){
         const auto& event=g_inputManager->m_buffer[i];
@@ -520,6 +616,7 @@ bool request(int op,int id,int a,int b,int c,int d,int e){
     // Predict presentation only on clear, disclosed, unguarded terrain. The
     // command is already on the wire; authority still owns cost and legality.
     hero* predicted=nullptr;type_point predictionStart;const auto predictionCamera=g_advManager->m_radarOrigin;int predictionFacing=0;
+    const int predictionTerrain=g_advManager->m_lastTerrain;
     if(op==1&&id>=0&&id<game::HERO_COUNT&&a>=0&&a<8&&HD::adventureVisible()){
         auto& h=g_game->m_heroes[id];const auto start=h.getLocation();
         const type_point dest(start.m_x+g_normalDirTable[a].m_x,start.m_y+g_normalDirTable[a].m_y,start.m_z);
@@ -529,7 +626,7 @@ bool request(int op,int id,int a,int b,int c,int d,int e){
                 predicted=&h;predictionStart=start;predictionFacing=h.m_facing;applying=true;
                 *g_advManager->getRouteArrayPtr(dest.m_x,dest.m_y,dest.m_z)=0;
                 h.m_facing=a;g_advManager->turnTo(a);g_advManager->animateMove(&h,a,g_normalDirTable[a].m_x,g_normalDirTable[a].m_y);
-                g_advManager->stopCursor(movementStandEnd);g_advManager->setEnvironmentOrigin(g_advManager->getMapCenter(),0);applying=false;
+                g_advManager->stopCursor(movementStandEnd);g_advManager->updateMovementSounds(&h);g_advManager->setEnvironmentOrigin(g_advManager->getMapCenter(),0);applying=false;
             }
         }
     }
@@ -537,12 +634,20 @@ bool request(int op,int id,int a,int b,int c,int d,int e){
     while(!failed&&!(result=EM_ASM_INT({return window.homm3Authority.result($0);},ticket))){
         // In-flight commands own the original UI continuation; no unrelated
         // window handler can run until the authoritative state is installed.
-        tick();Port::Harness::wait(8);
+        tick();
+        // Installing the projection can complete the command. Do not sleep
+        // another frame after the result has become usable.
+        if((result=EM_ASM_INT({return window.homm3Authority.result($0);},ticket)))break;
+        Port::Harness::wait(8);
     }
     tick();Fast::state().waiting=false;choosing=outerChoiceGuard;discardPendingActions();
     if(result<0&&predicted){
         predicted->m_x=predictionStart.m_x;predicted->m_y=predictionStart.m_y;predicted->m_z=predictionStart.m_z;predicted->m_facing=predictionFacing;
         g_advManager->m_radarOrigin=predictionCamera;g_advManager->stopCursor(true);g_advManager->reseed(0,0);
+        if(g_advManager->m_lastTerrain!=predictionTerrain){
+            g_advManager->m_lastTerrain=predictionTerrain;
+            g_soundManager->switchAmbientMusic(g_terrainMusicIds[predictionTerrain]);
+        }
         if(predicted->m_pathTargetX>=0){g_advManager->seedTo(predicted->getTarget());g_advManager->showRoute(0,0,1);}
         g_advManager->setEnvironmentOrigin(g_advManager->getMapCenter(),0);g_advManager->redrawAdvScreen(1,0);g_advManager->updateScreen(1,0);
     }

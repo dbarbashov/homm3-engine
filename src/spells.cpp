@@ -1,3 +1,4 @@
+#include "browser_rng.h"
 #include "combat_presentation.h"
 #include "va.h"
 #include "includes.h"
@@ -3105,7 +3106,7 @@ void combatManager::resetBoltAngle(SBolt* bolt)
             scaled = static_cast<float>(bolt->m_angleDistortMin) / 100.0f;
         else
             scaled = static_cast<float>(
-                random(bolt->m_angleDistortMin,
+                Port::CosmeticRng::range(bolt->m_angleDistortMin,
                        bolt->m_angleDistortMax)) / 100.0f;
         float step = (2.0f - bolt->m_progress) / 1.5 * scaled;
         bolt->m_angle = step + bolt->m_angle;
@@ -3154,7 +3155,7 @@ void combatManager::drawBolt(SBolt* bolt, int drawLength)
     lastY = static_cast<long>(bolt->m_y);
     spanFirst = bolt->m_spanFirst;
     spanLast = bolt->m_spanLast;
-    useThicknessStopOffset = random(7, 12);
+    useThicknessStopOffset = Port::CosmeticRng::range(7, 12);
 
     { for (i = 0; i < drawLength; i++) {
         bolt->m_x = static_cast<float>(
@@ -3499,7 +3500,7 @@ void combatManager::doBolt(int handleResets, int sourceX, int sourceY,
                         int absDist = abs(bolts[i].m_destX - bolts[i].m_pixelX)
                             + abs(bolts[i].m_destY - bolts[i].m_pixelY);
                         if (maxBolt < 25 && absDist > segmentLength * 2
-                            && random(0, splitChanceTimes100) < 100) {
+                            && Port::CosmeticRng::range(0, splitChanceTimes100) < 100) {
                             // iStartX is the last fork's position, so the
                             // second test throttles how often one bolt can
                             // fork; a bolt that has never forked from the
@@ -3512,13 +3513,13 @@ void combatManager::doBolt(int handleResets, int sourceX, int sourceY,
                                 bolts[i].m_startX = bolts[i].m_pixelX;
                                 bolts[i].m_startY = bolts[i].m_pixelY;
                                 float offset =
-                                    static_cast<float>(random(50, 80))
+                                    static_cast<float>(Port::CosmeticRng::range(50, 80))
                                     / 100.0f;
-                                if (random(0, 1))
+                                if (Port::CosmeticRng::range(0, 1))
                                     offset = -offset;
                                 float angle = bolts[i].m_distortedAngle;
                                 angle += offset;
-                                int drawLength = random(maxSplitLength >> 1,
+                                int drawLength = Port::CosmeticRng::range(maxSplitLength >> 1,
                                                         maxSplitLength);
                                 if (drawLength > (absDist >> 1))
                                     drawLength = absDist >> 1;
@@ -4874,6 +4875,10 @@ MAC_ADDRESS(0x19a1dc, 0x7f0)  // order-map+arity
 void combatManager::showSpellMessage(int isMonsterSpell, SpellID spellId,
                                      army* targetArmy)
 {
+#ifdef HOMM3_SERVER
+    Port::Authority::recordCombatVisual(Port::Authority::VisualSpellMessage,getCurrentArmy(),
+        spellId,isMonsterSpell,m_currentSide,targetArmy?targetArmy->group:-1,targetArmy?targetArmy->index:-1);
+#endif
     if (suppressCombatPresentation())
         return;
 

@@ -1,0 +1,149 @@
+[
+  {
+    "name": "move-out",
+    "key": "ArrowDown",
+    "ms": 1024
+  },
+  {
+    "name": "approach",
+    "key": "ArrowDown",
+    "ms": 1024
+  },
+  {
+    "name": "plan-attack",
+    "map": [
+      5,
+      8
+    ],
+    "ms": 256
+  },
+  {
+    "name": "encounter",
+    "ms": 20000,
+    "until_seat": 0,
+    "until": {
+      "game.combat": 1,
+      "combat.control": true,
+      "combat.processing": false
+    },
+    "map": [
+      5,
+      8
+    ]
+  },
+  {
+    "name": "battle-ready",
+    "seat": 0,
+    "ms": 128,
+    "expect": {
+      "combat.control": true
+    }
+  },
+  {
+    "name": "winning-shot",
+    "seat": 0,
+    "target": [
+      1,
+      0
+    ],
+    "ms": 20000,
+    "until": {
+      "screen": "combat-results"
+    }
+  },
+  {
+    "name": "loser-results-ready",
+    "seat": 1,
+    "ms": 20000,
+    "until": {
+      "screen": "combat-results"
+    }
+  },
+  {
+    "name": "loser-dismiss",
+    "seat": 1,
+    "key": "Enter",
+    "ms": 1024,
+    "when": {
+      "screen": "combat-results"
+    }
+  },
+  {
+    "name": "winner-dismiss",
+    "seat": 0,
+    "key": "Enter",
+    "ms": 2048,
+    "expect": {
+      "window.type": "10TDialogBox"
+    }
+  },
+  {
+    "name": "loot-dismiss",
+    "seat": 0,
+    "key": "Enter",
+    "ms": 2048,
+    "expect": {
+      "window.type": "14TLevelUpWindow"
+    }
+  },
+  {
+    "name": "select-level",
+    "seat": 0,
+    "widget": 2010,
+    "ms": 256
+  },
+  {
+    "name": "confirm-level",
+    "seat": 0,
+    "key": "Enter",
+    "ms": 1024
+  },
+  {
+    "name": "accept-loot-0",
+    "seat": 0,
+    "key": "Enter",
+    "ms": 1024,
+    "when": {
+      "window.type": "10TDialogBox"
+    }
+  },
+  {
+    "name": "accept-loot-1",
+    "seat": 0,
+    "key": "Enter",
+    "ms": 1024,
+    "when": {
+      "window.type": "10TDialogBox"
+    }
+  },
+  {
+    "name": "accept-loot-2",
+    "seat": 0,
+    "key": "Enter",
+    "ms": 1024,
+    "when": {
+      "window.type": "10TDialogBox"
+    }
+  },
+  {
+    "name": "settled",
+    "ms": 2048,
+    "expect_both": {
+      "game.combat": 0,
+      "hd.layers": 0
+    }
+  },
+  {
+    "name": "winner-move",
+    "seat": 0,
+    "key": "ArrowLeft",
+    "ms": 1024,
+    "expect": {
+      "game.x": 5,
+      "game.y": 8,
+      "adventure.mobile": true,
+      "adventure.cursor": true,
+      "game.player": 0
+    }
+  }
+]

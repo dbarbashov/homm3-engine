@@ -1,4 +1,7 @@
+#include "browser_rng.h"
 #include "soundmgr.h"
+#include "mousemgr.h"
+#include "bitmap16.h"
 #include "advmgr.h"
 #include "battle_client.h"
 #include "authority_client.h"
@@ -85,6 +88,20 @@ bool take(){
 }
 }
 struct AuthorityBattleAccess {
+    static void cycleTimers(const Port::Authority::CombatVisualRecord& event){
+        auto& c=*g_combatManager;const auto now=GameTime::get();
+        Port::CosmeticRng::clockEpoch()=static_cast<std::uint32_t>(now);
+        c.cmbtHeroLastFidgetTime[0]=c.cmbtHeroLastFidgetTime[1]=now;
+        for(int i=0;i<5&&event[6]+i<42;++i)if(event[7+i]!=INT_MIN){
+            const int side=(event[6]+i)/21,slot=(event[6]+i)%21;
+            if(slot<c.m_numArmies[side]){
+                c.m_armies[side][slot].m_lastFidgetTime=now+event[7+i];
+#ifdef HOMM3_HARNESS
+                Port::Harness::decision("cycle-restored",side*21+slot,event[7+i]);
+#endif
+            }
+        }
+    }
     static const combatManager::TObstacleInfo* shape(const std::string& name){
         for(int i=0;i<91;++i)if(name==combatManager::s_obstacleInfo[i].m_spriteName)return &combatManager::s_obstacleInfo[i];
         if(name==combatManager::s_quicksandInfo[0].m_spriteName)return &combatManager::s_quicksandInfo[0];
@@ -128,9 +145,21 @@ struct AuthorityBattleAccess {
         button(TCombatWindow::COMBAT_LEFT_COMMAND_1_ID,offered(4));
         button(TCombatWindow::COMBAT_LEFT_COMMAND_2_ID,canAct);
         button(TCombatWindow::COMBAT_LEFT_COMMAND_3_ID,ready && EM_ASM_INT({return window.homm3Authority.combatCanAuto();}));
-        button(TCombatWindow::COMBAT_RIGHT_COMMAND_0_ID,!c.m_creaturePlacement&&offered(101));
+        // The original lets a hero inspect the book even with no affordable
+        // spell. Opening the book is not a cast; the selected spell is still
+        // validated by the authority when it becomes an action.
+        const auto* caster=c.m_heroes[c.m_currentSide];
+        button(TCombatWindow::COMBAT_RIGHT_COMMAND_0_ID,canAct&&!c.m_creaturePlacement&&caster&&
+            (!c.m_spellsCast[c.m_currentSide]||c.m_debugNoSpellLimit)&&caster->isWieldingArtifact(ARTIFACT_SPELLBOOK));
         button(TCombatWindow::COMBAT_RIGHT_COMMAND_1_ID,!c.m_creaturePlacement&&offered(8));
         button(TCombatWindow::COMBAT_RIGHT_COMMAND_2_ID,!c.m_creaturePlacement&&offered(3));
+        // getControl enables the combat log on a local turn. Its arrows keep
+        // that state during animations/opponent turns (disableAllButtons does
+        // not touch them), so history remains readable while commands wait.
+        if(canAct&&!c.m_creaturePlacement){
+            button(TCombatWindow::COMBAT_LOG_SCROLL_UP_ID,true);
+            button(TCombatWindow::COMBAT_LOG_SCROLL_DOWN_ID,true);
+        }
         if(c.m_creaturePlacement){button(TCombatWindow::COMBAT_PLACEMENT_COMMAND_0_ID,offered(8));button(TCombatWindow::COMBAT_PLACEMENT_COMMAND_1_ID,offered(100));}
         // NODRAW changes only the flags. drawFrame never repaints this bar.
         if(changed&&ready){c.m_combatWindow->drawWindow(0,WINDOW_ALL_WIDGETS_LOW,WINDOW_ALL_WIDGETS_HIGH);g_windowManager->updateScreen(0,556,800,44);}
@@ -225,7 +254,7 @@ struct AuthorityBattleAccess {
         // actions and spells. Replaying only movement/effects left unrelated
         // stacks stranded in the middle of their previous fidget sequence.
         auto finishAction=[&](){
-            if(action==1||action==2||action==4||action==5||action==6||action==7||action==9||action==10)c.resetCycleTimers();
+            if(snapshot.presentationVersion<3&&(action==1||action==2||action==4||action==5||action==6||action==7||action==9||action==10))c.resetCycleTimers();
             action=0;
         };
         auto finishCast=[&](){if(castingSide<0)return;auto* sprite=c.cmbtHero[castingSide];for(int frame=c.cmbtHeroFrameIndex[castingSide]+1;frame<sprite->GetNumFrames(4);++frame){c.cmbtHeroFrameIndex[castingSide]=frame;c.drawFrame(1,0,0,100,1,1);}c.cmbtHeroFrameType[castingSide]=0;c.cmbtHeroFrameIndex[castingSide]=0;castingSide=-1;};
@@ -238,6 +267,23 @@ struct AuthorityBattleAccess {
                 c.removeArmyFromGrid(*a);a->m_gridIndex=e[4];a->m_facing=e[5];if(a->m_numTroops>0)c.placeArmyInGrid(*a,e[4]);
             }
             switch(e[1]){
+            case VisualPause:
+                Port::pauseCombat(a,e[6]);break;
+            case VisualTurn:
+                if(e[6])a->setupAnimation();
+                a->turn(e[6]!=0);break;
+            case VisualFlightEnd:
+                a->playAnimation(cs_wait,1,0);break;
+            case VisualCycleTimers:{
+                finishCast();
+                cycleTimers(e);
+                break;
+            }
+            case VisualRound:
+                finishCast();finishAction();c.m_turnNumber=e[6];
+                c.turnOffHighlighter(1);c.m_lastMovedArmy=nullptr;
+                if(!e[7])c.m_combatWindow->combatMessage((*g_generalText)[GENERAL_TEXT_COMBAT_ROUND],1,0);
+                break;
             case VisualWalk:
                 if(e[6]>=0&&e[6]<6&&a->m_gridIndex>=0&&a->m_gridIndex<187)a->walk(e[6],e[7]!=0,e[8]!=0);
                 break;
@@ -274,7 +320,7 @@ struct AuthorityBattleAccess {
                 const auto spell=static_cast<SpellID>(e[6]);c.m_currentSide=e[10];
                 source=akSpellTraits[spell].m_name;sourceCount=1;
                 army* target=e[7]>=0&&e[7]<187?c.m_cells[e[7]].getArmy():nullptr;
-                c.showSpellMessage(e[8],spell,target);
+                if(snapshot.presentationVersion<5)c.showSpellMessage(e[8],spell,target);
                 finishCast();int castX=a->midX(),castY=a->midY();
                 hero* caster=c.m_heroes[c.m_currentSide];
                 if(caster&&(e[8]==0||e[8]==combatManager::SPELL_CASTER_ARTIFACT)){
@@ -291,6 +337,10 @@ struct AuthorityBattleAccess {
                 }else if(e[7]>=0&&e[7]<187)c.spellEffect(akSpellTraits[spell].m_effect,e[7],80,false);
                 break;
             }
+            case VisualSpellMessage:
+                c.m_currentSide=e[8];
+                c.showSpellMessage(e[7],static_cast<SpellID>(e[6]),stack(e[9],e[10]));
+                break;
             case VisualMorale:
                 finishCast();finishAction();Port::showMorale(a,e[6]!=0);break;
             case VisualLuck:
@@ -315,7 +365,17 @@ struct AuthorityBattleAccess {
                 else if(e[10]==2){bool effected[2][20]={};for(int side=0;side<2;++side)for(int slot=0;slot<20;++slot)effected[side][slot]=(e[7+side]&(1<<slot))!=0;c.showMassSpell(effected,e[6],e[9]!=0);}
                 break;
             case VisualAction:{
+                // The original main loop polls the frame clock before every
+                // action, including after a long morale cue. A packet can hold
+                // several AI actions; each must cross the same clock boundary.
+                c.doAnimations();
+                Port::feedbackMarker("action-start",a);
                 finishCast();finishAction();action=e[6];c.m_currentSide=e[10];c.m_combatWindow->clearCombatMessages();
+                // Each resolved AI action passed through getControl on the
+                // worker. Reproduce its selector transition even when several
+                // actions arrive together; selecting only the final stack
+                // leaves intermediate actors in their idle/fidget animation.
+                c.checkChangeSelector();
                 if(action==1||action==2||action==6||action==7||action==9||action==10)c.resetCyclingCreatures();
                 if(e[6]==3||e[6]==8){
                     const int text=e[6]==8?(a->m_numTroops==1?GENERAL_TEXT_COMBAT_WAIT_ONE_FORMAT:GENERAL_TEXT_COMBAT_WAIT_MANY_FORMAT):(a->m_numTroops==1?GENERAL_TEXT_COMBAT_DEFEND_ONE_FORMAT:GENERAL_TEXT_COMBAT_DEFEND_MANY_FORMAT);
@@ -362,7 +422,19 @@ struct AuthorityBattleAccess {
         std::vector<type_artifact> loot;int count=next(0,128);for(int i=0;i<count;++i){int id=next(0,200),extra=next(INT32_MIN,INT32_MAX);type_artifact item(static_cast<TArtifact>(id));item.m_extra=extra;loot.push_back(item);}
         for(auto& spells:c.m_eagleEyeData)spells.clear();count=next(0,81);for(int i=0;i<count;++i)c.m_eagleEyeData[mine].insert(SpellID(next(0,80)));
         int raisedType=next(-1,200),raisedCount=next(0,INT32_MAX);if(index!=words.size())throw std::runtime_error("Trailing combat result");
-        TCombatResultsWindow window(c.m_heroes[0],c.m_heroes[1],mine,winner,siege,experience);window.doModal();
+        c.m_battleOver=1;
+        // Original doVictory stops battle samples before opening results.
+        // Waiting until the combat manager closes leaves a live battle sound
+        // underneath the result theme and skips the original dimmed backdrop.
+        c.freeArmies();c.m_combatWindow->combatMessage("",0,0);
+        g_mouseManager->m_noChangePointer=0;
+        g_mouseManager->setPointer(6,mouseManager::COMBAT_SET);
+        g_mouseManager->showPointer(false);g_mouseManager->enable();
+        g_windowManager->m_screenBitmap->Darken(0,0,800,600);
+        g_windowManager->updateScreen();
+        TCombatResultsWindow window(c.m_heroes[0],c.m_heroes[1],mine,winner,siege,experience);
+        g_soundManager->startMP3(g_combatResultMusic[g_combatResult],1,1);
+        window.doModal();
         if(mine==winner){
             c.showEagleEye(mine,0);c.showLootedArtifacts(loot,0);
             if(raisedType>=0&&raisedCount>0){
@@ -410,6 +482,10 @@ bool active(){return running;}
 void settleDeath(army& stack){AuthorityBattleAccess::settleDeath(stack);}
 void project(){if(running)AuthorityBattleAccess::project();}
 void installOpening(){if(running)AuthorityBattleAccess::project(false);}
+void restoreOpeningCycles(){
+    if(running)for(const auto& event:snapshot.events)
+        if(event[1]==Port::Authority::VisualCycleTimers)AuthorityBattleAccess::cycleTimers(event);
+}
 int main(message& msg){try{return AuthorityBattleAccess::main(msg);}catch(const std::exception& e){
 #ifdef __EMSCRIPTEN__
     EM_ASM({window.homm3Authority.fail(UTF8ToString($0));},e.what());
@@ -434,12 +510,16 @@ bool begin(){
         // Match the original adventure-to-combat boundary: leave a static
         // map hero behind, not a live adventure cursor under the battle.
         g_advManager->demobilizeCurrHero(false,false);
+        // The original encounter consumes the route before opening combat.
+        // Keep the target from leaking through the battle and its return.
+        if(heroes[0]){heroes[0]->m_pathTargetX=-1;heroes[0]->m_pathTargetY=-1;heroes[0]->m_pathTargetZ=-1;}
         AuthorityBattleAccess::heroes();
         g_combatManager->setupCombat(type_point(s.x,s.y,s.z),heroes[0],&groups[0],s.players[1],t,heroes[1],&groups[1],s.x,s.y,0,s.surrounded);
         AuthorityBattleAccess::configure();g_executive->doDialog(g_combatManager);running=false;
 #ifdef __EMSCRIPTEN__
         EM_ASM({window.homm3Authority.combatWindowClosed();});
 #endif
+        AuthorityClient::combatClosed();
         return true;
     }catch(const std::exception& e){running=false;
 #ifdef __EMSCRIPTEN__

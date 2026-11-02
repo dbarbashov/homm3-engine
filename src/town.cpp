@@ -2,6 +2,7 @@
 #include "server_authority.h"
 #endif
 #include "va.h"
+#include "authority_client.h"
 
 #include <algorithm>
 #include <stdlib.h>
@@ -741,7 +742,11 @@ void town::view(int alreadyFaded)
     if (heroId != -1) {
         hero* visitingHero = g_game->getHero(heroId);
         if (visitingHero->m_owner == g_curWatchPlayer) {
-            g_advManager->setHeroContext(visitingHero->m_id, 0, 0, 1);
+            // A read-only town does not grant adventure control in either
+            // network mode. Selecting a visitor must use the viewing seat.
+            // Keep the visitor in its map cell while selecting its portrait.
+            const bool waiting = !g_currentPlayer->isLocalHuman();
+            g_advManager->setHeroContext(visitingHero->m_id, 0, waiting, 1);
             g_adventureGraphicsPreserveMode = 0;
             g_townViewActive = 0;
             return;

@@ -893,6 +893,11 @@ DC_ADDRESS(0x0cbdb8, 0xc8)
 MAC_ADDRESS(0x0f3e2c, 0x1b8)  // anchor-bracket
 hero::hero()
 {
+    // Tavern candidates are evaluated before the first AI turn bonus sweep.
+    // These caches are not serialized and must never contain allocator data.
+    m_valueOfPower = m_valueOfDuration = m_valueOfKnowledge = 0;
+    m_valueOfSpring = m_valueOfWell = 0;
+    m_turnExperienceToRvRatio = 0;
     m_id = heroIdNone;
     m_owner = -1;
     m_x = 0;
@@ -6206,7 +6211,7 @@ int hero::getHeroSpellBonus(SpellID spellId, int targetLevel, int value) const
     int bonus = 0;
     const THeroSpecificAbility& ability = g_heroSpecificAbilities[m_id];
     if (ability.m_type == eHeroAbilitySpell
-        && static_cast<int>(ability.m_skill) == spellId) {
+        && ability.m_subject == spellId) {
         switch (spellId) {
         case SPELL_BLOODLUST:
         case SPELL_PRECISION:

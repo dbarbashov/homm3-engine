@@ -20,8 +20,9 @@ output = ROOT / 'test-results/authority-fog'
 output.mkdir(parents=True, exist_ok=True)
 build, runtime = args.build.resolve(), args.runtime.resolve()
 env = {**os.environ, 'SDL_VIDEODRIVER': 'dummy', 'SDL_AUDIODRIVER': 'dummy'}
-objects = [str(p) for p in sorted((build / 'CMakeFiles/homm3-port.dir').rglob('*.o'))
-           if p.name != 'main.cpp.o']
+# Use the configured target, not stale objects left by an older source layout.
+link = shlex.split((build / 'CMakeFiles/homm3-port.dir/link.txt').read_text())
+objects = [str(build / p) for p in link if p.endswith('.o') and Path(p).name != 'main.cpp.o']
 assert objects, 'Build the worker first'
 media = ROOT / 'build/ffmpeg-native/install'
 probe = output / 'fog-probe'

@@ -26,8 +26,12 @@ SPELLS = ['visions', 'view-earth', 'view-air', 'disguise', 'fly', 'water-walk',
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--runtime',type=Path,default=ROOT.parent/'homm3-web/.local/runtime')
+    parser.add_argument('--worker',type=Path,default=ROOT/'build/cmake-parity-native/homm3-worker')
+    parser.add_argument('--web',type=Path,default=ROOT/'build/cmake-parity-web/web')
     parser.add_argument('--cases', nargs='+', choices=[*OBJECTS, *SPELLS, 'week'],
                         default=[*OBJECTS, *SPELLS, 'week'])
+    parser.add_argument('--rng-algorithm',choices=['msvc-lcg32','browser-libc'],default='msvc-lcg32')
     parser.add_argument('--jobs', type=int, choices=[1,2], default=1)
     parser.add_argument('--browser', choices=['chromium','webkit'], default='chromium')
     args = parser.parse_args()
@@ -44,7 +48,7 @@ def main():
             if name=='obelisk':flags+=['--natural-setup','--map','maps/All for One.h3m']
             with (args.out/f'fixture-{key}.log').open('w') as log:
                 subprocess.run([sys.executable,str(ROOT/'scripts/parity/fixture.py'),
-                                *flags,'--out',str(fixture)],cwd=ROOT,
+                                *flags,'--rng-algorithm',args.rng_algorithm,'--combat-rng',args.rng_algorithm,'--out',str(fixture),'--worker',str(args.worker.resolve()),'--runtime',str(args.runtime.resolve())],cwd=ROOT,
                                stdout=log,stderr=subprocess.STDOUT,check=True)
             fixtures[key] = fixture
 
@@ -66,7 +70,7 @@ def main():
         with (args.out/(name+'.log')).open('w') as log:
             process = subprocess.run([sys.executable,str(ROOT/'scripts/parity/run.py'),
                                       '--browser',args.browser,'--fixture',str(fixture),
-                                      '--scenario',str(scenario),'--out',str(out)],
+                                      '--scenario',str(scenario),'--out',str(out),'--worker',str(args.worker.resolve()),'--web',str(args.web.resolve()),'--runtime',str(args.runtime.resolve())],
                                      cwd=ROOT,stdout=log,stderr=subprocess.STDOUT)
         out.mkdir(exist_ok=True)
         result = check_run(out,fixture)
